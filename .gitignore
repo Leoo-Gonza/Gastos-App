@@ -5,3 +5,4 @@ docs/referencia/
 *.xlsx
 *.db
 .claude/settings.local.json
+.coverage
