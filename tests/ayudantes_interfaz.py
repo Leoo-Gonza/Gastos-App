@@ -133,13 +133,64 @@ def tecla(key, ctrl=False, meta=False, shift=False, alt=False):
     return SimpleNamespace(key=key, ctrl=ctrl, meta=meta, shift=shift, alt=alt)
 
 
-def filas_tabla(pantalla_gastos):
-    """Filas de la tabla de gastos como listas de textos (incluye la fila de total)."""
+def tabla_gastos(pantalla_gastos):
     tablas = de_tipo(pantalla_gastos.cuerpo, ft.DataTable)
     assert len(tablas) == 1, "No hay tabla de gastos"
-    return [[_texto_celda(celda) for celda in fila.cells] for fila in tablas[0].rows]
+    return tablas[0]
+
+
+def titulos(pantalla_gastos):
+    """Títulos de las columnas, en orden."""
+    return [c.label.value for c in tabla_gastos(pantalla_gastos).columns]
+
+
+def columna(pantalla_gastos, titulo):
+    """Índice de la columna con ese título (así las pruebas no dependen de la posición)."""
+    return titulos(pantalla_gastos).index(titulo)
+
+
+def filas_tabla(pantalla_gastos):
+    """Filas de la tabla (incluye la de total) como diccionarios {título: texto}.
+
+    El texto de una celda con varios controles (ej. "$ 32.000" y "US$ 20,00 × $ 1.600")
+    se une con " | ". Las celdas sin texto (tilde, menú) quedan en None.
+    """
+    nombres = titulos(pantalla_gastos)
+    return [
+        dict(zip(nombres, (_texto_celda(c) for c in fila.cells), strict=True))
+        for fila in tabla_gastos(pantalla_gastos).rows
+    ]
+
+
+def fila_de(pantalla_gastos, nombre):
+    """La DataRow del gasto con ese nombre."""
+    i = columna(pantalla_gastos, "Nombre")
+    for fila in tabla_gastos(pantalla_gastos).rows:
+        contenido = fila.cells[i].content
+        if isinstance(contenido, ft.Text) and contenido.value == nombre:
+            return fila
+    raise AssertionError(f"No hay fila {nombre!r}")
+
+
+def celda(pantalla_gastos, nombre, titulo):
+    """La DataCell de la columna "titulo" en la fila del gasto "nombre"."""
+    return fila_de(pantalla_gastos, nombre).cells[columna(pantalla_gastos, titulo)]
+
+
+def item_menu(pantalla_gastos, nombre, texto):
+    """El ítem "texto" del menú de acciones de la fila."""
+    menu = celda(pantalla_gastos, nombre, "").content
+    for item in menu.items:
+        if item.content == texto:
+            return item
+    raise AssertionError(f"No hay ítem {texto!r}")
 
 
 def _texto_celda(celda):
     contenido = celda.content
-    return contenido.value if isinstance(contenido, ft.Text) else None
+    if isinstance(contenido, ft.Text):
+        return contenido.value
+    partes = [
+        t.value for t in recorrer(contenido) if isinstance(t, ft.Text) and t.value
+    ]
+    return " | ".join(partes) if partes else None

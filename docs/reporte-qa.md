@@ -285,3 +285,81 @@ Se actualizaron 6 pruebas a `ErrorDeBase` y a los mensajes nuevos (exigen el tex
 Ninguno.
 
 **Estado del paso 1c: pruebas automáticas completas. Falta la prueba manual del usuario con su base real.**
+
+---
+
+## Ronda 8 – Paso 2a (lógica de pagos)
+
+- Fecha: 2026-10-04 · Probado por: Lucía (QA)
+- Alcance: `app/logica/pagos.py` y `formato.formatear_fecha`. RF-13 a RF-15; RN-20 a RN-23; CA-13.1, CA-13.2, CA-14.1, CA-14.2, CA-15.1; CA-09.1 completo; CA-43.5, CA-07.2, CA-45.4 y CA-45.6 con pagos registrados por la función. Sin interfaz.
+- Datos: base en memoria, fechas fijas.
+
+### Resultado
+| Archivo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_pagos.py (nuevo) | 52 | 52 | 0 |
+| Resto | 644 | 644 | 0 |
+| **Total** | **696** | **696** | **0** |
+
+Cobertura: app/logica/ 100 % (incluido pagos.py). Ruff sin errores.
+
+### Bugs
+Ninguno.
+
+### Observaciones
+- O22: `registrar_pago` acepta un `datetime` (en Python es un tipo de `date`) y guardaría la hora ("2026-10-04T15:30:00"), que `formatear_fecha` mostraría mal. El `ft.DatePicker` de la interfaz devuelve un `datetime`.
+- O23 (informativa): `listar_pagos` de un gasto inexistente devuelve una lista vacía en vez de error.
+
+---
+
+## Ronda 9 – Paso 2b (interfaz de pagos)
+
+- Fecha: 2026-10-04 · Probado por: Lucía (QA)
+- Alcance: columnas Pag. / Pagado / Pendiente, fila de totales, tilde con Deshacer, destildar con confirmación, DialogoPago, DialogoVerPagos y el arreglo de O22.
+- Método: página falsa, "hoy" fijo en 04/10/2026, datos inventados.
+
+### Resultado
+| Archivo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_interfaz_pagos.py (nuevo) | 48 | 47 | 1 |
+| test_interfaz_gastos.py (actualizado) | 44 | 44 | 0 |
+| test_interfaz_ronda5.py (actualizado) | 27 | 27 | 0 |
+| test_interfaz_usd.py (actualizado) | 55 | 55 | 0 |
+| Resto | 570 | 570 | 0 |
+| **Total** | **744** | **743** | **1** |
+
+Cobertura 99 % (1.239 líneas, 1 sin cubrir). Ruff sin errores. Las 19 pruebas que leían celdas por posición ahora buscan la columna por su título (ayudantes nuevos en tests/ayudantes_interfaz.py).
+
+Verificado: O22, tabla y fila de totales (CA-09.1 completo), tilde con Deshacer (CA-13.1), destildar con confirmación (CA-13.2), Registrar pago (CA-14.1, CA-14.2), Ver pagos (CA-15.1) y gastos en USD (CA-43.5).
+
+### Bugs
+- **BUG-10** – Si el gasto se borra por detrás entre la confirmación y "Quitar pagos", aparecen "El gasto ya no existe." y también "Se quitaron los pagos de X". Hipótesis: en `_confirmar_quitar_pagos` el `except ErrorDeValidacion` no hace `return`.
+
+### Observaciones
+- O24: no se pudo comprobar sin ventana si Flet dispara `on_dismiss` del calendario después de elegir una fecha. Si no lo hace, el calendario queda contado como diálogo abierto: los atajos se ignoran y el primer Esc no cierra "Registrar pago".
+
+### Para que pruebe el usuario con la ventana real
+Tilde (y que siga marcado hasta confirmar), "Parcial" y "Pagado" dentro de la fila, calendario y O24, confirmación en la fila de "Ver pagos", "Deshacer" del aviso.
+
+---
+
+## Ronda 10
+
+- Fecha: 2026-10-04 · Probado por: Lucía (QA)
+- Motivo: verificar BUG-10 (no avisar "Se quitaron…" si falló) y O24 (el calendario se marca cerrado al elegir una fecha).
+
+### Resultado
+752 pruebas, pasan las 752 (8 nuevas en test_interfaz_pagos.py). Cobertura 99 % (1.241 líneas, 1 sin cubrir). Ruff sin errores.
+
+| Ítem | Estado |
+|---|---|
+| BUG-10 | Corregido (solo aparece el error y la tabla queda refrescada) |
+| O24 | Corregido (después de elegir fecha, un Esc cierra "Registrar pago" y Ctrl+N vuelve a andar; un on_dismiss tardío no rompe nada) |
+
+### Bugs nuevos
+Ninguno.
+
+### Observaciones
+- O25 (menor): `app.abrir_dialogo` no se fija si el diálogo ya estaba en la lista. Si el calendario se cerrara sin elegir y Flet no avisara, al reabrirlo quedaría anotado dos veces.
+
+**Estado del paso 2: pruebas automáticas completas. Falta la prueba manual del usuario.**

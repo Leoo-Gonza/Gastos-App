@@ -243,7 +243,7 @@ def test_o15_gasto_borrado_con_el_dialogo_de_edicion_abierto(app, con, pagina):
     assert d.dialogo.open is False
     assert app.hay_dialogo_abierto() is False
     assert pagina.avisos()[-1] == "El gasto ya no existe."
-    assert [f[0] for f in filas_tabla(app._pantallas[0])[:-1]] == ["Alquiler"]
+    assert [f["Nombre"] for f in filas_tabla(app._pantallas[0])[:-1]] == ["Alquiler"]
     assert len(gastos.listar_gastos(con, app.mes_id)) == 1  # no se creó otro
 
 
@@ -281,7 +281,7 @@ def test_bug06_total_singular_y_plural(app, con, cantidad, texto):
     for i in range(cantidad):
         gastos.agregar_gasto(con, app.mes_id, f"Gasto {i}", _otros(con), 100, "fijo")
     app.refrescar()
-    assert filas_tabla(app._pantallas[0])[-1][0] == texto
+    assert filas_tabla(app._pantallas[0])[-1]["Nombre"] == texto
 
 
 def test_bug08_eliminar_que_paso_a_estar_en_uso_avisa_archivado(app, con, pagina):

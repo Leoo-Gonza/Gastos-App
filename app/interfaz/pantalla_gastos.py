@@ -1,7 +1,8 @@
 """Gastos del mes (RF-06 a RF-09, docs/diseno.md §3.3).
 
-En el paso 1: tabla con alta, edición y baja, y el total. Las columnas de
-pagos llegan en el paso 2 y "Por medio de pago" en el paso 4.
+Tabla con alta, edición y baja (paso 1), gastos en dólares (paso 1c) y pagos:
+tilde "pagado", pagos parciales y pendiente (paso 2). "Por medio de pago"
+llega en el paso 4.
 """
 
 import flet as ft
@@ -9,7 +10,10 @@ import flet as ft
 from app.interfaz import estilos
 from app.interfaz.componentes import estado_vacio, titulo
 from app.interfaz.dialogos.dialogo_gasto import DialogoGasto
-from app.logica import gastos, meses
+from app.interfaz.dialogos.dialogo_pago import DialogoPago
+from app.interfaz.dialogos.dialogo_ver_pagos import DialogoVerPagos
+from app.logica import gastos, meses, pagos
+from app.logica.errores import ErrorDeValidacion
 from app.logica.formato import (
     clave_orden,
     formatear_ars,
@@ -102,39 +106,96 @@ class PantallaGastos:
         filas = sorted(
             filas, key=lambda f: (_ORDEN_TIPO[f["tipo"]], clave_orden(f["nombre"]))
         )
-        total = gastos.total_gastos(self.app.con, self.app.mes_id)
-        self.cuerpo.controls = [self._tabla(filas, total)]
+        totales = pagos.totales_del_mes(self.app.con, self.app.mes_id)
+        self.cuerpo.controls = [self._tabla(filas, totales)]
 
-    def _tabla(self, filas, total: int) -> ft.DataTable:
+    def _tabla(self, filas, totales: dict[str, int]) -> ft.DataTable:
         negrita = ft.FontWeight.W_700
         fila_total = ft.DataRow(
             color=estilos.SUPERFICIE_VARIANTE,
             cells=[
+                ft.DataCell(ft.Text("")),
                 ft.DataCell(
                     ft.Text(f"TOTAL ({_cantidad_gastos(len(filas))})", weight=negrita)
                 ),
                 ft.DataCell(ft.Text("")),
                 ft.DataCell(ft.Text("")),
                 ft.DataCell(ft.Text("")),
-                ft.DataCell(ft.Text(formatear_ars(total), weight=negrita)),
+                # "Gastos", "Pagado" y "Falta por pagar" de la planilla (RF-09).
+                ft.DataCell(ft.Text(formatear_ars(totales["total"]), weight=negrita)),
+                ft.DataCell(ft.Text(formatear_ars(totales["pagado"]), weight=negrita)),
+                ft.DataCell(self._celda_pendiente(totales["pendiente"], es_total=True)),
                 ft.DataCell(ft.Text("")),
             ],
         )
         return ft.DataTable(
             heading_row_color=estilos.SUPERFICIE_VARIANTE,
             data_row_min_height=48,
-            # 64 deja lugar para la segunda línea de los gastos en dólares.
+            # 64 deja lugar para la segunda línea (dólares o "Parcial").
             data_row_max_height=64,
             columns=[
+                ft.DataColumn(ft.Text("Pag.")),
                 ft.DataColumn(ft.Text("Nombre")),
                 ft.DataColumn(ft.Text("Categoría")),
                 ft.DataColumn(ft.Text("Tipo")),
                 ft.DataColumn(ft.Text("Medio de pago")),
                 # numeric=True alinea los montos a la derecha: miles bajo miles.
                 ft.DataColumn(ft.Text("Monto"), numeric=True),
+                ft.DataColumn(ft.Text("Pagado"), numeric=True),
+                ft.DataColumn(ft.Text("Pendiente"), numeric=True),
                 ft.DataColumn(ft.Text("")),
             ],
             rows=[self._fila(f) for f in filas] + [fila_total],
+        )
+
+    def _celda_pagado(self, f) -> ft.Control:
+        pagado = ft.Text(formatear_ars(f["pagado_cent"]))
+        if not 0 < f["pagado_cent"] < f["monto_cent"]:
+            return pagado
+        # Pago parcial: etiqueta chica debajo, en color "pendiente" (§3.3).
+        return ft.Column(
+            [
+                pagado,
+                ft.Text(
+                    "Parcial",
+                    size=estilos.TAM_AYUDA,
+                    color=estilos.color(self.app.page, "pendiente"),
+                ),
+            ],
+            spacing=0,
+            horizontal_alignment=ft.CrossAxisAlignment.END,
+            tight=True,
+        )
+
+    def _celda_pendiente(self, pendiente: int, es_total: bool = False) -> ft.Control:
+        """Lo que falta en color "pendiente"; si es 0, "Pagado" con un tilde en verde.
+
+        El color nunca es la única señal: siempre hay texto o ícono (§0).
+        """
+        peso = ft.FontWeight.W_700 if es_total else None
+        if pendiente > 0:
+            return ft.Text(
+                formatear_ars(pendiente),
+                color=estilos.color(self.app.page, "pendiente"),
+                weight=peso,
+            )
+        positivo = estilos.color(self.app.page, "positivo")
+        return ft.Row(
+            [
+                ft.Icon(
+                    ft.Icons.CHECK_CIRCLE if es_total else ft.Icons.CHECK,
+                    color=positivo,
+                    size=16,
+                ),
+                ft.Text(
+                    formatear_ars(0) if es_total else "Pagado",
+                    color=positivo,
+                    weight=peso,
+                ),
+            ],
+            tight=True,
+            spacing=4,
+            alignment=ft.MainAxisAlignment.END,
         )
 
     def _fila(self, f) -> ft.DataRow:
@@ -146,9 +207,16 @@ class PantallaGastos:
         if f["medio_pago_archivado"]:
             medio.color = estilos.TEXTO_SECUNDARIO
             medio.tooltip = "Medio de pago archivado"
+        pendiente = f["monto_cent"] - f["pagado_cent"]
 
         # "f=f" fija el valor de esta fila dentro de la lambda. Sin eso, todas
         # las lambdas usarían la última fila del for.
+        tilde = ft.Checkbox(
+            # RN-22: marcado si no falta nada, con el tilde o con pagos parciales.
+            value=pendiente == 0,
+            tooltip="Marcar como pagado",
+            on_change=lambda e, f=f: self._cambiar_tilde(f, e.control),
+        )
         acciones = ft.PopupMenuButton(
             icon=ft.Icons.MORE_VERT,
             tooltip="Acciones",
@@ -159,6 +227,16 @@ class PantallaGastos:
                     on_click=lambda e, f=f: self.editar(f["id"]),
                 ),
                 ft.PopupMenuItem(
+                    content="Registrar pago",
+                    icon=ft.Icons.PAYMENTS_OUTLINED,
+                    on_click=lambda e, f=f: self.registrar_pago(f["id"]),
+                ),
+                ft.PopupMenuItem(
+                    content="Ver pagos",
+                    icon=ft.Icons.RECEIPT_OUTLINED,
+                    on_click=lambda e, f=f: self.ver_pagos(f["id"]),
+                ),
+                ft.PopupMenuItem(
                     content="Borrar",
                     icon=ft.Icons.DELETE_OUTLINE,
                     on_click=lambda e, f=f: self.borrar(f["id"]),
@@ -167,6 +245,7 @@ class PantallaGastos:
         )
         return ft.DataRow(
             cells=[
+                ft.DataCell(tilde),
                 # Clic en el nombre también abre "Editar" (§2.5).
                 ft.DataCell(
                     ft.Text(f["nombre"]), on_tap=lambda e, f=f: self.editar(f["id"])
@@ -175,6 +254,8 @@ class PantallaGastos:
                 ft.DataCell(ft.Text(_TIPO_CORTO[f["tipo"]])),
                 ft.DataCell(medio),
                 ft.DataCell(_celda_monto(f)),
+                ft.DataCell(self._celda_pagado(f)),
+                ft.DataCell(self._celda_pendiente(pendiente)),
                 ft.DataCell(acciones),
             ]
         )
@@ -240,3 +321,94 @@ class PantallaGastos:
             "Borrar",
             confirmado,
         )
+
+    # ------------------------------------------------------------------
+    # Pagos (paso 2)
+    # ------------------------------------------------------------------
+
+    def _cambiar_tilde(self, f, tilde: ft.Checkbox) -> None:
+        if self._gasto_que_ya_no_existe(f["id"]):
+            return
+        if tilde.value:
+            self._marcar_pagado(f)
+        else:
+            # Destildar borra pagos: hasta que confirme, el tilde sigue marcado.
+            tilde.value = True
+            self._confirmar_quitar_pagos(f)
+
+    def _marcar_pagado(self, f) -> None:
+        """RN-22: un pago por todo lo pendiente, con "Deshacer" (§3.3)."""
+        try:
+            pago_id = pagos.marcar_pagado(self.app.con, f["id"])
+        except Exception as error:  # noqa: BLE001 (a propósito: ver error_inesperado)
+            self.app.error_inesperado(error)
+            return
+        self.app.refrescar()
+        if pago_id is None:
+            return  # Ya estaba pagado: no hay nada que deshacer.
+
+        def deshacer():
+            # "Deshacer" borra solo el pago que agregó el tilde.
+            try:
+                pagos.borrar_pago(self.app.con, pago_id)
+            except ErrorDeValidacion:
+                pass  # Ya se había borrado por otro lado.
+            self.app.refrescar()
+
+        self.app.avisar(f"{f['nombre']} marcado como pagado", al_deshacer=deshacer)
+
+    def _confirmar_quitar_pagos(self, f) -> None:
+        lista = pagos.listar_pagos(self.app.con, f["id"])
+        pagado = sum(p["monto_cent"] for p in lista)
+        if len(lista) == 1:
+            cantidad = "Se va a borrar el pago registrado"
+        else:
+            cantidad = f"Se van a borrar los {len(lista)} pagos registrados"
+
+        def confirmado():
+            try:
+                pagos.quitar_pagos(self.app.con, f["id"])
+            except ErrorDeValidacion as error:
+                # Ej.: el gasto se borró por detrás. Se actualiza la tabla y se
+                # avisa el error; return evita avisar también "Se quitaron…" (BUG-10).
+                self.app.refrescar()
+                self.app.avisar(str(error))
+                return
+            except Exception as error:  # noqa: BLE001 (a propósito: ver error_inesperado)
+                self.app.error_inesperado(error)
+                return
+            self.app.refrescar()
+            self.app.avisar(f"Se quitaron los pagos de {f['nombre']}")
+
+        self.app.page.update()
+        self.app.confirmar(
+            f"¿Quitar los pagos de {f['nombre']}?",
+            f"{cantidad} ({formatear_ars(pagado)}). El gasto vuelve a "
+            f"quedar pendiente por {formatear_ars(f['monto_cent'])}.",
+            "Quitar pagos",
+            confirmado,
+        )
+
+    def registrar_pago(self, gasto_id: int) -> None:
+        if self._gasto_que_ya_no_existe(gasto_id):
+            return
+        if pagos.pendiente(self.app.con, gasto_id) == 0:
+            self.app.avisar("Este gasto ya está pagado.")
+            return
+
+        def al_guardar(monto: int, quedo_pagado: bool):
+            self.app.refrescar()
+            nombre = gastos.obtener_gasto(self.app.con, gasto_id)["nombre"]
+            aviso = f"Pago de {formatear_ars(monto)} registrado"
+            if quedo_pagado:
+                aviso += f": {nombre} quedó pagado"
+            self.app.avisar(aviso)
+
+        DialogoPago(self.app, gasto_id, al_guardar).abrir()
+
+    def ver_pagos(self, gasto_id: int) -> None:
+        if self._gasto_que_ya_no_existe(gasto_id):
+            return
+        DialogoVerPagos(
+            self.app, gasto_id, al_registrar_otro=lambda: self.registrar_pago(gasto_id)
+        ).abrir()

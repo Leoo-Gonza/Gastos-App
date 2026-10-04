@@ -13,6 +13,7 @@ from app.logica import base_datos, catalogos, gastos, meses
 from tests.ayudantes import id_por_nombre, insertar_pago
 from tests.ayudantes_interfaz import (
     PaginaFalsa,
+    celda,
     de_tipo,
     dialogo_gasto_abierto,
     filas_tabla,
@@ -485,12 +486,7 @@ def test_ca_45_5_pesos_a_dolares_en_edicion(app, con, pagina):
 
 
 def _celda_monto(app, nombre):
-    tabla = de_tipo(app._pantallas[0].cuerpo, ft.DataTable)[0]
-    for fila in tabla.rows:
-        celda = fila.cells[0].content
-        if isinstance(celda, ft.Text) and celda.value == nombre:
-            return fila.cells[4].content
-    raise AssertionError(nombre)
+    return celda(app._pantallas[0], nombre, "Monto").content
 
 
 def test_ca_46_1_tabla_con_segunda_linea_y_tooltip(app, con):
@@ -514,8 +510,8 @@ def test_ca_46_1_tabla_con_segunda_linea_y_tooltip(app, con):
     assert isinstance(ars, ft.Text) and ars.value == "$ 1.434.617"
     # El total sigue en pesos y suma los pesos del gasto en dólares.
     total = filas_tabla(app._pantallas[0])[-1]
-    assert (total[0], total[4]) == ("TOTAL (2 gastos)", "$ 1.466.617")
-    assert not any("US$" in t for t in total if t)
+    assert (total["Nombre"], total["Monto"]) == ("TOTAL (2 gastos)", "$ 1.466.617")
+    assert not any("US$" in t for t in total.values() if t)
     assert de_tipo(app._pantallas[0].cuerpo, ft.DataTable)[0].data_row_max_height == 64
 
 
@@ -532,7 +528,7 @@ def test_la_moneda_no_cambia_el_orden(app, con):
     gastos.agregar_gasto(con, app.mes_id, "Alquiler", _otros(con), 100, "fijo")
     _usd(con, app.mes_id, 2000, 160000, nombre="Beta", tipo="unico")
     app.refrescar()
-    assert [f[0] for f in filas_tabla(app._pantallas[0])[:-1]] == [
+    assert [f["Nombre"] for f in filas_tabla(app._pantallas[0])[:-1]] == [
         "Alquiler",
         "Zeta",
         "Beta",

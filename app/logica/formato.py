@@ -204,3 +204,13 @@ def clave_orden(texto: str) -> str:
     descompuesto = unicodedata.normalize("NFD", texto)
     sin_acentos = "".join(c for c in descompuesto if not unicodedata.combining(c))
     return sin_acentos.casefold()
+
+
+def formatear_fecha(fecha_iso: str) -> str:
+    """ "2026-10-04" -> "04/10/2026".
+
+    Las fechas se guardan en formato ISO (AAAA-MM-DD) porque así se ordenan bien
+    como texto; en pantalla se muestran como se usan en Argentina.
+    """
+    anio, mes, dia = fecha_iso.split("-")
+    return f"{dia}/{mes}/{anio}"

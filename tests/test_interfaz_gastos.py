@@ -9,14 +9,18 @@ from app.logica import catalogos, gastos
 from tests.ayudantes import id_por_nombre, insertar_pago, insertar_plan
 from tests.ayudantes_interfaz import (
     boton,
+    celda,
     clic,
+    columna,
     de_tipo,
     dialogo_arriba,
     dialogo_gasto_abierto,
     filas_tabla,
     hay_boton,
+    item_menu,
     textos,
     titulo_dialogo,
+    titulos,
 )
 
 
@@ -58,18 +62,7 @@ def _agregar(
 
 
 def _nombres_en_tabla(pantalla):
-    return [fila[0] for fila in filas_tabla(pantalla)[:-1]]
-
-
-def _fila_de(pantalla, nombre):
-    tabla = de_tipo(pantalla.cuerpo, ft.DataTable)[0]
-    for fila in tabla.rows:
-        if (
-            isinstance(fila.cells[0].content, ft.Text)
-            and fila.cells[0].content.value == nombre
-        ):
-            return fila
-    raise AssertionError(f"No hay fila {nombre!r}")
+    return [fila["Nombre"] for fila in filas_tabla(pantalla)[:-1]]
 
 
 # ---------------------------------------------------------------------------
@@ -110,8 +103,8 @@ def test_ca_09_1_ocho_gastos_cargados_por_dialogo(app, pantalla, con, pagina):
     filas = filas_tabla(pantalla)
     assert len(filas) == 9
     total = filas[-1]
-    assert total[0] == "TOTAL (8 gastos)"
-    assert total[4] == "$ 851.700"
+    assert total["Nombre"] == "TOTAL (8 gastos)"
+    assert total["Monto"] == "$ 851.700"
     assert pagina.avisos()[0] == 'Gasto "Alquiler" agregado'
     assert app.hay_dialogo_abierto() is False
 
@@ -122,24 +115,38 @@ def test_ca_09_2_total_se_redondea_desde_el_exacto(app, pantalla, con):
         _cargar_por_dialogo(
             app, pantalla, "Chicle", _cat(con, "Otros"), "0,40", "unico"
         )
-    assert filas_tabla(pantalla)[-1][4] == "$ 1"
+    assert filas_tabla(pantalla)[-1]["Monto"] == "$ 1"
 
 
 def test_columnas_de_la_tabla(app, pantalla, con, mes_id):
-    # §6 Paso 1: Nombre, Categoría, Tipo, Medio de pago, Monto (+ acciones).
+    # §3.3 (paso 2): Pag., Nombre, Categoría, Tipo, Medio de pago, Monto, Pagado,
+    # Pendiente (+ acciones). Los tres montos son numéricos (alineados a la derecha).
     _agregar(con, mes_id, "Nafta", "Transporte", 3000000, "unico")
     app.refrescar()
     tabla = de_tipo(pantalla.cuerpo, ft.DataTable)[0]
-    encabezados = [c.label.value for c in tabla.columns]
-    assert encabezados == ["Nombre", "Categoría", "Tipo", "Medio de pago", "Monto", ""]
-    assert tabla.columns[4].numeric is True
-    assert filas_tabla(pantalla)[0][:5] == [
-        "Nafta",
-        "Transporte",
-        "Único",
-        "—",
-        "$ 30.000",
+    assert titulos(pantalla) == [
+        "Pag.",
+        "Nombre",
+        "Categoría",
+        "Tipo",
+        "Medio de pago",
+        "Monto",
+        "Pagado",
+        "Pendiente",
+        "",
     ]
+    for titulo in ("Monto", "Pagado", "Pendiente"):
+        assert tabla.columns[columna(pantalla, titulo)].numeric is True
+    fila = filas_tabla(pantalla)[0]
+    assert {
+        k: fila[k] for k in ("Nombre", "Categoría", "Tipo", "Medio de pago", "Monto")
+    } == {
+        "Nombre": "Nafta",
+        "Categoría": "Transporte",
+        "Tipo": "Único",
+        "Medio de pago": "—",
+        "Monto": "$ 30.000",
+    }
 
 
 def test_orden_fijos_cuotas_unicos_y_por_nombre(app, pantalla, con, mes_id):
@@ -164,7 +171,7 @@ def test_orden_fijos_cuotas_unicos_y_por_nombre(app, pantalla, con, mes_id):
         "Bicicleta",
         "Zapatillas",
     ]
-    assert [f[2] for f in filas_tabla(pantalla)[:-1]] == [
+    assert [f["Tipo"] for f in filas_tabla(pantalla)[:-1]] == [
         "Fijo",
         "Fijo",
         "Cuota",
@@ -185,7 +192,7 @@ def test_total_con_un_solo_gasto_en_singular(app, pantalla, con, mes_id):
     # Con un gasto la fila de total debería decir "TOTAL (1 gasto)", no "1 gastos".
     _agregar(con, mes_id, "Nafta")
     app.refrescar()
-    assert filas_tabla(pantalla)[-1][0] == "TOTAL (1 gasto)"
+    assert filas_tabla(pantalla)[-1]["Nombre"] == "TOTAL (1 gasto)"
 
 
 def test_categoria_y_medio_archivados_en_texto_secundario(app, pantalla, con, mes_id):
@@ -198,8 +205,8 @@ def test_categoria_y_medio_archivados_en_texto_secundario(app, pantalla, con, me
     catalogos.eliminar(con, catalogos.MEDIOS_PAGO, visa)
     app.refrescar()
 
-    archivada = _fila_de(pantalla, "Cuota gym")
-    categoria, medio = archivada.cells[1].content, archivada.cells[3].content
+    categoria = celda(pantalla, "Cuota gym", "Categoría").content
+    medio = celda(pantalla, "Cuota gym", "Medio de pago").content
     assert (categoria.value, categoria.color, categoria.tooltip) == (
         "Gym",
         estilos.TEXTO_SECUNDARIO,
@@ -210,25 +217,29 @@ def test_categoria_y_medio_archivados_en_texto_secundario(app, pantalla, con, me
         estilos.TEXTO_SECUNDARIO,
         "Medio de pago archivado",
     )
-    normal = _fila_de(pantalla, "Nafta")
-    assert normal.cells[1].content.color is None
-    assert normal.cells[3].content.color is None
+    assert celda(pantalla, "Nafta", "Categoría").content.color is None
+    assert celda(pantalla, "Nafta", "Medio de pago").content.color is None
 
 
 def test_menu_de_fila_editar_y_borrar(app, pantalla, con, mes_id):
-    # §2.5: menú de acciones con Editar y Borrar.
+    # §3.3 (paso 2): menú de acciones Editar · Registrar pago · Ver pagos · Borrar.
     _agregar(con, mes_id, "Nafta")
     app.refrescar()
-    menu = _fila_de(pantalla, "Nafta").cells[5].content
+    menu = celda(pantalla, "Nafta", "").content
     assert isinstance(menu, ft.PopupMenuButton)
     assert menu.tooltip == "Acciones"
-    assert [i.content for i in menu.items] == ["Editar", "Borrar"]
+    assert [i.content for i in menu.items] == [
+        "Editar",
+        "Registrar pago",
+        "Ver pagos",
+        "Borrar",
+    ]
 
-    menu.items[0].on_click(None)
+    item_menu(pantalla, "Nafta", "Editar").on_click(None)
     assert titulo_dialogo(dialogo_arriba(app)) == "Editar gasto – Octubre 2026"
     app.cerrar_dialogo(dialogo_arriba(app))
 
-    menu.items[1].on_click(None)
+    item_menu(pantalla, "Nafta", "Borrar").on_click(None)
     assert titulo_dialogo(dialogo_arriba(app)) == "¿Borrar el gasto Nafta?"
 
 
@@ -236,7 +247,7 @@ def test_clic_en_el_nombre_abre_editar(app, pantalla, con, mes_id):
     # §2.5: clic en el nombre (DataCell.on_tap) abre "Editar".
     _agregar(con, mes_id, "Nafta")
     app.refrescar()
-    _fila_de(pantalla, "Nafta").cells[0].on_tap(None)
+    celda(pantalla, "Nafta", "Nombre").on_tap(None)
     d = dialogo_gasto_abierto(app)
     assert d.nombre.value == "Nafta"
 
@@ -246,7 +257,7 @@ def test_con_varias_filas_cada_menu_edita_su_gasto(app, pantalla, con, mes_id):
     _agregar(con, mes_id, "Alquiler")
     _agregar(con, mes_id, "Nafta")
     app.refrescar()
-    _fila_de(pantalla, "Alquiler").cells[5].content.items[0].on_click(None)
+    item_menu(pantalla, "Alquiler", "Editar").on_click(None)
     assert dialogo_gasto_abierto(app).nombre.value == "Alquiler"
 
 
@@ -285,7 +296,7 @@ def test_ca_08_1_borrar_borra_y_recalcula(app, pantalla, con, mes_id, pagina):
     assert gastos.obtener_gasto(con, gid) is None
     assert gastos.total_pagado(con, gid) == 0
     assert _nombres_en_tabla(pantalla) == ["Alquiler"]
-    assert filas_tabla(pantalla)[-1][4] == "$ 260.000"
+    assert filas_tabla(pantalla)[-1]["Monto"] == "$ 260.000"
     assert pagina.avisos()[-1] == 'Gasto "Nafta" borrado'
     assert app.hay_dialogo_abierto() is False
 
