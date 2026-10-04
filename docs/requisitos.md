@@ -1,7 +1,8 @@
 # Requisitos – App de gastos personales (v1)
 
 > Documento de requisitos. Sale de la entrevista (/grill-me) confirmada por el usuario,
-> de sus respuestas a dos rondas de preguntas abiertas y de la planilla de referencia
+> de sus respuestas a dos rondas de preguntas abiertas, de la entrevista sobre gastos en
+> dólares (y sus preguntas abiertas) y de la planilla de referencia
 > (`docs/referencia/Referencia planilla.png`).
 > Define QUÉ hace la app, no CÓMO se programa.
 
@@ -20,13 +21,16 @@ Situación del usuario:
 - Tiene deudas en cuotas (tarjetas, préstamos, deudas con personas).
 - Comparte gastos de la casa con dos personas (Sofía y Marsu): paga el total y después
   ellas le devuelven su parte. Lleva la cuenta de lo que le deben.
+- Algunos gastos están expresados en dólares (ej. una suscripción de US$ 20), pero los paga
+  en pesos (RF-43 a RF-48).
 
 Ejemplo real de la planilla: gastos 1.434.617 ARS ÷ cotización 1.600 ≈ 897 USD a cambiar;
 1.200 − 897 = 303 USD de ahorro.
 
 Objetivos de la v1:
 
-1. Cargar los gastos del mes, marcar qué está pagado y saber cuánto falta pagar.
+1. Cargar los gastos del mes (en ARS o en USD), marcar qué está pagado y saber cuánto falta
+   pagar.
 2. Saber cuántos USD hay que cambiar y cuánto se ahorra, con la cotización que el usuario
    carga a mano.
 3. Seguir las deudas en cuotas (cuota actual, cuándo terminan, cuánto se libera).
@@ -46,17 +50,20 @@ Objetivos de la v1:
 | **Sueldo** | Ingreso principal en USD del mes (hoy 1.200 USD). |
 | **Ingreso extra** | Ingreso adicional del mes, en ARS o en USD. |
 | **Cotización** | Cantidad de ARS que se obtienen por 1 USD. La carga el usuario a mano. Ej.: 1.600. |
+| **Cotización del mes** | La cotización cargada en el mes; se usa para pesos a cubrir, USD a cambiar y ahorro. |
 | **Cambio realizado** | Operación ya hecha: "cambié X USD a una cotización Y y recibí Z ARS". |
-| **Gasto** | Salida de dinero en ARS dentro de un mes. Tipo: fijo mensual, en cuotas o pago único. |
+| **Gasto** | Salida de dinero que se paga en ARS dentro de un mes. Tipo: fijo mensual, en cuotas o pago único. Su monto puede estar expresado en ARS o en USD (RF-43). |
+| **Gasto en dólares** | Gasto fijo mensual o de pago único expresado en USD (ej. US$ 20,00). Se paga en pesos: tiene un monto en ARS que sale de multiplicar por la cotización del gasto (RN-53). |
+| **Cotización del gasto** | Cotización que el usuario carga en un gasto en dólares (ej. la del dólar tarjeta). Es propia del gasto y puede ser distinta de la cotización del mes. |
 | **Gasto fijo mensual** | Gasto que se repite todos los meses (alquiler, internet). Se copia al crear un mes nuevo. |
-| **Gasto en cuotas** | Gasto generado por un plan de cuotas en cada mes en que el plan está activo. |
+| **Gasto en cuotas** | Gasto generado por un plan de cuotas en cada mes en que el plan está activo. Siempre en ARS. |
 | **Pago único** | Gasto que solo existe en el mes en que se carga. No se copia. |
-| **Plan de cuotas** | La deuda completa: monto de la cuota, cantidad de cuotas y mes de la primera cuota. |
+| **Plan de cuotas** | La deuda completa: monto de la cuota (ARS), cantidad de cuotas y mes de la primera cuota. |
 | **Cuota actual** | Número de cuota que corresponde a un mes, mostrado como "n/total" (ej. "3/3"). |
 | **Cuota omitida** | Mes en el que el usuario borró a mano la cuota de un plan. El plan sigue, pero en ese mes la cuota no se vuelve a generar (RN-52). |
 | **Medio de pago** | Cómo se paga un gasto (cada tarjeta, efectivo, transferencia…). Opcional. |
-| **Pago** | Monto pagado de un gasto. Un gasto puede tener varios pagos parciales. |
-| **Pendiente** | Lo que falta pagar de un gasto: monto − suma de pagos. |
+| **Pago** | Monto pagado de un gasto, siempre en ARS. Un gasto puede tener varios pagos parciales. |
+| **Pendiente** | Lo que falta pagar de un gasto: monto en ARS − suma de pagos. |
 | **Pesos a cubrir** | ARS que todavía hay que conseguir cambiando USD (RN-14). |
 | **USD a cambiar** | Pesos a cubrir ÷ cotización del mes (RN-15). |
 | **Pesos sobrantes** | ARS que sobran cuando lo obtenido supera los gastos (RN-16). Se convierten a USD y suman al ahorro. |
@@ -70,6 +77,7 @@ Objetivos de la v1:
 | **Capacidad de endeudamiento** | ARS por mes que sobran después de pagar fijos y cuotas y de ahorrar la meta (RN-38). |
 | **Meta de ahorro** | Monto único en USD que el usuario quiere ahorrar por mes. |
 | **Previsión** | Estimación de los 12 meses siguientes al mes actual, con la cotización actual y sin inflación. |
+| **Versión de la base** | Número que indica qué estructura tiene el archivo de la base (0 = sin gastos en dólares; 1 = con gastos en dólares). Evita repetir actualizaciones (RN-59). |
 
 ---
 
@@ -93,8 +101,9 @@ número CA-xx.y, donde xx es el número del RF.
 ### Módulo B – Gastos
 
 - **RF-06** Alta de gasto en el mes seleccionado con: nombre (obligatorio), categoría
-  (obligatoria), monto en ARS (obligatorio), tipo (fijo mensual o pago único) y medio de pago
-  (opcional). Los gastos en cuotas se crean a través de un plan de cuotas (RF-16).
+  (obligatoria), monto (obligatorio; en ARS, o en USD con su cotización según RF-43 y RF-44),
+  tipo (fijo mensual o pago único) y medio de pago (opcional). Los gastos en cuotas se crean
+  a través de un plan de cuotas (RF-16).
 - **RF-07** Edición de cualquier campo de un gasto del mes seleccionado, respetando RN-23
   (no bajar el monto por debajo de lo pagado).
 - **RF-08** Baja de un gasto del mes seleccionado, con confirmación (RN-51). Si es la cuota
@@ -102,7 +111,7 @@ número CA-xx.y, donde xx es el número del RF.
 - **RF-09** Lista de gastos del mes seleccionado con: nombre, categoría, tipo, cuota actual
   (si es en cuotas), medio de pago, monto, pagado y pendiente. Al pie: total de gastos,
   total pagado y total pendiente del mes (columnas "Gastos", "Pagado" y "Falta por pagar" de
-  la planilla).
+  la planilla). Los gastos en dólares muestran además el detalle de RF-46.
 - **RF-10** ABM de categorías: crear, renombrar y eliminar. Una categoría en uso no se borra:
   se archiva, y se puede desarchivar (RN-49).
 - **RF-11** ABM de medios de pago: crear, renombrar y eliminar. Cada tarjeta puede ser un medio
@@ -124,7 +133,8 @@ número CA-xx.y, donde xx es el número del RF.
 ### Módulo D – Deudas en cuotas
 
 - **RF-16** Alta de plan de cuotas con: nombre, categoría, medio de pago (opcional), monto de
-  la cuota en ARS, cantidad total de cuotas y mes de la primera cuota (RN-29).
+  la cuota en ARS, cantidad total de cuotas y mes de la primera cuota (RN-29). Los planes no
+  tienen selector de moneda: son siempre en ARS.
 - **RF-17** Para cada plan, la app calcula y muestra: cuota actual ("n/total") respecto del
   mes seleccionado, mes de la última cuota y monto restante (RN-24 a RN-28).
 - **RF-18** Al dar de alta un plan, la app genera los gastos correspondientes en el mes actual
@@ -145,7 +155,8 @@ número CA-xx.y, donde xx es el número del RF.
 - **RF-23** Ver y editar el sueldo en USD del mes seleccionado. Se permite 0, con aviso (RN-05).
 - **RF-24** ABM de ingresos extra del mes: descripción, moneda (ARS o USD) y monto.
 - **RF-25** Ver y editar la cotización del mes seleccionado en cualquier momento. Al cambiarla
-  se recalculan de inmediato todos los valores que dependen de ella (RN-19).
+  se recalculan de inmediato todos los valores que dependen de ella (RN-19). El monto en ARS
+  de los gastos en dólares **no** cambia (RN-55).
 - **RF-26** ABM de cambios realizados del mes: fecha, USD cambiados, cotización del cambio y
   ARS recibidos. Los ARS se completan solos (USD × cotización) y se pueden corregir a mano
   (RN-13).
@@ -184,8 +195,8 @@ número CA-xx.y, donde xx es el número del RF.
 ### Módulo H – Previsiones
 
 - **RF-38** Tabla de los 12 meses siguientes al mes actual con, por mes: gastos ARS
-  estimados, USD a cambiar y ahorro estimado. Solo considera sueldo, gastos fijos mensuales y
-  cuotas (RN-41 a RN-43, RN-45).
+  estimados, USD a cambiar y ahorro estimado. Solo considera sueldo, gastos fijos mensuales
+  (los en dólares, convertidos con la cotización actual) y cuotas (RN-41 a RN-43, RN-45).
 - **RF-39** En cada mes de la previsión se indica qué cuotas se liberan ese mes y cuánto
   (ej. "desde abril: Avant +41.117 libres") (RN-44).
 
@@ -195,6 +206,36 @@ número CA-xx.y, donde xx es el número del RF.
   usuario (RN-46).
 - **RF-41** Gráfico de ahorro en USD mes a mes, con todos los meses del historial (RN-47).
 - **RF-42** Gráfico de previsión de gastos ARS de los 12 meses de la previsión (RN-48).
+
+### Módulo J – Gastos en dólares
+
+- **RF-43** Selector de moneda (ARS o USD) en el alta y la edición de gastos **fijos
+  mensuales y de pago único**. Los gastos en cuotas no tienen selector (siempre ARS). Un gasto
+  en dólares se paga en pesos: su monto en ARS cuenta en todos los cálculos igual que el de
+  cualquier gasto (total de gastos, pesos a cubrir, USD a cambiar, ahorro, pagos, pendiente,
+  total por medio de pago, partes compartidas, capacidad de endeudamiento y gráfico por
+  categoría) (RN-55). La previsión es la excepción: usa la cotización actual (RN-42).
+- **RF-44** Al elegir USD, la app pide el **monto en USD** y la **cotización del gasto**. La
+  cotización aparece completada con la cotización del mes; si el mes no tiene cotización, el
+  campo queda vacío y es obligatorio (RN-54). Mientras el usuario escribe, la app muestra al
+  instante los pesos a pagar: "US$ 20,00 × $ 1.600 = $ 32.000" (RN-53). La app no calcula
+  impuestos ni recargos (RN-58).
+- **RF-45** Edición de un gasto en dólares: se pueden cambiar el monto en USD y la cotización
+  del gasto, y el monto en ARS se recalcula. También se puede cambiar la moneda del gasto
+  (ARS ↔ USD) (RN-56). Si cambia la cotización del mes, el monto en ARS del gasto **no**
+  cambia (RN-55).
+- **RF-46** En la lista de gastos (RF-09), los gastos en dólares muestran el monto en ARS (en
+  la columna de monto, como todos) y además el detalle "US$ 20,00 × $ 1.600" (cotización con
+  el formato de RN-04).
+- **RF-47** Al crear un mes nuevo, los gastos fijos en dólares se copian con el mismo monto en
+  USD y con la cotización del mes nuevo (o la del gasto copiado, si el mes nuevo no tiene
+  cotización), recalculando el monto en ARS (RN-57). Si es un gasto compartido y sus partes
+  manuales ya no entran en el nuevo monto, se reparten en partes iguales y la app avisa
+  (RN-37).
+- **RF-48** La incorporación de gastos en dólares no debe perder ni alterar los datos ya
+  cargados por el usuario: antes de actualizar la base se hace una copia de respaldo, y todos
+  los gastos existentes quedan como gastos en ARS con sus mismos montos, pagos y partes. La
+  actualización se aplica una sola vez (RN-59).
 
 ---
 
@@ -207,22 +248,28 @@ número CA-xx.y, donde xx es el número del RF.
   los números con decimales de punto flotante acumulan errores de redondeo al sumar
   (0,1 + 0,2 ≠ 0,3); con enteros las sumas son exactas.
 - **RN-02 – Almacenamiento de la cotización.** Entero en **centavos de ARS por 1 USD**.
-  Ej.: 1.600 → `160000`; 1.432,50 → `143250`.
-- **RN-03 – Redondeo en cálculos.** Solo se redondea al dividir (conversiones ARS → USD y
-  división de partes). Las conversiones se redondean al centavo más cercano, mitad hacia
-  arriba (0,5 → 1). Las sumas y restas nunca redondean. La división de partes sigue RN-32.
+  Ej.: 1.600 → `160000`; 1.432,50 → `143250`. Vale para la cotización del mes, la de cada
+  cambio y la de cada gasto en dólares.
+- **RN-03 – Redondeo en cálculos.** Solo se redondea al dividir (conversiones entre monedas,
+  incluida la conversión USD → ARS de los gastos en dólares, RN-53, y división de partes).
+  Las conversiones se redondean al centavo más cercano, mitad hacia arriba (0,5 → 1). Las
+  sumas y restas nunca redondean. La división de partes sigue RN-32.
 - **RN-04 – Visualización.** Internamente todo sigue en centavos. En pantalla:
   - **ARS sin decimales**, redondeado al peso más cercano (mitad hacia arriba), con punto
     de miles: 66.020,12 → "66.020"; 22.093,68 → "22.094".
   - **USD con 2 decimales**: "896,64".
+  - **Cotizaciones** (del mes, de los cambios y de los gastos en dólares): **con sus
+    decimales cuando los tienen** ("$ 1.432,50") y **sin decimales cuando son enteras**
+    ("$ 1.600"). No se redondean. Vale en todas partes: barra/resumen, diálogos, detalle
+    "US$ 19,99 × $ 1.432,50" en la lista y vista previa del alta y la edición.
   - Los totales se redondean a partir del valor exacto, no sumando valores ya redondeados.
-  - La entrada de montos acepta hasta 2 decimales (coma decimal), en ARS y en USD.
-- **RN-05 – Montos válidos.** Montos de gastos, cuotas, pagos, ingresos extra, USD y ARS de
-  cambios, ítems "me deben" y meta de ahorro deben ser **mayores a 0**. Se rechazan negativos,
-  cero, vacíos y texto no numérico, con un mensaje. El **sueldo** debe ser ≥ 0; si es 0 se
-  acepta y se muestra el aviso "El sueldo de este mes es 0".
-- **RN-06 – Cotización válida.** Mayor a 0. No se puede guardar 0 ni negativa. Puede quedar
-  sin cargar (RN-18).
+  - La entrada de montos y cotizaciones acepta hasta 2 decimales (coma decimal).
+- **RN-05 – Montos válidos.** Montos de gastos (en ARS o en USD), cuotas, pagos, ingresos
+  extra, USD y ARS de cambios, ítems "me deben" y meta de ahorro deben ser **mayores a 0**. Se
+  rechazan negativos, cero, vacíos y texto no numérico, con un mensaje. El **sueldo** debe ser
+  ≥ 0; si es 0 se acepta y se muestra el aviso "El sueldo de este mes es 0".
+- **RN-06 – Cotización válida.** Mayor a 0. No se puede guardar 0 ni negativa. La cotización
+  del mes puede quedar sin cargar (RN-18); la de un gasto en dólares es obligatoria (RN-54).
 - **RN-07 – Meses válidos.** Año de 4 dígitos y mes de 1 a 12. No puede haber dos meses con
   el mismo año y mes.
 
@@ -231,13 +278,14 @@ número CA-xx.y, donde xx es el número del RF.
 - **RN-08 – Mes nuevo.** Solo se puede crear el mes siguiente al último mes (ej. si el último
   es 2026-10, solo 2026-11). No se pueden saltear meses ni crear meses anteriores al primero.
 - **RN-09 – Contenido del mes nuevo.**
-  - Copia los gastos fijos mensuales del último mes: nombre, categoría, monto, medio de pago y
-    configuración de compartido (RN-37). Todos quedan **sin pagos**.
+  - Copia los gastos fijos mensuales del último mes: nombre, categoría, monto, moneda, medio de
+    pago y configuración de compartido (RN-37). Los fijos en dólares se copian según RN-57.
+    Todos quedan **sin pagos**.
   - Genera un gasto por cada plan de cuotas activo en el mes nuevo (RN-24): no cancelado y
     sin cuota omitida en ese mes.
   - Los gastos fijos y cuotas se copian o generan **aunque usen una categoría, medio de pago o
     persona archivada** (RN-49).
-  - **No** copia gastos de pago único, ingresos extra ni cambios realizados.
+  - **No** copia gastos de pago único (en ARS ni en USD), ingresos extra ni cambios realizados.
   - Sugiere el sueldo y la cotización del último mes (editables).
   - Si un gasto fijo se eliminó en el último mes, ya no se copia más.
 - **RN-10 – Borrar mes.** Solo se puede borrar el último mes, con confirmación. Se borran sus
@@ -261,9 +309,9 @@ Variables (todas del mismo mes):
 | `C_ars` | Suma de ARS recibidos en los cambios |
 | `K` | Cotización del mes (ARS por USD) |
 
-- **RN-12 – Total de gastos.** `G = Σ monto de todos los gastos del mes`, pagados o no. Los
-  gastos compartidos cuentan por su **monto completo**, porque el usuario paga todo y después
-  le devuelven.
+- **RN-12 – Total de gastos.** `G = Σ monto en ARS de todos los gastos del mes`, pagados o
+  no. Los gastos compartidos cuentan por su **monto completo**, porque el usuario paga todo y
+  después le devuelven. Los gastos en dólares cuentan por su monto en ARS (RN-55).
 - **RN-13 – ARS recibidos en un cambio.** Valor sugerido: `usd × cotización_del_cambio`
   (en centavos: `usd_cent × cot_cent ÷ 100`, redondeado según RN-03). El usuario puede
   corregirlo a mano (ej. si hubo comisión); se usa el valor guardado. Si después cambia los
@@ -293,14 +341,16 @@ porque redondeaba a enteros).
 
 - **RN-20 – Pagado y pendiente.** `Pagado(gasto) = Σ pagos del gasto`;
   `Pendiente(gasto) = monto − Pagado`;
-  `Total pendiente del mes = Σ Pendiente de los gastos del mes`.
+  `Total pendiente del mes = Σ Pendiente de los gastos del mes`. Pagos y pendiente son
+  siempre en ARS, también en los gastos en dólares (sobre su monto en ARS).
 - **RN-21 – Tope del pago.** Un pago parcial debe ser > 0 y ≤ pendiente del gasto. No se puede
   pagar de más.
 - **RN-22 – Tilde "pagado".** Marcarlo registra un pago por el pendiente (queda en 0). Un
   gasto con pendiente 0 se ve con el tilde marcado, se haya pagado con el tilde o con
   parciales. **Destildarlo borra todos los pagos del gasto** (pendiente = monto).
 - **RN-23 – Monto menor a lo pagado.** No se puede bajar el monto de un gasto por debajo de lo
-  ya pagado: se rechaza con un mensaje que indique el monto pagado.
+  ya pagado: se rechaza con un mensaje que indique el monto pagado. En un gasto en dólares
+  vale para el monto en ARS resultante de cualquier edición (monto USD, cotización o moneda).
 
 ### 4.5 Cuotas
 
@@ -318,8 +368,9 @@ porque redondeaba a enteros).
 - **RN-28 – Monto restante.** Respecto del mes seleccionado: `(N − n) × monto_cuota` (cuotas
   posteriores a la del mes). Si el plan no empezó, `N × monto_cuota`; si terminó o está
   cancelado, 0.
-- **RN-29 – Validaciones del plan.** Cantidad de cuotas: entero ≥ 1. Monto de cuota > 0. La
-  primera cuota puede ser un mes pasado (deudas ya empezadas, ej. Avant en 3/3).
+- **RN-29 – Validaciones del plan.** Cantidad de cuotas: entero ≥ 1. Monto de cuota > 0, en
+  ARS (las cuotas en dólares están fuera de la v1). La primera cuota puede ser un mes pasado
+  (deudas ya empezadas, ej. Avant en 3/3).
 - **RN-30 – Alcance de alta y edición.** Crear o editar un plan crea, actualiza o elimina sus
   gastos **solo en el mes actual (calendario) y en los meses futuros que ya existan**. Los
   meses anteriores al mes actual nunca se modifican, aunque la primera cuota sea anterior y
@@ -347,7 +398,7 @@ porque redondeaba a enteros).
   persona es `monto ÷ (p + 1)` truncado al centavo; la parte del usuario es
   `monto − Σ partes de las personas` (se queda con los centavos sobrantes).
   Ej.: Internet 38.700 entre 3 → 12.900 c/u. Edenor 66.281 entre 3 → Sofía 22.093,66,
-  Marsu 22.093,66, usuario 22.093,68.
+  Marsu 22.093,66, usuario 22.093,68. En un gasto en dólares, `monto` es su monto en ARS.
 - **RN-33 – Partes editadas a mano.** El usuario edita las partes de las personas; la del
   usuario siempre se calcula como `monto − Σ partes de las personas`. Si da negativa, se
   rechaza con un mensaje. Una parte editada a mano queda marcada como "manual".
@@ -361,6 +412,8 @@ porque redondeaba a enteros).
       cobrado y la diferencia: `diferencia = parte nueva − ya cobrado`. Si la diferencia es
       positiva, es lo que falta cobrar; si es negativa, se muestra como "a devolver".
   - Marcar de nuevo el tilde registra como cobrada la parte nueva completa.
+  - En un gasto en dólares, cualquier edición que cambie su monto en ARS (monto USD,
+    cotización del gasto o moneda) es un cambio de monto a los efectos de esta regla.
 - **RN-35 – Total adeudado por persona (acumulado).**
   `Total(persona) = Σ (parte − ya cobrado) de sus partes no marcadas como cobradas, de todos los meses + Σ ítems manuales no cobrados`.
   Una parte que nunca se cobró aporta la parte completa; una con diferencia aporta la
@@ -369,14 +422,23 @@ porque redondeaba a enteros).
   `G`, pesos a cubrir, USD a cambiar ni ahorro. Se muestra aparte.
 - **RN-37 – Copia al mes nuevo.** Al copiar un gasto fijo compartido se copian las personas y
   las partes (automáticas o manuales). Las partes nuevas quedan **no cobradas** (ya cobrado = 0).
+  Si es un fijo en dólares y su monto en ARS cambia al copiarse (RN-57):
+  - las partes automáticas se calculan sobre el nuevo monto en ARS (RN-32) y las manuales se
+    mantienen, como en RN-34;
+  - si con las partes manuales la parte del usuario quedaría **negativa**, **todas** las
+    partes de ese gasto en el mes nuevo vuelven a ser automáticas (partes iguales, RN-32) y,
+    al terminar de crear el mes, la app avisa: "Las partes de X se repartieron en partes
+    iguales porque cambió el monto." (X = nombre del gasto). El mes se crea igual; las partes
+    del mes anterior no cambian.
 
 ### 4.7 Resumen, capacidad y meta
 
 - **RN-38 – Capacidad de endeudamiento (ARS/mes).** Lo que sobra después de pagar todo y
   ahorrar la meta:
   `Capacidad = S × K − Σ gastos fijos mensuales del mes − Σ gastos en cuotas del mes − Meta × K`.
-  - Gastos fijos y cuotas por su monto completo (RN-12). No entran los pagos únicos ni los
-    ingresos extra.
+  - Gastos fijos y cuotas por su monto completo en ARS (RN-12), también los fijos en dólares
+    (con su monto en ARS guardado).
+    No entran los pagos únicos ni los ingresos extra.
   - Sin meta cargada, `Meta = 0`.
   - Puede ser negativa: se muestra en rojo con el aviso "Sin capacidad de endeudamiento".
   - Sin cotización: "Cargá la cotización" (RN-18).
@@ -392,8 +454,13 @@ porque redondeaba a enteros).
   el actual e independientemente del mes seleccionado. Ej.: mes actual 2026-10 → 2026-11 a
   2027-10.
 - **RN-42 – Gastos estimados del mes `M`.**
-  `G(M) = Σ gastos fijos mensuales del mes actual (mismo monto, completo aunque sea compartido) + Σ cuotas de planes activos en M` (RN-24, sin cuotas omitidas).
-  **No** incluye pagos únicos.
+  `G(M) = Σ gastos fijos mensuales del mes actual (completo aunque sea compartido) + Σ cuotas de planes activos en M` (RN-24, sin cuotas omitidas).
+  - Fijos en ARS: con su mismo monto.
+  - Fijos en dólares: `monto en USD × K_actual` (con RN-53), la misma lógica que al crear un
+    mes nuevo (RN-57), y **no** su monto en ARS guardado. Si el mes actual no tiene
+    cotización, se usa la cotización guardada en el gasto. Ej.: Claude US$ 20,00 guardado a
+    1.600 (32.000) con cotización actual 1.700 → 34.000 en cada mes previsto.
+  - **No** incluye pagos únicos.
 - **RN-43 – USD a cambiar y ahorro estimados.** `U(M) = G(M) ÷ K_actual` (RN-15);
   `Ahorro(M) = S_actual − U(M)`. **No** incluye ingresos extra ni cambios realizados. Sin
   inflación. `S_actual` y `K_actual` son el sueldo y la cotización del mes actual.
@@ -403,12 +470,14 @@ porque redondeaba a enteros).
   liberación queda fuera de la tabla.
 - **RN-45 – Datos faltantes.** Si el mes actual no existe en la app, la previsión no se calcula
   y muestra "Creá el mes AAAA-MM para ver la previsión". Si existe pero no tiene cotización,
-  muestra solo los gastos ARS y avisa que falta la cotización.
+  muestra solo los gastos ARS (los fijos en dólares con la cotización guardada en cada gasto,
+  RN-42) y avisa que falta la cotización.
 
 ### 4.9 Gráficos
 
-- **RN-46 – Por categoría.** Suma de la **parte propia** del usuario de cada gasto del mes,
-  agrupada por categoría. Categorías sin gastos no aparecen.
+- **RN-46 – Por categoría.** Suma de la **parte propia** del usuario de cada gasto del mes
+  (en ARS, también para los gastos en dólares), agrupada por categoría. Categorías sin gastos
+  no aparecen.
 - **RN-47 – Ahorro.** Un punto por mes del historial, con RN-17 y la cotización guardada en
   cada mes. Los meses sin ahorro calculable (RN-18) se muestran vacíos.
 - **RN-48 – Previsión.** Los 12 valores `G(M)` de RN-42.
@@ -430,6 +499,66 @@ porque redondeaba a enteros).
   omitida**: la cuota no se vuelve a generar en ese mes (ni al editar el plan, ni al borrar y
   volver a crear el mes) y no se cuenta en la previsión.
 
+### 4.11 Gastos en dólares
+
+- **RN-53 – Conversión USD → ARS.**
+  `monto_ars_cent = redondeo(monto_usd_cent × cotizacion_cent ÷ 100)`, al centavo más cercano,
+  mitad hacia arriba (RN-03).
+  - US$ 20,00 × 1.600 → `2000 × 160000 ÷ 100 = 3200000` → $ 32.000.
+  - US$ 19,99 × 1.432,50 → `1999 × 143250 ÷ 100 = 2863567,5` → `2863568` (28.635,68), en
+    pantalla "US$ 19,99 × $ 1.432,50 = $ 28.636" (cotización con decimales, monto en ARS sin
+    decimales, RN-04).
+  La vista previa del alta y la edición (RF-44) usa la misma fórmula que el valor guardado.
+- **RN-54 – Validaciones de un gasto en dólares.**
+  - Monto en USD > 0 (RN-05) y cotización del gasto > 0 (RN-06); ambos obligatorios. Se
+    rechazan cero, negativos, vacíos y texto no numérico, con un mensaje.
+  - La cotización del gasto se sugiere con la cotización del mes. Si el mes no tiene
+    cotización, el campo queda vacío y no se puede guardar el gasto hasta completarlo.
+  - El monto en ARS resultante debe ser > 0 (RN-05): si el redondeo da 0 (ej. US$ 0,01 ×
+    0,40 = 0,004), se rechaza.
+  - Solo los tipos "fijo mensual" y "pago único" pueden ser en USD. Las cuotas son siempre en
+    ARS.
+- **RN-55 – Monto en ARS fijo.** El monto en ARS de un gasto en dólares se calcula al
+  guardarlo y queda fijo. **No** cambia si después cambia la cotización del mes: en ese caso
+  cambian USD a cambiar y ahorro (porque cambia `K`), pero no `G`. Solo cambia si el usuario
+  edita el monto en USD, la cotización del gasto o la moneda (RN-56), y en ese caso:
+  - se recalcula con RN-53;
+  - si queda por debajo de lo ya pagado, se rechaza la edición (RN-23);
+  - si el gasto es compartido, las partes se tratan según RN-34.
+  El monto en ARS es el que se usa en todos los cálculos del mes (RN-12, RN-20, RN-22, RF-22,
+  RN-32, RN-38, RN-46). La previsión de meses futuros usa en cambio la cotización actual
+  (RN-42).
+- **RN-56 – Cambio de moneda al editar.** Está permitido.
+  - **ARS → USD:** se piden monto en USD y cotización del gasto (sugerida: la del mes), igual
+    que en el alta; el monto en ARS pasa a ser el resultado de RN-53.
+  - **USD → ARS:** se pide el monto en ARS (obligatorio, RN-05); el monto en USD y la
+    cotización del gasto se descartan.
+  - En ambos casos aplican RN-23 (no quedar por debajo de lo pagado) y RN-34 (compartidos).
+- **RN-57 – Copia de un fijo en dólares al mes nuevo.** Se copia con el **mismo monto en USD**
+  y con cotización del gasto = **cotización del mes nuevo**; si el mes nuevo no tiene
+  cotización, conserva la cotización del gasto copiado. El monto en ARS se recalcula con RN-53.
+  Si después se cambia la cotización del mes nuevo, el gasto copiado no cambia (RN-55).
+  Si el gasto es compartido, las partes se tratan según RN-37.
+  Consecuencia aceptada por el usuario: si en el mes anterior había usado una cotización con
+  recargo (ej. dólar tarjeta), en el mes nuevo el gasto toma la cotización del mes y, si
+  corresponde, tiene que corregirla a mano.
+- **RN-58 – Sin impuestos.** La app no calcula impuestos, percepciones ni recargos (dólar
+  tarjeta, etc.). El usuario escribe directamente la cotización que corresponda.
+- **RN-59 – Actualización de la base existente.** La base del usuario ya tiene datos reales.
+  - **Versión de la base:** la estructura se identifica con un número de versión guardado en
+    la propia base. Una base sin gastos en dólares es la **versión 0**; con gastos en dólares,
+    la **versión 1**. La actualización solo se aplica si la base está en una versión menor;
+    así no se repite al volver a abrir la app.
+  - **Respaldo previo:** antes de modificar la estructura se crea una copia completa de la
+    base en `datos-privados/respaldos/gastos-AAAAMMDD-HHMMSS.db` (fecha y hora del momento
+    del respaldo). Si el respaldo no se puede crear, la actualización no se hace y la app
+    avisa.
+  - **Todo o nada:** la actualización (agregar las columnas y pasar a versión 1) se hace en
+    un solo paso: o se completa entera, o la base queda exactamente como estaba (versión 0,
+    sin columnas nuevas, mismos datos) y la app avisa.
+  - **Resultado:** todos los gastos existentes quedan con moneda ARS, sin monto en USD ni
+    cotización del gasto, y con exactamente los mismos montos, pagos y partes que antes.
+
 ---
 
 ## 5. Modelo de datos propuesto (SQLite)
@@ -445,6 +574,8 @@ Convenciones:
 - Booleanos: `INTEGER` 0/1 (SQLite no tiene booleano).
 - Claves foráneas activadas (`PRAGMA foreign_keys = ON`).
 - El mes actual no se guarda: se toma del reloj del sistema cada vez que se necesita.
+- Versión de la estructura: `PRAGMA user_version` (0 = sin gastos en dólares; 1 = con gastos
+  en dólares) (RN-59).
 
 ### 5.1 `meses`
 | Campo | Tipo | Notas |
@@ -475,7 +606,7 @@ Los medios de pago son una tabla (y no texto libre) para poder agrupar sin error
 | nombre | TEXT NOT NULL | Ej. "Avant Service" |
 | categoria_id | INTEGER NOT NULL FK → categorias | |
 | medio_pago_id | INTEGER NULL FK → medios_pago | |
-| monto_cuota_cent | INTEGER NOT NULL | CHECK > 0 |
+| monto_cuota_cent | INTEGER NOT NULL | CHECK > 0. Siempre ARS (sin columna de moneda). |
 | cantidad_cuotas | INTEGER NOT NULL | CHECK ≥ 1 |
 | primer_anio | INTEGER NOT NULL | |
 | primer_mes | INTEGER NOT NULL | CHECK 1..12 |
@@ -505,21 +636,46 @@ omisión sobreviva si el mes se borra y se vuelve a crear.
 | mes_id | INTEGER NOT NULL FK → meses ON DELETE CASCADE | |
 | nombre | TEXT NOT NULL | |
 | categoria_id | INTEGER NOT NULL FK → categorias | |
-| monto_cent | INTEGER NOT NULL | CHECK > 0 |
+| monto_cent | INTEGER NOT NULL | CHECK > 0. **Monto en ARS para todos los gastos**, también los en dólares (resultado de RN-53). |
+| moneda | TEXT NOT NULL DEFAULT 'ARS' | CHECK IN ('ARS', 'USD'). Moneda en la que está expresado el gasto. |
+| monto_usd_cent | INTEGER NULL | CHECK > 0. Obligatorio si moneda = 'USD'; NULL si moneda = 'ARS'. |
+| cotizacion_cent | INTEGER NULL | CHECK > 0. Cotización del gasto. Obligatoria si moneda = 'USD'; NULL si moneda = 'ARS'. |
 | tipo | TEXT NOT NULL | CHECK IN ('fijo', 'cuota', 'unico') |
 | medio_pago_id | INTEGER NULL FK → medios_pago | |
 | plan_cuotas_id | INTEGER NULL FK → planes_cuotas | Obligatorio si tipo = 'cuota'; NULL en otro caso. |
 | | | UNIQUE(mes_id, plan_cuotas_id): un plan genera como máximo un gasto por mes. |
+| | | CHECK: si moneda = 'USD', entonces tipo ≠ 'cuota' (RN-54). |
 
 Cada mes tiene **copias** de sus gastos (no referencias a una lista maestra), para que editar
 un mes no altere los demás (RN-11).
+
+Decisiones sobre los gastos en dólares:
+
+- `monto_cent` sigue siendo el monto en ARS de **todos** los gastos. Así los totales, los
+  pagos, el pendiente, el total por medio de pago, las partes compartidas y la capacidad se
+  siguen calculando igual, sin preguntar la moneda.
+- El monto en ARS se **guarda** (no se calcula cada vez) porque tiene que quedar fijo aunque
+  cambie la cotización del mes (RN-55). Se guardan también el monto en USD y la cotización del
+  gasto para poder mostrar "US$ 20,00 × $ 1.600", recalcular al editar, copiar al mes nuevo
+  (RN-57) y estimar la previsión con la cotización actual (RN-42).
+- **Migración (versión 0 → 1, RN-59):** la base del usuario ya tiene datos reales, así que
+  estas tres columnas se agregan con una migración:
+  1. Se lee `PRAGMA user_version`; si ya es 1 (o más), no se hace nada.
+  2. Se hace la copia de respaldo con la **API de backup de SQLite** en
+     `datos-privados/respaldos/gastos-AAAAMMDD-HHMMSS.db` (la API copia la base de forma
+     consistente aunque esté abierta, a diferencia de copiar el archivo a mano).
+  3. Dentro de **una transacción**: `ALTER TABLE gastos ADD COLUMN ...` para las tres
+     columnas y `PRAGMA user_version = 1`. Si algo falla, se deshace todo y la base queda en
+     versión 0.
+  Por el `DEFAULT 'ARS'`, los gastos existentes quedan como ARS con `monto_usd_cent` y
+  `cotizacion_cent` en NULL.
 
 ### 5.6 `pagos`
 | Campo | Tipo | Notas |
 |---|---|---|
 | id | INTEGER PK | |
 | gasto_id | INTEGER NOT NULL FK → gastos ON DELETE CASCADE | |
-| monto_cent | INTEGER NOT NULL | CHECK > 0 |
+| monto_cent | INTEGER NOT NULL | CHECK > 0. Siempre ARS. |
 | fecha | TEXT NOT NULL | ISO |
 
 Una tabla de pagos (en vez de un campo "pagado") permite varios pagos parciales y borrarlos
@@ -554,7 +710,7 @@ guarda: es `monto − Σ partes` (así la suma siempre cierra).
 | gasto_id | INTEGER NOT NULL FK → gastos ON DELETE CASCADE | |
 | persona_id | INTEGER NOT NULL FK → personas | |
 | monto_cent | INTEGER NOT NULL | CHECK ≥ 0 |
-| editada_a_mano | INTEGER NOT NULL DEFAULT 0 | 0/1. Automática (RN-32) o manual (RN-33/RN-34). |
+| editada_a_mano | INTEGER NOT NULL DEFAULT 0 | 0/1. Automática (RN-32) o manual (RN-33/RN-34). Vuelve a 0 en el caso de RN-37. |
 | cobrado | INTEGER NOT NULL DEFAULT 0 | 0/1. Estado del tilde. |
 | cobrado_cent | INTEGER NOT NULL DEFAULT 0 | CHECK ≥ 0. Monto ya cobrado. Al marcar el tilde = `monto_cent`; al desmarcarlo a mano = 0. Si cambia la parte (RN-34) se conserva para mostrar la diferencia. |
 | | | UNIQUE(gasto_id, persona_id) |
@@ -585,7 +741,9 @@ Sin `mes_id`: la lista es acumulada por persona (RN-35).
 Mes actual, total de gastos, pagado, pendiente, pesos a cubrir, USD a cambiar, pesos
 sobrantes, ahorro, cuota actual, última cuota, restante, parte del usuario, diferencias de
 cobro, total que le deben, capacidad de endeudamiento y previsiones. Guardarlos duplicaría
-información que podría quedar vieja al cambiar la cotización o un gasto.
+información que podría quedar vieja al cambiar la cotización o un gasto. (Excepción
+deliberada: el monto en ARS de un gasto en dólares **sí** se guarda, porque tiene que quedar
+fijo, RN-55.)
 
 ---
 
@@ -597,7 +755,8 @@ información que podría quedar vieja al cambiar la cotización o un gasto.
 | Línea "Tarjetas de Credito 582.917" | Total por medio de pago (RF-22). **No** se carga como gasto: los gastos que la componen se cargan uno por uno. |
 | Tabla "Deudas" | Gastos y planes de cuotas con medio de pago (RF-16, RF-22) |
 | "Avant Service cuota 3/3" | Plan de cuotas con cuota actual calculada (RF-17) |
-| "Gastos en dolares 897" / "Sueldo − Gastos en dolares 303" | USD a cambiar y ahorro (RN-15, RN-17) |
+| "Gastos en dolares 897" / "Sueldo − Gastos en dolares 303" | USD a cambiar y ahorro (RN-15, RN-17). Ojo: en la planilla "Gastos en dolares" es el **total de gastos convertido a USD**, no tiene relación con los gastos en dólares de RF-43. |
+| (no existe en la planilla) Gastos expresados en USD, ej. una suscripción de US$ 20 | Gastos en dólares (RF-43 a RF-48): se cargan en USD con su cotización y cuentan por su monto en ARS. |
 | "Gastos fijos sin deuda / Sueldo / Capacidad de Endeudamiento" | Capacidad de endeudamiento con la nueva fórmula (RN-38) |
 | Edenor, Metrogas, "Total de servicios C/U" | Gastos compartidos (RF-29) |
 | "Deudas sofia", "Marsu" | Lista "me deben" por persona (RF-33) |
@@ -741,9 +900,12 @@ Base: gastos del mes 1.434.617.
 - **CA-25.2** Cotización 0 o negativa: se rechaza.
 - **CA-25.3** Mes sin cotización y con gastos: USD a cambiar, ahorro y capacidad muestran
   "Cargá la cotización" (no un error ni 0).
+- **CA-25.4** Cotización del mes 1.432,50: el resumen y el diálogo de edición la muestran como
+  "$ 1.432,50" (no "$ 1.433"); cotización 1.600 se muestra "$ 1.600" (sin ",00").
 - **CA-26.1** Cambio de 500 USD a 1.500: el campo ARS se completa con 750.000.
 - **CA-26.2** Corregir esos ARS a 745.000 y guardar: el cambio muestra 745.000.
 - **CA-26.3** Cambio con USD, cotización o ARS ≤ 0: se rechaza.
+- **CA-26.4** Un cambio a cotización 1.432,50 muestra su cotización como "$ 1.432,50".
 - **CA-27.1** Con el cambio de CA-26.1 (750.000) y cotización 1.600: pesos a cubrir 684.617;
   USD a cambiar 427,89; ahorro 272,11. Cambiar la cotización del mes a 1.700 no modifica los
   750.000 del cambio.
@@ -841,6 +1003,17 @@ Avant 41.117 con última cuota 2026-10, plan B de 10.000 con última cuota 2027-
 - **CA-38.7** Sin cotización en el mes actual: se ven los gastos ARS y el aviso de que falta
   la cotización. Si 2026-10 no existe (último mes 2026-09): se ve "Creá el mes 2026-10 para
   ver la previsión".
+- **CA-38.8** A la base se agrega en 2026-10 el fijo "Claude" US$ 20,00 guardado con
+  cotización 1.600 (32.000) y después se cambia la cotización de 2026-10 a 1.700 (Claude sigue
+  en 32.000 en el mes, RN-55). En la previsión Claude cuenta **34.000** en cada fila:
+  2026-11 a 2027-02 gastos 844.000, USD a cambiar 496,47, ahorro 703,53; desde 2027-03
+  gastos 834.000, USD a cambiar 490,59, ahorro 709,41.
+- **CA-38.9** Claude fijo US$ 20,00 guardado con cotización 2.100 (dólar tarjeta, 42.000) y
+  cotización actual 1.600: en la previsión cuenta 32.000 (2026-11: gastos 842.000).
+- **CA-38.10** Claude fijo US$ 20,00 guardado con cotización 1.600 y 2026-10 sin cotización:
+  la previsión muestra gastos 842.000 en 2026-11 (Claude a 1.600, la cotización del gasto) y
+  el aviso de que falta la cotización.
+- **CA-38.11** Un pago único en USD de 2026-10 no aparece en la previsión.
 - **CA-39.1** La fila 2026-11 indica "Avant +41.117 libres" y la fila 2027-03 "Plan B +10.000
   libres". Ninguna otra fila indica liberaciones.
 - **CA-39.2** Un plan con última cuota 2027-10 no muestra liberación en la tabla.
@@ -856,7 +1029,90 @@ Avant 41.117 con última cuota 2026-10, plan B de 10.000 con última cuota 2027-
 - **CA-41.2** Cambiar la cotización de 2026-10 a 1.700 cambia solo ese punto (a 356,11).
 - **CA-41.3** Un mes sin cotización y con gastos aparece vacío, sin error.
 - **CA-42.1** El gráfico de previsión muestra los mismos 12 valores de gastos que la tabla
-  (en la base de módulo H: 810.000 hasta 2027-02 y 800.000 desde 2027-03).
+  (en la base de módulo H: 810.000 hasta 2027-02 y 800.000 desde 2027-03; en el caso CA-38.8:
+  844.000 y 834.000).
+
+### Módulo J – Gastos en dólares
+Base: mes 2026-10 con cotización del mes 1.600 y los gastos de la base del módulo E
+(1.434.617), salvo que se indique otra cosa.
+- **CA-43.1** Alta de "Claude", pago único, moneda USD, US$ 20,00, cotización 1.600: se guarda
+  `monto_usd_cent = 2000`, `cotizacion_cent = 160000`, `monto_cent = 3200000`; el total de
+  gastos pasa a 1.466.617; pesos a cubrir 1.466.617; USD a cambiar 916,64; ahorro 283,36.
+- **CA-43.2** El mismo gasto con cotización del gasto 2.100 (dólar tarjeta): monto 42.000;
+  total 1.476.617; USD a cambiar 922,89 (se calcula con la cotización del mes, 1.600);
+  ahorro 277,11.
+- **CA-43.3** En el formulario de alta de un plan de cuotas no hay selector de moneda.
+  Intentar guardar un gasto en USD de tipo cuota (por ejemplo, directamente en la lógica) se
+  rechaza.
+- **CA-43.4** Claude (US$ 20,00 × 1.600 = 32.000) con medio "Visa Santander" junto con Gym
+  50.000 (Visa Santander): el total de Visa Santander es 82.000.
+- **CA-43.5** Marcar pagado Claude registra un pago de 32.000 ARS y su pendiente queda en 0.
+  Un pago parcial de 10.000 deja pendiente 22.000.
+- **CA-43.6** "Netflix" fijo US$ 15,00 × 1.600 = 24.000, compartido con Sofía y Marsu: 8.000
+  cada uno, incluido el usuario. El gráfico por categoría suma 8.000 (parte propia).
+- **CA-43.7** Capacidad: con los datos de CA-37.1 (613.583) más Claude como **fijo** US$ 20,00
+  × 1.600: capacidad 581.583. Como pago único no cambia la capacidad (613.583).
+- **CA-44.1** Al elegir USD con cotización del mes 1.600, el campo cotización aparece con
+  1.600; al escribir 20 en USD se ve "US$ 20,00 × $ 1.600 = $ 32.000" sin guardar todavía.
+- **CA-44.2** US$ 19,99 con cotización 1.432,50: la vista previa muestra
+  "US$ 19,99 × $ 1.432,50 = $ 28.636" y se guarda `monto_cent = 2863568`.
+- **CA-44.3** En un mes sin cotización, al elegir USD el campo cotización está vacío; guardar
+  sin completarlo se rechaza con mensaje. Completándolo con 1.550, US$ 20,00 se guarda como
+  31.000.
+- **CA-44.4** Monto USD 0, −5, vacío o "abc": se rechaza. Cotización del gasto 0, negativa o
+  vacía: se rechaza. Nada se guarda.
+- **CA-44.5** US$ 0,01 con cotización 0,40 (resultado 0,004 ARS, que redondea a 0): se rechaza.
+- **CA-45.1** Con Claude guardado (US$ 20,00 × 1.600 = 32.000), cambiar la cotización del
+  **mes** a 1.700: Claude sigue en 32.000; total 1.466.617; USD a cambiar 862,72; ahorro 337,28.
+- **CA-45.2** Editar Claude y poner cotización del gasto 1.700: monto 34.000; total 1.468.617.
+- **CA-45.3** Editar Claude y poner US$ 25,00 (cotización 1.600): monto 40.000.
+- **CA-45.4** Claude con un pago de 30.000: editar la cotización a 1.400 (28.000) se rechaza
+  con un mensaje que indica lo pagado; a 1.550 (31.000) se acepta y el pendiente queda 1.000.
+  Editar el monto a US$ 18,00 con cotización 1.600 (28.800) se rechaza.
+- **CA-45.5** Cambiar "Nafta" (ARS 30.000) a USD con US$ 25,00 × 1.600: monto 40.000 y se
+  muestra el detalle en USD. Volver a ARS con 35.000: monto 35.000, sin monto USD ni
+  cotización del gasto guardados.
+- **CA-45.6** Claude con 32.000 pagados: pasarlo a ARS con 30.000 se rechaza (RN-23).
+- **CA-45.7** Netflix de CA-43.6 con la parte de Sofía (8.000) cobrada: editar la cotización
+  del gasto a 1.700 (25.500): las partes automáticas pasan a 8.500; la de Sofía queda
+  desmarcada con "cobrado 8.000, falta 500".
+- **CA-45.8** Al editar un gasto con cotización 1.432,50, el diálogo muestra la cotización
+  como "1.432,50".
+- **CA-46.1** En la lista de gastos, Claude se ve con monto "32.000" y el detalle
+  "US$ 20,00 × $ 1.600". Los gastos en ARS no muestran detalle en USD.
+- **CA-46.2** Un gasto US$ 19,99 × 1.432,50 se ve en la lista con monto "28.636" y el detalle
+  "US$ 19,99 × $ 1.432,50" (no "$ 1.433").
+- **CA-47.1** Claude fijo US$ 20,00 × 1.600 en 2026-10. Crear 2026-11 con cotización 1.700:
+  en 2026-11 Claude es US$ 20,00 × 1.700 = 34.000, sin pagos. Claude de 2026-10 sigue en 32.000.
+- **CA-47.2** Igual, creando 2026-11 sin cotización: Claude conserva la cotización 1.600 y
+  queda en 32.000.
+- **CA-47.3** Claude fijo US$ 20,00 × 2.100 (dólar tarjeta) en 2026-10; crear 2026-11 con
+  cotización 1.700: en 2026-11 queda US$ 20,00 × 1.700 = 34.000.
+- **CA-47.4** Después de CA-47.1, cambiar la cotización de 2026-11 a 1.800: Claude de 2026-11
+  sigue en 34.000.
+- **CA-47.5** Un pago único en USD de 2026-10 no aparece en 2026-11.
+- **CA-47.6** Netflix fijo US$ 15,00 compartido entre 3 con partes automáticas, creado 2026-11
+  con cotización 1.700: monto 25.500 y partes de 8.500, no cobradas.
+- **CA-47.7** Netflix fijo US$ 15,00 × 1.600 (24.000) con Sofía manual 12.000 y Marsu manual
+  10.000 (usuario 2.000). Crear 2026-11 con cotización 1.500: monto 22.500; Sofía 12.000 y
+  Marsu 10.000 se mantienen (manuales), usuario 500; no hay aviso.
+- **CA-47.8** Mismo Netflix, crear 2026-11 con cotización 1.400: monto 21.000; como el usuario
+  quedaría en −1.000, las tres partes pasan a 7.000 (automáticas) y al crear el mes se ve
+  "Las partes de Netflix se repartieron en partes iguales porque cambió el monto." El mes se
+  crea igual y las partes de 2026-10 siguen siendo 12.000 / 10.000 / 2.000.
+- **CA-48.1** Con una base en versión 0 que ya tiene meses, gastos, pagos y partes cargados
+  (en las pruebas, una base y una carpeta de respaldos temporales; nadie lee
+  `datos-privados/`): al abrir la versión con gastos en dólares existe un respaldo
+  `respaldos/gastos-AAAAMMDD-HHMMSS.db` hecho antes del cambio, que se puede abrir y contiene
+  los mismos datos que la base original; la base queda en versión 1; todos los gastos
+  aparecen como ARS; totales, pagos, pendientes y "me deben" son idénticos a los de antes.
+- **CA-48.2** Abrir la app una segunda vez con la base en versión 1 no vuelve a aplicar la
+  actualización (no intenta agregar las columnas de nuevo) ni pierde los gastos en USD
+  cargados mientras tanto.
+- **CA-48.3** Si la actualización falla a mitad de camino (simulado en las pruebas), la base
+  sigue en versión 0, sin las columnas nuevas y con los mismos datos, y la app avisa.
+- **CA-48.4** Si no se puede crear el respaldo (simulado en las pruebas), la base no se
+  modifica (sigue en versión 0) y la app avisa.
 
 ---
 
@@ -864,7 +1120,10 @@ Avant 41.117 con última cuota 2026-10, plan B de 10.000 con última cuota 2027-
 
 - Importar la planilla de Excel.
 - Cotización automática desde internet.
-- Cuotas (o gastos) en dólares.
+- Cuotas (planes de cuotas) en dólares. Los gastos fijos mensuales y de pago único en dólares
+  **sí** están en la v1 (RF-43 a RF-48).
+- Cálculo automático de impuestos o recargos sobre el dólar (dólar tarjeta, percepciones):
+  el usuario carga la cotización que corresponda (RN-58).
 - Ajuste por inflación en previsiones.
 
 ---
@@ -874,10 +1133,11 @@ Avant 41.117 con última cuota 2026-10, plan B de 10.000 con última cuota 2027-
 | Paso | Contenido | Requisitos |
 |---|---|---|
 | 1 | Base de datos + ABM de gastos de un mes | RF-01 (un mes), RF-04, RF-06 a RF-12 (sin CA-08.2/08.3); RN-01 a RN-07, RN-49 a RN-51 |
+| 1c | Gastos en dólares (alta, edición, cambio de moneda, lista, formato de cotizaciones) y migración de la base existente con respaldo y versión | RF-43 a RF-46, RF-48; RN-04 (cotizaciones), RN-53 a RN-56, RN-58, RN-59. CA-43.1 a CA-43.4, CA-44.x, CA-45.1 a CA-45.5, CA-45.8, CA-46.x, CA-48.x. Las partes de los CA que dependen de pasos posteriores se verifican en ese paso: pesos a cubrir/ahorro (CA-43.1, 43.2, 45.1) y formato de la cotización del mes y de los cambios (CA-25.4, CA-26.4) en el paso 3; pagos (CA-43.5, 45.4, 45.6) en el paso 2; capacidad (CA-43.7) en el paso 3/4; compartidos (CA-43.6, 45.7) en el paso 5; copia al mes nuevo (RF-47, RN-57, CA-47.1 a CA-47.6) en el paso 4; reparto de partes al copiar (RN-37, CA-47.7, CA-47.8) en el paso 5; previsión con fijos en USD (CA-38.8 a CA-38.11) en el paso 6. |
 | 2 | Pagos (tilde y parciales) y pendiente | RF-13 a RF-15; RN-20 a RN-23 |
 | 3 | Sueldo, cotización, cambios, ahorro (pantalla resumen) | RF-23 a RF-27, RF-35 a RF-37; RN-12 a RN-19, RN-38 a RN-40 (las cuotas de la capacidad valen 0 hasta el paso 4) |
-| 4 | Cuotas e historial de meses | RF-01 a RF-05, RF-16 a RF-22, CA-08.2/08.3; RN-08 a RN-11, RN-24 a RN-31, RN-52 |
-| 5 | Gastos compartidos y "me deben" | RF-28 a RF-34; RN-32 a RN-37 |
+| 4 | Cuotas e historial de meses | RF-01 a RF-05, RF-16 a RF-22, RF-47 (sin partes compartidas), CA-08.2/08.3; RN-08 a RN-11, RN-24 a RN-31, RN-52, RN-57 |
+| 5 | Gastos compartidos y "me deben" | RF-28 a RF-34, RF-47 (partes de fijos en USD compartidos); RN-32 a RN-37 |
 | 6 | Previsiones | RF-38, RF-39; RN-41 a RN-45 |
 | 7 | Gráficos | RF-40 a RF-42; RN-46 a RN-48 |
 

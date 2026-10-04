@@ -240,4 +240,41 @@ class Aplicacion:
 
 def main(page: ft.Page) -> None:
     """Punto de entrada que recibe Flet al abrir la ventana."""
-    Aplicacion(page, base_datos.conectar()).iniciar()
+    try:
+        con = base_datos.conectar()
+    except Exception as error:  # noqa: BLE001 (a propósito: se muestra en la ventana)
+        # Ej.: falló la actualización de la base (RN-59). La base queda como
+        # estaba y hay una copia en datos-privados/respaldos/.
+        mostrar_error_al_abrir(page, error)
+        return
+    Aplicacion(page, con).iniciar()
+
+
+def mostrar_error_al_abrir(page: ft.Page, error: Exception) -> None:
+    """Pantalla de error cuando la base no se pudo abrir o actualizar."""
+    page.title = "Gastos – No se pudo abrir"
+    page.add(
+        ft.Container(
+            padding=32,
+            content=ft.Column(
+                [
+                    ft.Text(
+                        "No se pudo abrir la base de datos",
+                        size=estilos.TAM_TITULO,
+                        weight=ft.FontWeight.W_600,
+                    ),
+                    # ErrorDeBase ya trae el mensaje exacto (si hay respaldo y dónde).
+                    # Otro error es inesperado: no se promete nada sobre un respaldo.
+                    ft.Text(
+                        str(error)
+                        if isinstance(error, base_datos.ErrorDeBase)
+                        else "Ocurrió un error inesperado al abrir la base."
+                    ),
+                    texto_ayuda(
+                        "".join(traceback.format_exception(error)), selectable=True
+                    ),
+                ],
+                spacing=12,
+            ),
+        )
+    )

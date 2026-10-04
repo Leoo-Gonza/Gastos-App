@@ -5,6 +5,8 @@
 > Base: `docs/requisitos.md` (aprobado) y la planilla de referencia
 > (`docs/referencia/Referencia planilla.png`).
 > Las referencias RF-xx, RN-xx y CA-xx.y son las de `requisitos.md`.
+> **Gastos en dólares** (funcionalidad aprobada después de la v1 inicial): mientras sus
+> requisitos no tengan número en `requisitos.md`, se los cita por su descripción.
 
 ---
 
@@ -24,7 +26,8 @@
 5. **Componentes estándar de Flet.** Nada de controles personalizados complejos. Si algo se
    puede hacer con `DataTable`, `Card`, `AlertDialog` y `ProgressBar`, se hace así.
 6. **Mostrar el cálculo.** El usuario viene de una planilla donde veía las cuentas. Los
-   valores calculados importantes (USD a cambiar, ahorro, capacidad) muestran de dónde salen.
+   valores calculados importantes (USD a cambiar, ahorro, capacidad, pesos de un gasto en
+   dólares) muestran de dónde salen.
 
 ---
 
@@ -168,12 +171,12 @@ en `app/interfaz/estilos.py`) porque deben ser exactos.
 | Superficie | `#FFFFFF` | Tarjetas, tablas, diálogos | – |
 | Superficie variante | `#E9EEF1` | Encabezado de tablas, fila de totales | – |
 | Texto | `#1A1C1E` | Texto principal | ≈ 16:1 |
-| Texto secundario | `#4A5056` | Etiquetas, ayudas | ≈ 8:1 |
+| Texto secundario | `#4A5056` | Etiquetas, ayudas, detalle "US$ 20,00 × $ 1.600" | ≈ 8:1 |
 | Borde | `#C3C9CE` | Bordes de tarjetas y separadores | – |
 | **Pagado / positivo** | `#1E7B34` (fondo suave `#E3F2E6`) | Gasto pagado, cobrado, ahorro, meta alcanzada | ≈ 5,4:1 |
 | **Pendiente / aviso** | `#9A5800` (fondo suave `#FFF1DC`) | Pendiente de pago, falta cotización, sueldo 0, parte con diferencia | ≈ 5,3:1 |
 | **Negativo / error** | `#B3261E` (fondo suave `#FCE8E6`) | Déficit, capacidad negativa, errores de validación, botón borrar, "a devolver" | ≈ 6,5:1 |
-| Info | `#1F5F7A` (fondo suave `#E3EFF4`) | Avisos informativos (mes pasado, alcance de cuotas) | ≈ 7:1 |
+| Info | `#1F5F7A` (fondo suave `#E3EFF4`) | Avisos informativos (mes pasado, alcance de cuotas, resultado en pesos de un gasto en dólares) | ≈ 7:1 |
 
 **Tema oscuro**
 
@@ -204,9 +207,10 @@ agregan fuentes, para simplificar.
 | Título de pantalla | 24 | `W_600` | "Gastos de Octubre 2026" |
 | Título de sección / tarjeta | 16 | `W_600` | "Ingresos extra", "Por medio de pago" |
 | Monto destacado (KPI) | 30 | `W_700` | Montos de las tarjetas del Resumen |
+| Resultado de conversión (diálogo de gasto en USD) | 18 | `W_600` | "= $ 32.000 a pagar" |
 | Texto y celdas de tabla | 15 | normal | Por defecto en toda la app |
 | Totales de tabla | 15 | `W_700` | Fila de totales |
-| Etiqueta / ayuda | 13 | normal | Subtítulos, textos de ayuda, ejes de gráficos |
+| Etiqueta / ayuda | 13 | normal | Subtítulos, textos de ayuda, ejes de gráficos, detalle en USD bajo un monto |
 
 Nada se muestra por debajo de **13 px**. Los tamaños se definen como constantes en
 `estilos.py` para poder agrandarlos todos de una vez si hiciera falta.
@@ -222,6 +226,7 @@ Flet), así Lucía puede probarla (CA-06.4, CA-09.2). La interfaz solo la llama.
 | USD | `US$` + espacio + 2 decimales con coma + punto de miles | `US$ 896,64` · `US$ 1.200,00` · `US$ 0,00` |
 | Negativos | Signo menos antes de la moneda + palabra que lo explica | `-US$ 96,64` (Déficit) · `-$ 506.417` (Sin capacidad) · `-$ 2.900` (a devolver) |
 | Cotización | `$ 1.600 por US$`; si tiene centavos, con 2 decimales: `$ 1.432,50 por US$` | |
+| Gasto en dólares (detalle) | `US$` monto + ` × ` + `$` cotización (misma regla de decimales que la cotización) | `US$ 20,00 × $ 1.600` · `US$ 12,99 × $ 1.432,50` |
 | Porcentaje | Entero en la barra, 2 decimales en el tooltip | `101 %` (tooltip "101,12 %") |
 | Mes largo | Nombre en español + año | `Octubre 2026` |
 | Mes corto (tablas) | 3 letras + año | `oct 2026` |
@@ -258,6 +263,9 @@ ft.TextField(
 - **Regla del punto:** el punto solo se acepta como separador de miles (grupos de 3 dígitos).
   "66020.12" se rechaza con "Usá coma para los decimales. Ej.: 66.020,12". Así no se
   interpreta mal lo que escribe el teclado numérico, que en muchos teclados pone punto.
+- Conviene que sea una función `campo_monto(moneda, label, ...)` en `componentes.py`, que
+  reciba "ARS" o "USD" y ponga prefijo, sufijo y ejemplo. Se usa en los diálogos de gasto,
+  pago, sueldo, cotización, ingreso extra, cambio, partes y "me deben".
 
 ### 2.5 Patrones comunes
 
@@ -271,6 +279,7 @@ ft.TextField(
 | Aviso en pantalla | `ft.Container` con fondo suave del color semántico, `border_radius=8`, ícono + texto | No usar `ft.Banner` (ocupa la parte superior y es más difícil de manejar). |
 | Acciones por fila | `ft.PopupMenuButton` (ícono `MORE_VERT`) en la última columna | Tooltip "Acciones". Además, clic en el nombre (`DataCell(on_tap=…)`) abre "Editar". |
 | Botones de ícono | `ft.IconButton(..., tooltip=…)` | **Siempre** con tooltip (lo leen los lectores de pantalla). |
+| Mostrar u ocultar partes de un formulario | Agrupar los campos en un `ft.Column` o `ft.Container` y cambiar su `visible` | Se usa para "Compartido" y para los campos de pesos / dólares del diálogo de gasto. Más simple que reconstruir el diálogo. |
 
 ---
 
@@ -387,6 +396,9 @@ ingresos extra y cambios de USD.
 | Cómo se calcula | `ft.ExpansionTile` cerrado por defecto con el desglose de RN-14 a RN-17. |
 | Ingresos extra y cambios | `ft.DataTable` + botón `ft.OutlinedButton` con ícono `ADD`. |
 
+Los gastos en dólares entran en "Total gastos" por su monto en pesos (el que quedó fijo al
+cargarlos), igual que cualquier otro gasto. El Resumen no los muestra aparte.
+
 **Desglose "Cómo se calcula el ahorro"** (texto alineado, con los números del mes):
 
 ```
@@ -448,10 +460,10 @@ Los pagos únicos y los ingresos extra no se cuentan.
 
 ---
 
-### 3.3 Gastos (RF-06 a RF-15, RF-22, RF-29 marca)
+### 3.3 Gastos (RF-06 a RF-15, RF-22, RF-29 marca, gastos en dólares)
 
-**Objetivo del usuario:** cargar los gastos del mes, marcar lo que pagó y ver cuánto le falta
-pagar. Equivale a "Gasto del Mes" y "Deudas" de la planilla.
+**Objetivo del usuario:** cargar los gastos del mes (en pesos o en dólares), marcar lo que
+pagó y ver cuánto le falta pagar. Equivale a "Gasto del Mes" y "Deudas" de la planilla.
 
 **Distribución**
 
@@ -464,6 +476,8 @@ pagar. Equivale a "Gasto del Mes" y "Deudas" de la planilla.
 | |----+--------------------+------------+-----------+-----------------+----------+---------+------------+---|
 | |[x] | Alquiler           | Vivienda   | Fijo      | Transferencia   | $260.000 |$260.000 | Pagado     |[:]|
 | |[ ] | Internet  [pers]   | Servicios  | Fijo      | Visa Santander  |  $38.700 |      $0 |   $38.700  |[:]|
+| |[ ] | Claude             | Trabajo    | Fijo      | Visa Santander  |  $32.000 |      $0 |   $32.000  |[:]|
+| |    |                    |            |           |                 | US$ 20,00 × $ 1.600 |  |         |   |
 | |[ ] | Seguro de moto     | Seguros    | Fijo      | Mastercard Nac. | $180.000 | $60.000 |  $120.000  |[:]|
 | |    |                    |            |           |                 |          | Parcial |            |   |
 | |[ ] | Avant Service      | Deudas     | Cuota 3/3 | Visa Santander  |  $41.117 |      $0 |   $41.117  |[:]|
@@ -475,7 +489,7 @@ pagar. Equivale a "Gasto del Mes" y "Deudas" de la planilla.
 | POR MEDIO DE PAGO                                                                          |
 | +-----------------------------------------+                                                |
 | | Medio de pago             |       Total |                                                |
-| | Visa Santander            |    $ 91.117 |                                                |
+| | Visa Santander            |   $ 123.117 |                                                |
 | | Mastercard Nación         |   $ 131.000 |                                                |
 | | Transferencia             |   $ 260.000 |                                                |
 | | Sin medio de pago         |    $ 30.000 |                                                |
@@ -484,10 +498,11 @@ pagar. Equivale a "Gasto del Mes" y "Deudas" de la planilla.
 ```
 
 (En el boceto los montos van pegados al `$` por espacio; en la app llevan el formato de §2.3:
-`$ 260.000`.)
+`$ 260.000`. La línea "US$ 20,00 × $ 1.600" va **dentro de la celda Monto**, debajo del monto
+en pesos y alineada a la derecha; en el boceto se desborda solo por falta de espacio.)
 
 **Columnas de la tabla** (`ft.DataTable`, `heading_row_color` = superficie variante,
-`data_row_min_height=48`):
+`data_row_min_height=48`, `data_row_max_height=64` para que entren las celdas de dos líneas):
 
 | Columna | Contenido | Componente |
 |---|---|---|
@@ -496,23 +511,38 @@ pagar. Equivale a "Gasto del Mes" y "Deudas" de la planilla.
 | Categoría | Nombre; si está archivada, en texto secundario con tooltip "Categoría archivada". | `ft.Text` |
 | Tipo | "Fijo", "Único" o "Cuota n/N" (une tipo y cuota actual de RF-09 en una sola columna). | `ft.Text` |
 | Medio de pago | Nombre o "—". | `ft.Text` |
-| Monto | ARS. | `numeric=True` |
+| Monto | **Siempre en ARS** (texto 15, es lo que se paga). Si el gasto es en dólares, debajo una segunda línea en texto secundario 13: "US$ 20,00 × $ 1.600". | `numeric=True`; la celda es un `ft.Column([monto, detalle], horizontal_alignment=END, spacing=0)` con `tooltip` en el contenedor. |
 | Pagado | ARS; si es parcial, debajo una etiqueta chica "Parcial" en *pendiente*. | `numeric=True` |
 | Pendiente | ARS en *pendiente*; si es 0, el texto "Pagado" en *positivo* con ícono `CHECK`. | `numeric=True` |
 | (acciones) | Menú: Editar · Registrar pago · Ver pagos · Borrar. Para cuotas, además "Ver plan" (va a Cuotas). | `ft.PopupMenuButton` |
 
+**Gastos en dólares en la tabla**
+
+- El **monto principal es en pesos**, porque se pagan en pesos (decisión aprobada). La línea
+  secundaria "US$ 20,00 × $ 1.600" explica de dónde sale, sin ocupar una columna aparte.
+- Tooltip de la celda: "Gasto en dólares: US$ 20,00 a $ 1.600 por US$ = $ 32.000. Los pesos
+  quedan fijos con esa cotización."
+- No se agrega color ni ícono especial: el texto `US$` ya lo identifica, y así el color queda
+  reservado para estados (pagado, pendiente, negativo).
+- Pagado y Pendiente se ven en pesos, como en cualquier gasto.
+- **La fila de totales sigue siendo solo en ARS** y suma el monto en pesos de cada gasto. No
+  se muestra un total en dólares (mezclaría cotizaciones distintas y no se usa para pagar).
+- "Por medio de pago" también suma los pesos.
+
 **Orden de las filas:** primero fijos, luego cuotas, luego pagos únicos; dentro de cada grupo,
-por nombre. (Opcional más adelante: ordenar por columna con `DataColumn(on_sort=…)`.)
+por nombre. La moneda no cambia el orden. (Opcional más adelante: ordenar por columna con
+`DataColumn(on_sort=…)`.)
 
 **Fila de totales (RF-09):** una última `ft.DataRow` con fondo de superficie variante y texto
 en negrita: "TOTAL (23 gastos)", total gastos, total pagado y total pendiente ("Gastos",
-"Pagado" y "Falta por pagar" de la planilla). Los totales se redondean desde el valor exacto
-(RN-04).
+"Pagado" y "Falta por pagar" de la planilla), todos en ARS. Los totales se redondean desde el
+valor exacto (RN-04).
 
 **Por medio de pago (RF-22):** `ft.Card` con una `ft.DataTable` de dos columnas, debajo de la
 tabla principal. "Sin medio de pago" siempre al final. Este bloque reemplaza la línea "Tarjetas
 de Crédito" de la planilla, así que lleva el texto de ayuda: "Incluye todos los gastos del mes
-(fijos, cuotas y únicos) agrupados por cómo se pagan."
+(fijos, cuotas y únicos, en pesos y en dólares) agrupados por cómo se pagan. Los gastos en
+dólares se suman por sus pesos."
 
 **Estados**
 
@@ -523,15 +553,31 @@ de Crédito" de la planilla, así que lleva el texto de ayuda: "Incluye todos lo
 | Todo pagado | La fila de totales muestra "Falta por pagar $ 0" con ícono `CHECK_CIRCLE` en *positivo*. |
 | Mes no actual | Franja informativa de §1.2. |
 
-**Flujo: cargar un gasto (RF-06)**
+**Flujo: cargar un gasto en pesos (RF-06)**
 
 1. Clic en "Agregar gasto" (o `Ctrl/Cmd+N`).
-2. Diálogo §4.1 con foco en "Nombre". Tipo por defecto: "Fijo mensual".
+2. Diálogo §4.1 con foco en "Nombre". Moneda por defecto: "Pesos". Tipo por defecto:
+   "Fijo mensual".
 3. Escribe nombre, elige categoría, monto, tipo y (opcional) medio de pago. Tab avanza de campo.
 4. Enter o "Guardar" → valida. Si hay errores se muestran debajo de cada campo y el diálogo
    sigue abierto.
 5. Si está todo bien: se cierra, la fila aparece en la tabla, los totales y "Por medio de pago"
    se actualizan, SnackBar "Gasto "Nafta" agregado".
+
+**Flujo: cargar un gasto en dólares**
+
+1. Clic en "Agregar gasto". Escribe "Claude" y elige la categoría.
+2. En "Moneda" elige **Dólares (USD)** (clic o Tab hasta el selector y flechas/Espacio).
+   Desaparece el campo "Monto" en pesos y aparecen "Monto en dólares" y "Cotización del día";
+   el foco pasa a "Monto en dólares".
+3. "Cotización del día" ya viene con la del mes ($ 1.600). Si el mes no tiene cotización,
+   viene vacía con la ayuda "Este mes no tiene cotización: escribí la del día."
+4. Escribe 20. En cada tecla, la línea de resultado muestra
+   "US$ 20,00 × $ 1.600 = **$ 32.000 a pagar**".
+5. Si pagó con tarjeta, cambia la cotización a la que le cobró (ej. 2.080): el resultado pasa a
+   "US$ 20,00 × $ 2.080 = $ 41.600 a pagar".
+6. Elige tipo y medio de pago y guarda. En la tabla aparece "Claude · $ 41.600" con la línea
+   "US$ 20,00 × $ 2.080". SnackBar: "Gasto "Claude" agregado: $ 41.600 (US$ 20,00)".
 
 **Flujo: marcar pagado (RF-13, RN-22)**
 
@@ -555,6 +601,9 @@ de Crédito" de la planilla, así que lleva el texto de ayuda: "Incluye todos lo
 4. "Guardar" → valida (> 0 y ≤ pendiente). Se cierra; la fila muestra Pagado $ 110.000
    "Parcial" y Pendiente $ 70.000. SnackBar "Pago de $ 50.000 registrado".
 5. Si con ese pago el pendiente llega a 0, el tilde aparece marcado solo (CA-14.1).
+
+Los pagos de un gasto en dólares también se registran **en pesos** (se pagan en pesos); el
+diálogo agrega debajo del resumen la línea secundaria "Gasto en dólares: US$ 20,00 × $ 1.600".
 
 **Flujo: ver y borrar pagos (RF-15)**
 
@@ -586,7 +635,8 @@ Si es la cuota de un plan:
 ### 3.4 Cuotas (RF-16 a RF-21)
 
 **Objetivo del usuario:** ver todas sus deudas en cuotas, en qué cuota va, cuándo terminan y
-cuánto le falta; cargar planes nuevos, editarlos o cancelarlos.
+cuánto le falta; cargar planes nuevos, editarlos o cancelarlos. Los planes son **solo en
+pesos** (los gastos en dólares no aplican a cuotas).
 
 **Distribución**
 
@@ -711,6 +761,9 @@ préstamos sueltos y tildar lo que ya cobró. Equivale a "Deudas sofia" y "Marsu
 | Acciones de ítems manuales | `ft.PopupMenuButton`: "Editar", "Borrar" (ver Observaciones). Las partes de gastos no tienen menú: se editan desde el gasto. |
 | Línea cobrada (si se muestran) | Texto tachado no; se ve en texto secundario con el tilde marcado y la etiqueta "Cobrado" en *positivo*. |
 
+Las partes de un gasto en dólares compartido se muestran y se cobran **en pesos** (son
+porciones del monto en pesos del gasto).
+
 **Estados**
 
 | Situación | Cómo se ve |
@@ -755,7 +808,8 @@ Ajustes.
 | [ $              1.600   ARS ] por US$    |
 | Se usa para calcular los dólares a        |
 | cambiar. No modifica los cambios ya       |
-| registrados.                              |
+| registrados ni los gastos en dólares ya   |
+| cargados.                                 |
 |                                           |
 |                    [Cancelar] [Guardar]   |
 +-------------------------------------------+
@@ -769,6 +823,12 @@ Ajustes.
 
 Al guardar cualquiera de los tres, todo lo que depende se recalcula al instante (RN-19) y
 SnackBar "Cotización actualizada: $ 1.700 por US$".
+
+**Cotización del mes y gastos en dólares.** Los gastos en dólares guardan su propia
+"cotización del día" y sus pesos quedan fijos (decisión aprobada), así que cambiar la
+cotización del mes **no** los recalcula; por eso el texto de ayuda lo dice. Si el mes tiene
+gastos en dólares, debajo se agrega: "Este mes tiene 2 gastos en dólares. Si querés
+actualizarlos, editalos uno por uno."
 
 ---
 
@@ -813,6 +873,9 @@ Enlace `ft.TextButton` al gráfico de previsión (Gráficos, pestaña 3).
 | Mes actual sin cotización | Aviso *pendiente*: "Falta la cotización de Octubre 2026: se muestran solo los gastos en pesos." + botón "Cargar cotización". Las columnas USD y Ahorro muestran "—". |
 | Normal | Como el boceto. |
 
+Gastos fijos en dólares en la previsión: ver Observaciones (falta definir con qué cotización
+se estiman).
+
 ---
 
 ### 3.8 Gráficos (RF-40, RF-41, RF-42)
@@ -840,7 +903,7 @@ los gastos en el futuro.
 
 | Gráfico | Tipo | Ejes / contenido | Color | Componente de Flet |
 |---|---|---|---|---|
-| 1. Gastos por categoría (RN-46), mes seleccionado | **Barras horizontales**, ordenadas de mayor a menor | Una fila por categoría: nombre (izquierda), barra proporcional al mayor, monto ARS y porcentaje del total. | Un solo color: *primario*. | **Sin librería de gráficos**: cada fila es un `ft.Row` con `ft.Text` (ancho fijo 160), `ft.ProgressBar(value=monto/máximo, height=18)` y dos `ft.Text`. Es más simple, los nombres largos se leen completos y el dato exacto está escrito. |
+| 1. Gastos por categoría (RN-46), mes seleccionado | **Barras horizontales**, ordenadas de mayor a menor | Una fila por categoría: nombre (izquierda), barra proporcional al mayor, monto ARS y porcentaje del total. Los gastos en dólares cuentan por sus pesos. | Un solo color: *primario*. | **Sin librería de gráficos**: cada fila es un `ft.Row` con `ft.Text` (ancho fijo 160), `ft.ProgressBar(value=monto/máximo, height=18)` y dos `ft.Text`. Es más simple, los nombres largos se leen completos y el dato exacto está escrito. |
 | 2. Ahorro mes a mes (RN-47), todo el historial | **Barras verticales** | Eje X: meses (`oct 26`). Eje Y: USD, con 0 marcado. Tooltip: "Octubre 2026: US$ 303,36". | Positivo: *positivo*. Negativo (déficit): *negativo*, la barra baja del 0. Mes sin cotización: sin barra y etiqueta "s/cot." debajo del mes. | `BarChart` (ver nota). Si hay meta, una línea de texto arriba: "Meta: US$ 300,00". |
 | 3. Previsión de gastos (RN-48) | **Barras verticales** | Eje X: los 12 meses previstos. Eje Y: ARS abreviado ("$ 800 mil"). Tooltip con el monto completo. | *Primario*. | `BarChart`. |
 
@@ -850,11 +913,11 @@ con daltonismo; la torta obliga a comparar ángulos y a usar muchos colores.
 Debajo de los gráficos 2 y 3 hay un `ft.ExpansionTile("Ver como tabla")` con los mismos datos
 en una `ft.DataTable` (accesibilidad: lectores de pantalla y quien prefiera números).
 
-**Nota sobre el componente de gráficos:** en Flet 0.2x es `ft.BarChart` (con
-`ft.BarChartGroup`, `ft.BarChartRod`, `ft.ChartAxis`, `ft.ChartAxisLabel`). En Flet 1.x los
-gráficos se movieron al paquete aparte `flet-charts` (`import flet_charts as fch`,
-`fch.BarChart`). Antes del paso 7 hay que verificar qué versión está instalada y, si hace
-falta, agregar `flet-charts` a `requirements.txt`.
+**Nota sobre el componente de gráficos:** el proyecto usa **Flet 1.0.3**. En Flet 1.x los
+gráficos están en el paquete aparte `flet-charts` (`import flet_charts as fch`,
+`fch.BarChart`, con sus grupos, barras y ejes). Antes del paso 7 hay que agregar
+`flet-charts` a `requirements.txt` y verificar los nombres exactos de las clases en esa
+versión.
 
 **Estados**
 
@@ -886,6 +949,8 @@ No es una pantalla, son dos diálogos que se abren desde la barra superior.
 |                                                           |
 | Se va a copiar de Octubre 2026:                           |
 |  • 12 gastos fijos, sin pagos                             |
+|    (2 en dólares: se pasan a pesos con la cotización      |
+|     de arriba)                                            |
 |  • 4 cuotas de planes activos                             |
 | No se copian pagos únicos, ingresos extra ni cambios.     |
 |                                                           |
@@ -895,7 +960,13 @@ No es una pantalla, son dos diálogos que se abren desde la barra superior.
 
 3. El mes no se elige: es siempre el siguiente al último (RN-08), así no hay cómo
    equivocarse. Sueldo y cotización vienen sugeridos (CA-03.2).
-4. "Crear mes" → la app selecciona el mes nuevo, muestra Resumen y SnackBar "Noviembre 2026
+4. **Gastos fijos en dólares:** se copian con el mismo monto en dólares y su "cotización del
+   día" pasa a ser la cotización del mes nuevo (la del campo de arriba); los pesos se
+   recalculan con ella (decisión aprobada). La línea "(2 en dólares: …)" solo aparece si hay
+   alguno. Si el usuario deja la cotización vacía y hay fijos en dólares, la línea cambia a
+   *pendiente*: "Sin cotización, los 2 gastos en dólares no se pueden pasar a pesos." (qué
+   hacer en ese caso está en Observaciones).
+5. "Crear mes" → la app selecciona el mes nuevo, muestra Resumen y SnackBar "Noviembre 2026
    creado: 12 gastos fijos y 4 cuotas."
 
 Validaciones iguales a §3.1 (sueldo y cotización).
@@ -976,7 +1047,9 @@ Mensajes comunes a todos los montos (RN-04, RN-05):
 | Más de 2 decimales | "Usá como máximo 2 decimales." |
 | Cero o negativo | "El monto tiene que ser mayor a 0." |
 
-### 4.1 Gasto (alta y edición) – RF-06, RF-07, RF-29, RF-30, RF-31
+### 4.1 Gasto (alta y edición) – RF-06, RF-07, RF-29, RF-30, RF-31, gastos en dólares
+
+**En pesos (por defecto)**
 
 ```
 +------------------------------------------------------------+
@@ -984,6 +1057,7 @@ Mensajes comunes a todos los montos (RN-04, RN-05):
 |                                                            |
 | Nombre          [ Internet                         ]       |
 | Categoría       [ Servicios                     v ] [+]    |
+| Moneda          ( Pesos (ARS) | Dólares (USD) )            |
 | Monto           [ $                38.700   ARS ]          |
 | Tipo            ( Fijo mensual | Pago único )              |
 |                 Los fijos se copian al mes siguiente.      |
@@ -1002,37 +1076,134 @@ Mensajes comunes a todos los montos (RN-04, RN-05):
 +------------------------------------------------------------+
 ```
 
+**En dólares** (mismo diálogo; solo cambia el bloque de monto)
+
+```
++------------------------------------------------------------+
+| Nuevo gasto – Octubre 2026                                 |
+|                                                            |
+| Nombre          [ Claude                           ]       |
+| Categoría       [ Trabajo                       v ] [+]    |
+| Moneda          ( Pesos (ARS) | Dólares (USD) )            |
+|                                  ^^^^^^^^^^^^^ elegido     |
+| Monto en dólares   [ US$             20,00   USD ]         |
+| Cotización del día [ $             1.600     ARS ] por US$ |
+|                    Escribí la cotización que te cobran     |
+|                    (oficial, tarjeta o MEP). La app no     |
+|                    suma impuestos.                         |
+| +--------------------------------------------------------+ |
+| | US$ 20,00 × $ 1.600 = $ 32.000 a pagar                 | |
+| | Los pesos quedan fijos con esta cotización.            | |
+| +--------------------------------------------------------+ |
+| Tipo            ( Fijo mensual | Pago único )              |
+|                 Los fijos se copian al mes siguiente con   |
+|                 los mismos dólares y la cotización del     |
+|                 mes nuevo.                                 |
+| Medio de pago   [ Visa Santander                v ]        |
+|                                                            |
+| Compartido      [off]                                      |
+|                                                            |
+|                                 [Cancelar] [Guardar]       |
++------------------------------------------------------------+
+```
+
+**Por qué el selector de moneda va antes del monto:** el usuario decide primero "en qué me
+cobran" y después escribe el número; el campo que aparece justo debajo ya tiene el prefijo
+correcto (`$` o `US$`), así no hay forma de escribir dólares en un campo de pesos.
+
 | Campo | Componente | Validación / mensaje |
 |---|---|---|
 | Nombre | `ft.TextField(autofocus=True, max_length=60)` | Vacío: "Ingresá un nombre." |
 | Categoría | `ft.Dropdown` con categorías no archivadas + `ft.IconButton(ADD, tooltip="Nueva categoría")` | Sin elegir: "Elegí una categoría." El botón "+" muestra **dentro del mismo diálogo** una fila `[Nombre de la categoría] [Agregar]` (no abre otro diálogo). Si no hay ninguna categoría, la fila aparece abierta con el texto "Todavía no tenés categorías. Creá la primera." |
-| Monto | Campo de monto ARS (§2.4) | Mensajes comunes + RN-23 en edición: "No podés bajar el monto a menos de lo que ya pagaste ($ 60.000)." |
-| Tipo | `ft.SegmentedButton` con "Fijo mensual" y "Pago único" (por defecto Fijo) | – |
+| Moneda | `ft.SegmentedButton` con `ft.Segment(value="ARS", label=ft.Text("Pesos (ARS)"))` y `ft.Segment(value="USD", label=ft.Text("Dólares (USD)"))`; `selected=["ARS"]`, `allow_multiple_selection=False`, `allow_empty_selection=False`, `on_change` muestra/oculta los bloques. | Siempre hay una elegida. No se muestra en gastos de cuota (los planes son solo en pesos). |
+| **Bloque pesos** (visible con ARS) | | |
+| Monto | Campo de monto ARS (§2.4), `label="Monto"` | Mensajes comunes + RN-23 en edición: "No podés bajar el monto a menos de lo que ya pagaste ($ 60.000)." |
+| **Bloque dólares** (visible con USD) | `ft.Column` con los 3 elementos siguientes | |
+| Monto en dólares | Campo de monto USD (§2.4): `label="Monto en dólares"`, `prefix_text="US$ "`, `suffix_text="USD"`, `hint_text="Ej.: 20,00"` | Vacío: "Ingresá el monto en dólares." Cero o negativo: "El monto tiene que ser mayor a 0." Resto: mensajes comunes. |
+| Cotización del día | Campo de monto ARS: `label="Cotización del día"`, `prefix_text="$ "`, `suffix_text="por US$"`, `helper_text="Escribí la cotización que te cobran (oficial, tarjeta o MEP). La app no suma impuestos."` Alta: precargada con la cotización del mes; si el mes no tiene, vacía y `helper_text="Este mes no tiene cotización: escribí la del día."` | Vacía: "Ingresá la cotización del día." Cero o negativa: "La cotización tiene que ser mayor a 0." Resto: mensajes comunes. |
+| Resultado | `ft.Container` color *info* suave, `border_radius=8`, con `ft.Text` 18 `W_600`: "US$ 20,00 × $ 1.600 = $ 32.000 a pagar" y debajo, texto 13: "Los pesos quedan fijos con esta cotización." Se recalcula en el `on_change` de los dos campos (en cada tecla). | Si falta un dato o no es válido todavía: texto secundario "Completá el monto y la cotización para ver cuántos pesos vas a pagar." (sin color de error mientras escribe; los errores aparecen al guardar). |
+| Tipo | `ft.SegmentedButton` con "Fijo mensual" y "Pago único" (por defecto Fijo) | Ayuda debajo según la moneda: ARS "Los fijos se copian al mes siguiente."; USD "Los fijos se copian al mes siguiente con los mismos dólares y la cotización del mes nuevo." |
 | Medio de pago | `ft.Dropdown` con "Sin medio de pago" como primera opción + medios no archivados | Opcional. |
-| Compartido | `ft.Switch` | Se habilita desde el paso 5. |
+| Compartido | `ft.Switch` | Se habilita desde el paso 5. Funciona igual en ARS y USD: las partes son **en pesos**, sobre el monto en pesos (el resultado de la conversión). |
 | Personas | `ft.Checkbox` por persona no archivada | Con el switch activo y ninguna tildada: "Elegí al menos una persona o desactivá Compartido." |
 | Parte de cada persona | Campo de monto ARS chico (ancho 160) + etiqueta "manual" si fue editada | Mensajes comunes, pero acepta 0 (el modelo permite ≥ 0). Si "Tu parte" queda negativa (RN-33): "Las partes suman $ 42.900 y superan el monto ($ 38.700)." en *negativo* debajo de la tabla. |
 | Tu parte | `ft.Text` (solo lectura), se recalcula en cada tecla (`on_change`) | – |
 
-**Edición: casos especiales**
+**Cálculo del resultado en pesos.** Es el mismo cálculo que los ARS sugeridos de un cambio
+(RN-13): `usd_cent × cotización_cent ÷ 100`, redondeado al centavo según RN-03, y se muestra
+sin decimales (RN-04). Ej.: US$ 12,99 × $ 1.432,50 = 18.608,175 → se guarda 18.608,18 y se ve
+"$ 18.608". La función que calcula está en la lógica; la interfaz solo la llama en cada tecla.
+
+**Cambiar de moneda con datos ya escritos**
+
+- Cada bloque **conserva lo que se escribió** mientras el diálogo está abierto. Ej.: escribió
+  38.700 en pesos, pasa a dólares, vuelve a pesos: sigue el 38.700. Ocultar y mostrar con
+  `visible` lo resuelve sin código extra.
+- **No se convierte** automáticamente un monto de una moneda a otra (si escribió 20 en pesos
+  y se dio cuenta de que eran dólares, el 20 no se transforma en $ 32.000). Al pasar a una
+  moneda cuyo campo está vacío, el foco va a ese campo.
+- Al guardar **solo cuenta el bloque visible**; lo escrito en el otro se descarta y no se
+  valida.
+- Las validaciones del bloque oculto se limpian al cambiar de moneda (no quedan errores
+  rojos escondidos).
+
+**Validaciones al guardar en USD (orden en que se muestran)**
+
+1. Nombre y categoría (igual que en pesos).
+2. Monto en dólares: vacío → "Ingresá el monto en dólares."; ≤ 0 → "El monto tiene que ser
+   mayor a 0."; formato → mensajes comunes.
+3. Cotización del día: vacía → "Ingresá la cotización del día."; ≤ 0 → "La cotización tiene
+   que ser mayor a 0."; formato → mensajes comunes.
+4. En edición, RN-23 sobre el resultado en pesos: si queda por debajo de lo pagado, el error
+   va en el recuadro de resultado (en *negativo*): "Con estos valores el gasto queda en
+   $ 30.000, menos de lo que ya pagaste ($ 32.000). Subí el monto o la cotización."
+5. Compartido: si con el nuevo resultado en pesos "Tu parte" queda negativa, el mismo mensaje
+   de RN-34 que en pesos.
+
+**Edición de un gasto en dólares**
+
+- Se abre con **"Dólares (USD)" seleccionado**, el monto en dólares y la **cotización del día
+  que se guardó en ese gasto** (no la del mes). El resultado muestra los pesos actuales.
+- Si la cotización guardada es distinta de la del mes, debajo del campo aparece un
+  `ft.TextButton("Usar la del mes ($ 1.650)")` que reemplaza el valor del campo. Así es fácil
+  actualizarla sin escribir.
+- Cambiar el monto en dólares o la cotización recalcula el resultado al instante; al guardar,
+  los pesos del gasto pasan a ser el nuevo resultado (decisión aprobada). Si el gasto tiene
+  pagos, se aplica RN-23 (punto 4 de arriba).
+- **Pasar un gasto en dólares a pesos:** al elegir "Pesos (ARS)" el campo "Monto" viene
+  precargado con los pesos actuales del gasto (ej. 32.000), y aparece el aviso *info*: "Al
+  guardar en pesos, el gasto deja de guardar los dólares y la cotización." Precargar acá sí
+  tiene sentido porque esos pesos son el monto real que tenía el gasto.
+- **Pasar un gasto en pesos a dólares:** el bloque de dólares aparece con el monto vacío y la
+  cotización del mes precargada, igual que en un alta.
+
+**Edición: otros casos especiales**
 
 - **Categoría, medio o persona archivados ya asignados al gasto:** se muestran en el
   `Dropdown` con el sufijo "(archivada)" para no obligar a cambiarlos al editar otro campo.
   No se ofrecen en un alta (RN-49, CA-06.5).
-- **Gasto de una cuota:** en lugar del selector de tipo se muestra el texto fijo "Cuota 3/6
-  de Préstamo X" con un enlace "Editar el plan". Los demás campos se pueden editar y el cambio
-  vale **solo para este mes** (RN-11); se avisa: "Este cambio vale solo para Octubre 2026.
-  Para cambiar todas las cuotas, editá el plan."
-- **Cambio de monto en un gasto compartido (RN-34):** mientras se escribe el monto nuevo, la
-  tabla de partes muestra los valores recalculados. Si una parte ya cobrada cambia, debajo
-  aparece en *pendiente*: "La parte de Sofía ya estaba cobrada ($ 12.900). Va a quedar
-  pendiente: falta $ 2.100." (o "a devolver $ 2.900"). Si "Tu parte" quedaría negativa, se
-  rechaza: "Con este monto tu parte quedaría en -$ 1.667. Subí el monto o bajá las partes
-  manuales."
+- **Gasto de una cuota:** en lugar de los selectores de moneda y tipo se muestra el texto fijo
+  "Cuota 3/6 de Préstamo X (en pesos)" con un enlace "Editar el plan". Los demás campos se
+  pueden editar y el cambio vale **solo para este mes** (RN-11); se avisa: "Este cambio vale
+  solo para Octubre 2026. Para cambiar todas las cuotas, editá el plan."
+- **Cambio de monto en un gasto compartido (RN-34):** mientras se escribe el monto nuevo (o,
+  en dólares, el monto o la cotización), la tabla de partes muestra los valores recalculados.
+  Si una parte ya cobrada cambia, debajo aparece en *pendiente*: "La parte de Sofía ya estaba
+  cobrada ($ 12.900). Va a quedar pendiente: falta $ 2.100." (o "a devolver $ 2.900"). Si "Tu
+  parte" quedaría negativa, se rechaza: "Con este monto tu parte quedaría en -$ 1.667. Subí el
+  monto o bajá las partes manuales."
 - Título: "Editar gasto – Octubre 2026"; en edición, botón extra a la izquierda
   `ft.TextButton("Borrar", color=negativo)`.
 
+**Teclado en el diálogo:** el orden de Tab sigue el orden visual (Nombre → Categoría →
+Moneda → Monto o Monto en dólares → Cotización del día → Tipo → Medio → Compartido). En el
+`SegmentedButton` se cambia de opción con las flechas o Espacio. Enter en cualquier campo
+guarda.
+
 ### 4.2 Plan de cuotas – RF-16, RF-19
+
+Los planes son **solo en pesos**: este diálogo no tiene selector de moneda. Junto al campo del
+monto, texto de ayuda: "Las cuotas se cargan en pesos."
 
 | Campo | Componente | Validación / mensaje |
 |---|---|---|
@@ -1048,7 +1219,7 @@ Mensajes comunes a todos los montos (RN-04, RN-05):
 
 | Campo | Componente | Validación / mensaje |
 |---|---|---|
-| Resumen del gasto | `ft.Text` | "Seguro de moto · Monto $ 180.000 · Pagado $ 60.000 · Pendiente $ 120.000" |
+| Resumen del gasto | `ft.Text` | "Seguro de moto · Monto $ 180.000 · Pagado $ 60.000 · Pendiente $ 120.000". Si el gasto es en dólares, debajo en texto secundario: "Gasto en dólares: US$ 20,00 × $ 1.600". |
 | Monto del pago | Campo de monto ARS + `ft.TextButton("Pagar todo lo pendiente")` | Mensajes comunes. Mayor al pendiente (RN-21): "El pago no puede superar lo pendiente ($ 120.000)." |
 | Fecha | `ft.TextField` (solo lectura, "04/10/2026") + `ft.IconButton(CALENDAR_MONTH)` que abre `ft.DatePicker` | Por defecto hoy. |
 
@@ -1063,7 +1234,7 @@ tooltip="Borrar este pago")`. Al pie: "Pagado $ 110.000 · Pendiente $ 70.000". 
 | Campo | Componente | Validación / mensaje |
 |---|---|---|
 | Descripción | `ft.TextField` | "Ingresá una descripción." |
-| Moneda | `ft.SegmentedButton` "ARS" / "USD" (por defecto ARS). Al cambiar, el campo monto cambia `prefix_text` y `suffix_text`. | Siempre hay una elegida (CA-24.3 no puede darse desde la interfaz; la lógica igual valida). |
+| Moneda | `ft.SegmentedButton` "Pesos (ARS)" / "Dólares (USD)" (por defecto ARS), igual que en §4.1. Al cambiar, el campo monto cambia `prefix_text` y `suffix_text`. | Siempre hay una elegida (CA-24.3 no puede darse desde la interfaz; la lógica igual valida). |
 | Monto | Campo de monto en la moneda elegida | Mensajes comunes. |
 
 ### 4.6 Cambio de USD realizado – RF-26
@@ -1093,17 +1264,22 @@ Un solo campo "Nombre". Mensajes de §3.10.
 ## 5. Accesibilidad (resumen)
 
 - **Contraste:** todos los pares de color de §2.1 cumplen 4,5:1 o más, en ambos temas.
-- **Tamaños:** texto base 15, mínimo 13; filas de tabla de 48 px de alto; botones e íconos
-  clickeables de al menos 40 × 40 px (tamaño por defecto de `IconButton`).
+- **Tamaños:** texto base 15, mínimo 13; filas de tabla de 48 px de alto (hasta 64 con
+  dos líneas); botones e íconos clickeables de al menos 40 × 40 px (tamaño por defecto de
+  `IconButton`).
 - **No solo color:** cada estado tiene texto o ícono ("Pagado", "Parcial", "Déficit", "Sin
-  capacidad de endeudamiento", "a devolver", "Archivada").
+  capacidad de endeudamiento", "a devolver", "Archivada"). Los gastos en dólares se
+  reconocen por el texto "US$", no por un color.
 - **Teclado:** todo se puede hacer con teclado: Tab recorre los controles en orden visual,
-  Espacio marca tildes, Enter guarda, Esc cancela, atajos de §1.3. En cada diálogo el foco
-  arranca en el primer campo; en las confirmaciones, en "Cancelar".
+  Espacio marca tildes y elige opciones de los selectores, Enter guarda, Esc cancela, atajos
+  de §1.3. En cada diálogo el foco arranca en el primer campo; en las confirmaciones, en
+  "Cancelar".
 - **Lectores de pantalla:** todos los `IconButton` tienen `tooltip`; los gráficos tienen su
-  versión en tabla.
+  versión en tabla; la celda de monto de un gasto en dólares tiene tooltip con la cuenta
+  completa.
 - **Etiquetas siempre visibles:** el rail muestra texto bajo cada ícono; los campos usan
-  `label` (no solo `hint_text`, que desaparece al escribir).
+  `label` (no solo `hint_text`, que desaparece al escribir). Los segmentos de moneda dicen
+  "Pesos (ARS)" y "Dólares (USD)", no solo un símbolo.
 - **Errores claros:** cada mensaje dice qué está mal y cómo arreglarlo, en español y sin
   términos técnicos.
 
@@ -1122,10 +1298,11 @@ Pantallas y partes que se construyen:
 - **Barra superior mínima:** solo el nombre del mes ("Octubre 2026") como texto. Sin selector,
   sin mes nuevo, sin cotización.
 - **Primer uso** (§3.1) completo (pide sueldo y cotización aunque todavía no se muestren en
-  otro lado; quedan guardados para el paso 3).
+  otro lado; quedan guardados para el paso 3; la cotización ya se usa en el paso 1c).
 - **Gastos** (§3.3) con columnas **Nombre, Categoría, Tipo, Medio de pago, Monto** y el menú
   con **Editar** y **Borrar**. Fila de totales solo con **Total gastos**. Estado vacío.
-- **Diálogo de gasto** (§4.1) sin la sección Compartido; con creación de categoría en línea.
+- **Diálogo de gasto** (§4.1) en pesos, sin selector de moneda y sin la sección Compartido;
+  con creación de categoría en línea.
 - **Confirmación de borrado** de gasto (versión simple).
 - **Ajustes:** pestañas **Categorías** y **Medios de pago** (§3.10), con archivar/desarchivar.
 - **Sistema visual** (§2) completo: paleta, tipografía, formato de montos, campo de monto
@@ -1135,13 +1312,52 @@ Pantallas y partes que se construyen:
 Qué puede probar el usuario: crear el primer mes, cargar, editar y borrar gastos, ver el total,
 crear/renombrar/archivar categorías y medios.
 
+### Paso 1c – Gastos en dólares
+
+Se construye sobre la pantalla Gastos del paso 1; no agrega pantallas nuevas.
+
+- **Diálogo de gasto** (§4.1):
+  - Selector **Moneda** (`ft.SegmentedButton` "Pesos (ARS)" / "Dólares (USD)") entre
+    Categoría y Monto, con ARS por defecto.
+  - **Bloque dólares:** "Monto en dólares" (US$), "Cotización del día" ($, precargada con la
+    del mes guardada en el primer uso, o vacía y obligatoria si no hay) con su texto de ayuda,
+    y el **recuadro de resultado** "US$ 20,00 × $ 1.600 = $ 32.000 a pagar" que se actualiza en
+    cada tecla.
+  - Mostrar/ocultar bloques con `visible`, conservando lo escrito en cada uno.
+  - Validaciones y mensajes del bloque dólares.
+  - **Edición** de un gasto en dólares: precarga de moneda, monto en dólares y cotización
+    guardada; botón "Usar la del mes"; paso de dólares a pesos con el monto precargado y aviso.
+  - Texto de ayuda del Tipo según la moneda.
+- **Tabla de gastos** (§3.3): segunda línea "US$ 20,00 × $ 1.600" en la celda Monto, tooltip
+  con la cuenta completa y `data_row_max_height=64`. Los totales siguen en pesos.
+- **Formato** (§2.3): función para el detalle "US$ 20,00 × $ 1.600" (en `formato.py`, para
+  que Lucía la pruebe) y la función de conversión en la lógica.
+- SnackBar de alta con pesos y dólares: "Gasto "Claude" agregado: $ 32.000 (US$ 20,00)".
+
+Qué puede probar el usuario:
+
+- Cargar "Claude" US$ 20 a $ 1.600 y ver "$ 32.000 a pagar" mientras escribe; al guardar, ver
+  $ 32.000 en la tabla con "US$ 20,00 × $ 1.600" debajo y el total sumando 32.000.
+- Cambiar la cotización del día a 2.080 antes de guardar y ver $ 41.600.
+- Intentar guardar con monto en dólares vacío o 0, o con cotización vacía o 0, y ver los
+  mensajes.
+- Escribir algo en pesos, pasar a dólares y volver: lo escrito sigue ahí.
+- Editar el gasto en dólares, cambiar la cotización y ver que el monto en pesos se recalcula;
+  pasarlo a pesos y ver el monto precargado.
+
+Lo que **no** se ve todavía en 1c (llega en pasos posteriores, ver cada paso): pagos de un
+gasto en dólares (paso 2), el aviso de gastos en dólares en el diálogo de cotización
+(paso 3), la copia al mes nuevo (paso 4) y las partes compartidas en pesos (paso 5).
+
 ### Paso 2 – Pagos y pendiente
 
 - **Gastos:** se agregan la columna **Pag.** (tilde), **Pagado** y **Pendiente**, la etiqueta
   "Parcial", y en la fila de totales **Pagado** y **Falta por pagar**.
 - Menú de fila: **Registrar pago** y **Ver pagos**.
-- Diálogos §4.3 y §4.4; confirmación de destildar; SnackBar con "Deshacer" al marcar pagado.
-- Validación RN-23 en el diálogo de edición de gasto.
+- Diálogos §4.3 (con la línea "Gasto en dólares: …" cuando corresponde) y §4.4; confirmación
+  de destildar; SnackBar con "Deshacer" al marcar pagado.
+- Validación RN-23 en el diálogo de edición de gasto, también sobre el resultado en pesos de
+  un gasto en dólares.
 
 ### Paso 3 – Sueldo, cotización, cambios y ahorro (Resumen)
 
@@ -1149,7 +1365,8 @@ crear/renombrar/archivar categorías y medios.
 - **Barra superior:** se agrega la **cotización** con su estado "sin cargar" y `Ctrl/Cmd+K`.
 - **Resumen** (§3.2) completo **salvo** la tarjeta "Te deben" (llega en el paso 5). La
   capacidad usa cuotas = 0.
-- Diálogos de sueldo, cotización y meta (§3.6), ingreso extra (§4.5) y cambio (§4.6).
+- Diálogos de sueldo, cotización (con el aviso sobre gastos en dólares) y meta (§3.6),
+  ingreso extra (§4.5) y cambio (§4.6).
 - **Ajustes:** pestaña **Meta de ahorro**.
 - Estados: sin cotización, sueldo 0, déficit, pesos sobrantes, capacidad negativa.
 
@@ -1157,18 +1374,19 @@ crear/renombrar/archivar categorías y medios.
 
 - **Barra superior:** **selector de mes**, flechas, **Mes nuevo**, menú **Borrar este mes**,
   franja de "mes pasado", atajos `Alt+←/→` y `Ctrl/Cmd+Shift+N`.
-- Diálogos de **crear mes** y **borrar mes** (§3.9).
+- Diálogos de **crear mes** (con la línea de fijos en dólares) y **borrar mes** (§3.9).
 - **Rail:** se agrega **Cuotas** (§3.4) con filtro, tabla, diálogo de plan (§4.2) y
   cancelación.
 - **Gastos:** columna Tipo muestra "Cuota n/N"; botón "Plan cuotas"; confirmación especial
-  para borrar una cuota (RN-52); edición de gasto-cuota (texto fijo + "Editar el plan");
-  bloque **Por medio de pago** (RF-22).
+  para borrar una cuota (RN-52); edición de gasto-cuota (texto fijo + "Editar el plan", sin
+  selector de moneda); bloque **Por medio de pago** (RF-22).
 - **Resumen:** la capacidad pasa a restar las cuotas reales.
 
 ### Paso 5 – Compartidos y "me deben"
 
 - **Gastos:** sección **Compartido** del diálogo (§4.1) con partes, "manual", "Tu parte" y
-  avisos de RN-34; ícono de compartido en la tabla; texto extra en la confirmación de borrado.
+  avisos de RN-34 (también al cambiar monto o cotización de un gasto en dólares); ícono de
+  compartido en la tabla; texto extra en la confirmación de borrado.
 - **Rail:** se agrega **Me deben** (§3.5) con tarjetas por persona, "Mostrar cobrados",
   diálogo de ítem (§4.8) y "Deshacer" al cobrar.
 - **Ajustes:** pestaña **Personas**.
@@ -1183,7 +1401,7 @@ crear/renombrar/archivar categorías y medios.
 ### Paso 7 – Gráficos
 
 - **Rail:** se agrega **Gráficos** (§3.8) con las 3 pestañas y sus tablas alternativas.
-- Verificar la versión de Flet y el paquete de gráficos (nota de §3.8).
+- Agregar `flet-charts` a `requirements.txt` (nota de §3.8).
 - **Previsión:** enlace "Ver el gráfico de previsión".
 - **Ajustes:** pestaña **Apariencia** (puede adelantarse a cualquier paso; es independiente).
 
@@ -1195,7 +1413,7 @@ Solo como orientación para el agente que programa:
 app/interfaz/
   main.py            # arma la ventana, el rail, la barra y cambia de pantalla
   estilos.py         # colores por tema, tamaños de texto, constantes
-  componentes.py     # campo de monto, confirmación, estado vacío, aviso, SnackBar
+  componentes.py     # campo de monto, selector de moneda, confirmación, estado vacío, aviso
   barra_superior.py
   pantalla_resumen.py
   pantalla_gastos.py
@@ -1206,7 +1424,7 @@ app/interfaz/
   pantalla_ajustes.py
   dialogos/          # un archivo por diálogo de §4
 app/logica/
-  formato.py         # formatear ARS/USD/fechas y leer montos escritos (sin Flet)
+  formato.py         # formatear ARS/USD/fechas/detalle en USD y leer montos escritos (sin Flet)
 ```
 
 Cada pantalla expone una función `refrescar()` que vuelve a pedir los datos a la lógica y
@@ -1241,15 +1459,17 @@ Puntos de los requisitos que no se pueden diseñar del todo bien o que necesitan
    validación.
 6. **Formato de la cotización.** RN-04 define ARS sin decimales, pero la cotización puede tener
    centavos (RN-02: 1.432,50). Propongo mostrarla sin decimales si es entera y con 2 si no.
+   Lo mismo vale para la "cotización del día" de los gastos en dólares.
 7. **Porcentaje de la meta.** CA-36.1 dice "101 % (101,12 %)". Interpreté: la barra muestra
    "101 %" y el tooltip "101,12 %". Si se quiere el valor exacto visible, se muestra
    "101,12 %" directamente.
 8. **Gasto de tipo cuota editado a mano.** RF-07 permite editar "cualquier campo", pero cambiar
    el tipo de una cuota a "fijo" o "único" rompería el vínculo con el plan (y `plan_cuotas_id`
    tiene que ser NULL si el tipo no es cuota). Diseñé el tipo como **no editable** en los
-   gastos de cuota. También conviene que Ana aclare qué pasa si el usuario cambia a mano el
-   monto de una cuota de un mes futuro y después edita el plan (RN-30 solo protege las cuotas
-   **con pagos**; el monto editado a mano se pisaría).
+   gastos de cuota (y tampoco la moneda, porque los planes son solo en pesos). También
+   conviene que Ana aclare qué pasa si el usuario cambia a mano el monto de una cuota de un
+   mes futuro y después edita el plan (RN-30 solo protege las cuotas **con pagos**; el monto
+   editado a mano se pisaría).
 9. **Fecha de los pagos.** El modelo guarda fecha en `pagos`, pero ningún RF dice que el
    usuario la cargue. Diseñé: fecha de hoy por defecto, editable en el pago parcial; el tilde
    usa la fecha de hoy.
@@ -1262,11 +1482,42 @@ Puntos de los requisitos que no se pueden diseñar del todo bien o que necesitan
 12. **Categoría/medio/persona archivados al editar.** RN-49 dice que lo archivado no aparece
     "para cargar datos nuevos". Interpreté que al **editar** un gasto que ya los usa sí se
     muestran (con "(archivada)"), para no obligar a cambiarlos.
-13. **Versión de Flet y gráficos.** Python 3.14 probablemente implique Flet 1.x, donde los
-    gráficos están en el paquete `flet-charts` y algunas APIs cambiaron (por ejemplo, cómo se
-    abren los diálogos: `page.open(dlg)` en 0.2x vs. `page.show_dialog(dlg)` en 1.x). Los
-    nombres de componentes de este documento son orientativos; hay que verificarlos contra la
-    versión instalada en `.venv`.
+13. **Versión de Flet y gráficos.** El proyecto usa Flet 1.0.3: los gráficos están en el
+    paquete `flet-charts` y los diálogos se abren con `page.show_dialog(dlg)` (no
+    `page.open(dlg)` de 0.2x). Los nombres de componentes de este documento son orientativos;
+    hay que verificarlos contra la versión instalada en `.venv` (por ejemplo, en
+    `ft.SegmentedButton` la propiedad `selected` es una lista de valores).
 14. **Punto decimal del teclado numérico.** Con punto de miles y coma decimal (RN-04), un
     "66020.12" escrito con el teclado numérico es ambiguo. Diseñé rechazarlo con un mensaje
     claro en vez de adivinar.
+
+**Gastos en dólares**
+
+15. **Mes nuevo sin cotización y fijos en dólares.** La decisión aprobada dice que los fijos en
+    USD se copian "con la cotización del mes nuevo", pero el mes nuevo puede crearse sin
+    cotización (RN-06). Opciones: (a) copiarlos con la cotización que tenían en el mes
+    anterior y avisarlo; (b) exigir la cotización al crear el mes si hay fijos en dólares;
+    (c) dejarlos sin pesos hasta que se cargue (rompe "monto > 0"). Diseñé el aviso en el
+    diálogo de crear mes y recomiendo **(b)**: es la más simple de explicar y no deja datos a
+    medias. Falta que Ana lo defina.
+16. **Fijos en dólares en la previsión.** RN-42 usa los fijos del mes actual "con el mismo
+    monto". Un fijo en dólares, ¿se estima con sus pesos fijos del mes actual o se reconvierte
+    con `K_actual`? Hoy dan lo mismo solo si su cotización del día es igual a la del mes.
+    Propongo usar los pesos del mes actual (es coherente con "mismo monto" y no cambia
+    RN-42); falta confirmarlo.
+17. **Cambiar la cotización del mes no actualiza los gastos en dólares.** Es lo aprobado (los
+    pesos quedan fijos), pero el usuario podría esperar lo contrario. Lo mitigué con el texto
+    del diálogo de cotización y el botón "Usar la del mes" al editar. Si se quisiera un
+    "actualizar todos los gastos en dólares con la cotización del mes", sería una función
+    nueva.
+18. **RN-05 y RN-23 para gastos en dólares.** Hace falta que los requisitos digan que el
+    monto en dólares y la cotización del día deben ser > 0, y que RN-23 se aplica al
+    resultado en pesos al editar. Diseñé los mensajes asumiendo eso.
+19. **Copia al mes nuevo de un fijo en dólares con pagos o partes.** Los fijos se copian sin
+    pagos (RN-09) y con su configuración de compartido (RN-37); las partes automáticas se
+    recalculan sobre los pesos nuevos, pero una parte **manual** se copia con su valor en
+    pesos aunque el gasto haya cambiado de monto por la cotización nueva. Si con eso "Tu
+    parte" queda negativa, no está definido qué hace la copia. Falta definirlo.
+20. **Total en dólares de la tabla.** No se muestra un total en dólares de los gastos en USD
+    (mezclaría cotizaciones distintas). Si el usuario lo quisiera (ej. "este mes pago US$ 45
+    de suscripciones"), se podría agregar como texto debajo de la tabla.

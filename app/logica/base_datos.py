@@ -1,6 +1,10 @@
-"""Conexión a SQLite y creación de las tablas (modelo de docs/requisitos.md §5)."""
+"""Conexión a SQLite, creación de las tablas y actualización de bases viejas.
+
+Modelo de datos: docs/requisitos.md §5. Actualizaciones: RN-59.
+"""
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 # La base real vive en datos-privados/, que está excluida de git.
@@ -17,6 +21,32 @@ CATEGORIAS_INICIALES = [
     "Otros",
 ]
 MEDIOS_PAGO_INICIALES = ["Tarjeta de crédito", "Efectivo", "Transferencia"]
+
+# Versión de la estructura de la base. Se guarda dentro del archivo con
+# PRAGMA user_version (un número que SQLite reserva para esto).
+#   0: estructura del paso 1.
+#   1: gastos en dólares (columnas moneda, monto_usd_cent y cotizacion_cent).
+VERSION_ACTUAL = 1
+
+
+class ErrorDeBase(Exception):
+    """La base no se pudo abrir o actualizar. El mensaje es para mostrar en pantalla
+    y dice si los datos se modificaron y si hay copia de respaldo (RN-59)."""
+
+
+# Qué hay que ejecutar para pasar de una versión a la siguiente.
+# ALTER TABLE ADD COLUMN agrega columnas sin tocar los datos que ya existen:
+# los gastos viejos quedan con moneda 'ARS' (el valor por defecto) y sin dólares.
+_ACTUALIZACIONES = {
+    1: [
+        (
+            "ALTER TABLE gastos ADD COLUMN moneda TEXT NOT NULL DEFAULT 'ARS' "
+            "CHECK (moneda IN ('ARS', 'USD'))"
+        ),
+        "ALTER TABLE gastos ADD COLUMN monto_usd_cent INTEGER CHECK (monto_usd_cent > 0)",
+        "ALTER TABLE gastos ADD COLUMN cotizacion_cent INTEGER CHECK (cotizacion_cent > 0)",
+    ],
+}
 
 # Se crean las 12 tablas desde el principio, aunque el paso 1 use pocas: así no hace
 # falta modificar la estructura de una base que ya tiene datos reales.
@@ -78,8 +108,19 @@ CREATE TABLE IF NOT EXISTS gastos (
     tipo TEXT NOT NULL CHECK (tipo IN ('fijo', 'cuota', 'unico')),
     medio_pago_id INTEGER REFERENCES medios_pago (id),
     plan_cuotas_id INTEGER REFERENCES planes_cuotas (id),
+    moneda TEXT NOT NULL DEFAULT 'ARS' CHECK (moneda IN ('ARS', 'USD')),
+    monto_usd_cent INTEGER CHECK (monto_usd_cent > 0),
+    cotizacion_cent INTEGER CHECK (cotizacion_cent > 0),
     -- Un gasto es cuota si y solo si tiene plan.
     CHECK ((tipo = 'cuota') = (plan_cuotas_id IS NOT NULL)),
+    -- En USD tiene dólares y cotización; en ARS, ninguno de los dos. Las cuotas, solo ARS.
+    -- (Las bases actualizadas con ALTER TABLE no tienen este control: SQLite no
+    -- permite agregarlo después. Ahí lo garantiza la lógica de gastos.py.)
+    CHECK (
+        (moneda = 'ARS' AND monto_usd_cent IS NULL AND cotizacion_cent IS NULL)
+        OR (moneda = 'USD' AND monto_usd_cent IS NOT NULL
+            AND cotizacion_cent IS NOT NULL AND tipo <> 'cuota')
+    ),
     UNIQUE (mes_id, plan_cuotas_id)
 );
 
@@ -139,7 +180,8 @@ def conectar(ruta: Path | str = RUTA_POR_DEFECTO) -> sqlite3.Connection:
 
     Las pruebas pasan ruta=":memory:" para usar una base temporal en memoria.
     """
-    if str(ruta) != ":memory:":
+    en_memoria = str(ruta) == ":memory:"
+    if not en_memoria:
         Path(ruta).parent.mkdir(parents=True, exist_ok=True)
 
     # check_same_thread=False: Flet ejecuta los clics en hilos distintos al que
@@ -149,14 +191,108 @@ def conectar(ruta: Path | str = RUTA_POR_DEFECTO) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     # SQLite no controla las claves foráneas salvo que se lo pida en cada conexión.
     con.execute("PRAGMA foreign_keys = ON")
-    crear_tablas(con)
+    # Los respaldos se guardan junto a la base: datos-privados/respaldos/.
+    carpeta_respaldos = None if en_memoria else Path(ruta).parent / "respaldos"
+    try:
+        crear_tablas(con, carpeta_respaldos)
+    except BaseException:
+        # Si no se pudo dejar lista, se cierra antes de avisar el error: así el
+        # archivo no queda abierto.
+        con.close()
+        raise
     return con
 
 
-def crear_tablas(con: sqlite3.Connection) -> None:
+def crear_tablas(
+    con: sqlite3.Connection, carpeta_respaldos: Path | None = None
+) -> None:
+    """Crea las tablas que falten y actualiza la estructura si la base es vieja."""
+    if version_de(con) > VERSION_ACTUAL:
+        # Una base creada por una versión más nueva de la app: esta versión no
+        # conoce su estructura y podría romperla.
+        raise ErrorDeBase(
+            "Esta base es de una versión más nueva de la app. "
+            "Actualizá la app antes de abrirla. Tus datos no se modificaron."
+        )
+    base_nueva = not _existe_tabla(con, "gastos")
     with con:
         con.executescript(_ESQUEMA)
         _cargar_datos_iniciales(con)
+    if base_nueva:
+        # Una base recién creada ya tiene la estructura completa (_ESQUEMA).
+        con.execute(f"PRAGMA user_version = {VERSION_ACTUAL}")
+    else:
+        actualizar_estructura(con, carpeta_respaldos)
+
+
+def version_de(con: sqlite3.Connection) -> int:
+    return con.execute("PRAGMA user_version").fetchone()[0]
+
+
+def _existe_tabla(con: sqlite3.Connection, nombre: str) -> bool:
+    fila = con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (nombre,)
+    ).fetchone()
+    return fila is not None
+
+
+def actualizar_estructura(
+    con: sqlite3.Connection, carpeta_respaldos: Path | None = None
+) -> Path | None:
+    """Lleva una base vieja a VERSION_ACTUAL (RN-59). Devuelve la ruta del respaldo.
+
+    Antes de cambiar nada hace una copia de respaldo (si se indica la carpeta).
+    Cada versión se aplica en una transacción: si algo falla, esa versión
+    queda sin aplicar (la base no queda a medias) y el error sigue hacia arriba.
+    """
+    version = version_de(con)
+    if version >= VERSION_ACTUAL:
+        return None
+    respaldo = None
+    if carpeta_respaldos:
+        try:
+            respaldo = hacer_respaldo(con, carpeta_respaldos)
+        except Exception as error:
+            # Sin respaldo no se toca nada.
+            raise ErrorDeBase(
+                "No se pudo hacer la copia de respaldo, así que la base no se actualizó. "
+                "Tus datos no se modificaron."
+            ) from error
+    for nueva_version in range(version + 1, VERSION_ACTUAL + 1):
+        try:
+            # BEGIN explícito: Python no abre solo una transacción para ALTER TABLE.
+            con.execute("BEGIN")
+            for sentencia in _ACTUALIZACIONES[nueva_version]:
+                con.execute(sentencia)
+            # user_version también es parte de la transacción.
+            con.execute(f"PRAGMA user_version = {nueva_version}")
+            con.commit()
+        except Exception as error:
+            con.rollback()
+            mensaje = "No se pudo actualizar la base. Tus datos no se modificaron."
+            if respaldo:
+                mensaje += f" Hay una copia de respaldo en {respaldo}."
+            # "from error" conserva el error original para el detalle técnico.
+            raise ErrorDeBase(mensaje) from error
+    return respaldo
+
+
+def hacer_respaldo(con: sqlite3.Connection, carpeta: Path) -> Path:
+    """Copia completa de la base en carpeta/gastos-AAAAMMDD-HHMMSS.db.
+
+    Usa backup() de SQLite y no una copia del archivo, porque copia bien aunque
+    la base esté abierta.
+    """
+    carpeta.mkdir(parents=True, exist_ok=True)
+    # Hora local a propósito: el nombre lo lee el usuario.
+    marca = datetime.now().strftime("%Y%m%d-%H%M%S")  # noqa: DTZ005
+    destino = carpeta / f"gastos-{marca}.db"
+    copia = sqlite3.connect(destino)
+    try:
+        con.backup(copia)
+    finally:
+        copia.close()
+    return destino
 
 
 def _cargar_datos_iniciales(con: sqlite3.Connection) -> None:

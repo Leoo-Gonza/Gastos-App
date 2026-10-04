@@ -11,7 +11,9 @@ from app.logica.formato import formatear_monto_para_editar, leer_monto
 _MONEDAS = {"ARS": "$ ", "USD": "US$ "}
 
 
-def campo_monto(label: str, moneda: str = "ARS", **opciones) -> ft.TextField:
+def campo_monto(
+    label: str, moneda: str = "ARS", sufijo: str | None = None, **opciones
+) -> ft.TextField:
     """Campo para escribir un monto. Igual en toda la app (§2.4).
 
     Acepta "66020", "66.020", "66020,12" y "66.020,12". Al salir del campo,
@@ -20,12 +22,14 @@ def campo_monto(label: str, moneda: str = "ARS", **opciones) -> ft.TextField:
     campo = ft.TextField(
         label=label,
         prefix=_MONEDAS[moneda],
-        suffix=moneda,
+        suffix=sufijo or moneda,  # Ej.: "por US$" en la cotización.
         text_align=ft.TextAlign.RIGHT,
         keyboard_type=ft.KeyboardType.NUMBER,
         # Impide escribir letras o el signo menos. Igual la lógica valida todo.
         input_filter=ft.InputFilter(regex_string=r"[0-9.,]", allow=True),
-        hint_text="Ej.: 66.020,12",
+        # pop saca hint_text de "opciones" si vino (ej. "Ej.: 20,00" en dólares);
+        # si no vino, usa el ejemplo de pesos. Así no se pasa dos veces.
+        hint_text=opciones.pop("hint_text", "Ej.: 66.020,12"),
         **opciones,
     )
 

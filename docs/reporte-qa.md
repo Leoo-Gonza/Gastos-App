@@ -224,3 +224,64 @@ Ninguno.
 - O17 (para el paso 4): si el mes se borra con el diálogo de gasto abierto, "El mes no existe." llama a `app.refrescar()`, que fallaría con TypeError. Probarlo cuando exista "Borrar mes".
 
 **Estado de la parte 1b: pruebas automáticas completas. Falta la prueba manual del usuario con la ventana real.**
+
+---
+
+## Ronda 6 – Paso 1c (gastos en dólares)
+
+- Fecha: 2026-10-04 · Probado por: Lucía (QA)
+- Alcance: RF-43 a RF-46, RF-48; RN-53 a RN-56, RN-58, RN-59 y sus CA aplicables al paso 1c (pagos, ahorro, compartidos, copia al mes nuevo y previsión quedan para pasos posteriores).
+- Datos: base en memoria para lógica e interfaz; para la migración, archivos temporales de pytest con una base versión 0 (tests/esquema_v0.py, del commit 3845e81). Nunca se usó datos-privados/.
+- Cómo correr: `.venv/Scripts/python.exe -m pytest --cov=app`
+
+### Resultado
+| Archivo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_migracion.py (nuevo) | 19 | 19 | 0 |
+| test_gastos_usd.py (nuevo) | 64 | 64 | 0 |
+| test_interfaz_usd.py (nuevo) | 46 | 45 | 1 |
+| Rondas anteriores | 497 | 497 | 0 |
+| **Total** | **626** | **625** | **1** |
+
+Cobertura 99 % (977 líneas, 1 sin cubrir); app/logica/ 100 %. Ruff sin errores.
+
+### Verificado
+Migración v0 → v1 con respaldo (datos idénticos, respaldo en versión 0, sin re-migrar al reabrir, falla a mitad y falla del respaldo dejan la base en versión 0); conversión y formato de cotizaciones; lógica de gastos en USD (CA-43.x, 44.x, 45.x); interfaz del diálogo y de la tabla (CA-44.x, 45.x, 46.x).
+
+### Bugs
+- **BUG-09** – El aviso de alta de un gasto en dólares dice 'Gasto "Claude" agregado' y el diseño (§6, paso 1c) pide 'Gasto "Claude" agregado: $ 32.000 (US$ 20,00)'. Hipótesis: `PantallaGastos._al_guardar` solo recibe el nombre.
+
+### Observaciones
+- O18: si falla justamente el respaldo, la pantalla de error dice igual que hay una copia de respaldo.
+- O19: si la actualización falla, `conectar()` no cierra la conexión antes de relanzar el error.
+- O20: la base actualizada no tiene el CHECK de consistencia de moneda (SQLite no permite agregarlo); lo cubre la lógica. Riesgo aceptado.
+- O21: una base con versión mayor a la de la app se abre sin avisar.
+
+### Para que pruebe el usuario con la ventana real
+Recuadro de resultado en cada tecla, selector de moneda con clic/flechas/Espacio, segunda línea de la tabla y su tooltip, y la migración real: al abrir debe aparecer un archivo en datos-privados/respaldos/ y los totales deben coincidir con los de antes.
+
+---
+
+## Ronda 7
+
+- Fecha: 2026-10-04 · Probado por: Lucía (QA)
+- Motivo: verificar los arreglos de BUG-09, O18, O19 y O21 (O20 queda como riesgo aceptado).
+- Datos: base en memoria y archivos temporales de pytest. Nunca se usó datos-privados/.
+
+### Resultado
+644 pruebas, pasan las 644. Cobertura 99 % (997 líneas, 1 sin cubrir); app/logica/ 100 %. Ruff sin errores.
+
+Se actualizaron 6 pruebas a `ErrorDeBase` y a los mensajes nuevos (exigen el texto exacto, la causa original, versión 0 y datos intactos).
+
+### Verificación de los arreglos
+| Ítem | Estado |
+|---|---|
+| BUG-09 aviso de alta en USD con montos | Corregido |
+| O18 mensajes de falla (con y sin respaldo) | Corregido |
+| O19 conexión cerrada tras una falla | Corregido (verificado renombrando el archivo en Windows) |
+| O21 base de una versión más nueva | Corregido |
+
+### Bugs nuevos
+Ninguno.
+
+**Estado del paso 1c: pruebas automáticas completas. Falta la prueba manual del usuario con su base real.**

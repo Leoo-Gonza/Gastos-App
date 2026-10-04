@@ -72,8 +72,34 @@ def formatear_usd(centavos: int) -> str:
 
 def formatear_cotizacion(centavos: int) -> str:
     """160000 -> "$ 1.600 por US$"; 143250 -> "$ 1.432,50 por US$"."""
+    return f"{formatear_cotizacion_corta(centavos)} por US$"
+
+
+def formatear_cotizacion_corta(centavos: int) -> str:
+    """160000 -> "$ 1.600"; 143250 -> "$ 1.432,50".
+
+    A diferencia de formatear_ars, conserva los centavos si los tiene: si se
+    redondeara, la cuenta "US$ 19,99 × $ 1.433" no daría el resultado mostrado.
+    """
     signo = "-" if centavos < 0 else ""
-    return f"{signo}$ {_pesos_y_centavos(abs(centavos))} por US$"
+    return f"{signo}$ {_pesos_y_centavos(abs(centavos))}"
+
+
+def formatear_detalle_usd(monto_usd_cent: int, cotizacion_cent: int) -> str:
+    """(2000, 160000) -> "US$ 20,00 × $ 1.600". Explica de dónde salen los pesos."""
+    return f"{formatear_usd(monto_usd_cent)} × {formatear_cotizacion_corta(cotizacion_cent)}"
+
+
+def convertir_usd_a_ars(monto_usd_cent: int, cotizacion_cent: int) -> int:
+    """Pesos (en centavos) que hay que pagar por un monto en dólares (RN-53).
+
+    La cotización está en centavos de peso por dólar, así que el producto queda
+    con 100 de más: se divide por 100 redondeando al centavo, mitad hacia arriba
+    (RN-03). Ej.: US$ 19,99 × $ 1.432,50 -> 1999 × 143250 / 100 = 2863567,5 -> 2863568.
+    """
+    # Sumar 50 antes de la división entera es el redondeo "mitad hacia arriba"
+    # (los dos valores son positivos: los valida validar_centavos antes).
+    return (monto_usd_cent * cotizacion_cent + 50) // 100
 
 
 def _pesos_y_centavos(centavos: int) -> str:

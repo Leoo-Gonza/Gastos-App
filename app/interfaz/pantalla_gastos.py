@@ -10,11 +10,42 @@ from app.interfaz import estilos
 from app.interfaz.componentes import estado_vacio, titulo
 from app.interfaz.dialogos.dialogo_gasto import DialogoGasto
 from app.logica import gastos, meses
-from app.logica.formato import clave_orden, formatear_ars, nombre_mes
+from app.logica.formato import (
+    clave_orden,
+    formatear_ars,
+    formatear_cotizacion,
+    formatear_detalle_usd,
+    formatear_usd,
+    nombre_mes,
+)
 
 # Cómo se muestra cada tipo en la tabla, y en qué orden van los grupos (§3.3).
 _TIPO_CORTO = {"fijo": "Fijo", "cuota": "Cuota", "unico": "Único"}
 _ORDEN_TIPO = {"fijo": 0, "cuota": 1, "unico": 2}
+
+
+def _celda_monto(f) -> ft.Control:
+    """Monto en pesos (lo que se paga). Si el gasto es en dólares, debajo va en
+    letra chica de dónde salen esos pesos: "US$ 20,00 × $ 1.600" (§3.3)."""
+    pesos = ft.Text(formatear_ars(f["monto_cent"]))
+    if f["moneda"] != "USD":
+        return pesos
+    usd, cotizacion = f["monto_usd_cent"], f["cotizacion_cent"]
+    return ft.Column(
+        [
+            pesos,
+            ft.Text(
+                formatear_detalle_usd(usd, cotizacion),
+                size=estilos.TAM_AYUDA,
+                color=estilos.TEXTO_SECUNDARIO,
+            ),
+        ],
+        spacing=0,
+        horizontal_alignment=ft.CrossAxisAlignment.END,
+        tight=True,
+        tooltip=f"Gasto en dólares: {formatear_usd(usd)} a {formatear_cotizacion(cotizacion)} "
+        f"= {formatear_ars(f['monto_cent'])}. Los pesos quedan fijos con esa cotización.",
+    )
 
 
 def _cantidad_gastos(n: int) -> str:
@@ -92,6 +123,8 @@ class PantallaGastos:
         return ft.DataTable(
             heading_row_color=estilos.SUPERFICIE_VARIANTE,
             data_row_min_height=48,
+            # 64 deja lugar para la segunda línea de los gastos en dólares.
+            data_row_max_height=64,
             columns=[
                 ft.DataColumn(ft.Text("Nombre")),
                 ft.DataColumn(ft.Text("Categoría")),
@@ -141,7 +174,7 @@ class PantallaGastos:
                 ft.DataCell(categoria),
                 ft.DataCell(ft.Text(_TIPO_CORTO[f["tipo"]])),
                 ft.DataCell(medio),
-                ft.DataCell(ft.Text(formatear_ars(f["monto_cent"]))),
+                ft.DataCell(_celda_monto(f)),
                 ft.DataCell(acciones),
             ]
         )
@@ -176,9 +209,14 @@ class PantallaGastos:
             al_borrar=self.borrar,
         ).abrir()
 
-    def _al_guardar(self, nombre: str, es_nuevo: bool) -> None:
+    def _al_guardar(self, gasto_id: int, es_nuevo: bool) -> None:
+        gasto = gastos.obtener_gasto(self.app.con, gasto_id)
+        aviso = f'Gasto "{gasto["nombre"]}" {"agregado" if es_nuevo else "actualizado"}'
+        if es_nuevo and gasto["moneda"] == "USD":
+            # Ej.: 'Gasto "Claude" agregado: $ 32.000 (US$ 20,00)' (§6, paso 1c).
+            aviso += f": {formatear_ars(gasto['monto_cent'])} ({formatear_usd(gasto['monto_usd_cent'])})"
         self.app.refrescar()
-        self.app.avisar(f'Gasto "{nombre}" {"agregado" if es_nuevo else "actualizado"}')
+        self.app.avisar(aviso)
 
     def borrar(self, gasto_id: int) -> None:
         if self._gasto_que_ya_no_existe(gasto_id):
