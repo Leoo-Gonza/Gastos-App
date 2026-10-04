@@ -5,6 +5,7 @@ Internamente todos los montos son enteros en centavos (RN-01). Este módulo es e
 """
 
 import re
+import unicodedata
 
 from app.logica.errores import ErrorDeValidacion
 
@@ -95,31 +96,32 @@ def formatear_monto_para_editar(centavos: int) -> str:
     return signo + _pesos_y_centavos(abs(centavos))
 
 
-def leer_monto(texto: str, permitir_cero: bool = False) -> int:
+def leer_monto(texto: str, permitir_cero: bool = False, que: str = "El monto") -> int:
     """Convierte lo que escribió el usuario a centavos: "66.020,12" -> 6602012.
 
     Lanza ErrorDeValidacion con un mensaje para mostrar si el texto no es válido.
     Por defecto el monto tiene que ser mayor a 0 (RN-05); el sueldo usa
-    permitir_cero=True porque puede ser 0.
+    permitir_cero=True porque puede ser 0. "que" personaliza los mensajes, como en
+    validar_centavos: que="La cotización" -> "La cotización tiene que ser mayor a 0."
     """
     limpio = texto.strip().replace(" ", "")
     if not limpio:
         raise ErrorDeValidacion("Ingresá un monto.")
     if limpio.startswith("-"):
-        raise ErrorDeValidacion("El monto no puede ser negativo.")
+        raise ErrorDeValidacion(f"{que} no puede ser negativo.")
 
     if _PATRON_MONTO.fullmatch(limpio) is None:
         if _PATRON_PUNTO_DECIMAL.fullmatch(limpio):
             raise ErrorDeValidacion("Usá coma para los decimales. Ej.: 66.020,12")
         if _PATRON_MUCHOS_DECIMALES.fullmatch(limpio):
             raise ErrorDeValidacion("Usá como máximo 2 decimales.")
-        raise ErrorDeValidacion("Monto inválido. Ej.: 66.020,12")
+        raise ErrorDeValidacion("Escribí solo números. Ej.: 66.020,12")
 
     # Se rechaza por largo ANTES de int(): Python se niega a convertir textos de
     # más de 4300 dígitos y tiraría un error técnico. El monto máximo válido
     # ("999.999.999.999,99") tiene 18 caracteres.
     if len(limpio) > _LARGO_MAXIMO_TEXTO:
-        raise ErrorDeValidacion("El monto es demasiado grande.")
+        raise ErrorDeValidacion(f"{que} es demasiado grande.")
 
     # partition separa en lo de antes y lo de después de la coma.
     # Si no hay coma, decimales queda vacío.
@@ -127,29 +129,34 @@ def leer_monto(texto: str, permitir_cero: bool = False) -> int:
     # ljust completa con ceros a la derecha: "5" -> "50" (o sea, 0,5 = 50 centavos).
     centavos = int(parte_entera.replace(".", "")) * 100 + int(decimales.ljust(2, "0"))
 
-    validar_centavos(centavos, permitir_cero=permitir_cero)
+    validar_centavos(centavos, permitir_cero=permitir_cero, que=que)
     return centavos
 
 
 def validar_centavos(
-    monto_cent: int, permitir_cero: bool = False, que: str = "El monto"
+    monto_cent: int,
+    permitir_cero: bool = False,
+    que: str = "El monto",
+    campo: str | None = None,
 ) -> None:
     """Controla que un monto ya convertido sea válido para guardar (RN-01, RN-05).
 
     La lógica la usa aunque la pantalla ya haya pasado por leer_monto, para no
     depender de que quien la llama haya validado. "que" personaliza el mensaje:
-    que="El sueldo" -> "El sueldo es demasiado grande."
+    que="El sueldo" -> "El sueldo es demasiado grande." "campo" se copia al error.
     """
     # bool se excluye aparte porque en Python True y False también son int (1 y 0).
     if not isinstance(monto_cent, int) or isinstance(monto_cent, bool):
-        raise ErrorDeValidacion(f"{que} tiene que ser un número entero de centavos.")
+        raise ErrorDeValidacion(
+            f"{que} tiene que ser un número entero de centavos.", campo
+        )
     if permitir_cero:
         if monto_cent < 0:
-            raise ErrorDeValidacion(f"{que} no puede ser negativo.")
+            raise ErrorDeValidacion(f"{que} no puede ser negativo.", campo)
     elif monto_cent <= 0:
-        raise ErrorDeValidacion(f"{que} tiene que ser mayor a 0.")
+        raise ErrorDeValidacion(f"{que} tiene que ser mayor a 0.", campo)
     if monto_cent > MONTO_MAXIMO_CENT:
-        raise ErrorDeValidacion(f"{que} es demasiado grande.")
+        raise ErrorDeValidacion(f"{que} es demasiado grande.", campo)
 
 
 def nombre_mes(anio: int, mes: int) -> str:
@@ -159,3 +166,15 @@ def nombre_mes(anio: int, mes: int) -> str:
     if not 1 <= mes <= 12:
         raise ValueError(f"Mes inválido: {mes}")
     return f"{MESES[mes - 1]} {anio}"
+
+
+def clave_orden(texto: str) -> str:
+    """Clave para ordenar textos como en un diccionario: sin acentos ni mayúsculas.
+
+    sorted(nombres, key=clave_orden) pone "Árbol" junto a las palabras con A.
+    """
+    # NFD separa cada letra de su acento ("Á" -> "A" + "´"); después se descartan
+    # los acentos (combining) y se pasa a minúsculas con casefold.
+    descompuesto = unicodedata.normalize("NFD", texto)
+    sin_acentos = "".join(c for c in descompuesto if not unicodedata.combining(c))
+    return sin_acentos.casefold()

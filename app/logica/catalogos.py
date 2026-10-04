@@ -6,9 +6,9 @@ constantes CATEGORIAS, MEDIOS_PAGO o PERSONAS.
 """
 
 import sqlite3
-import unicodedata
 
 from app.logica.errores import ErrorDeValidacion
+from app.logica.formato import clave_orden
 
 CATEGORIAS = "categorias"
 MEDIOS_PAGO = "medios_pago"
@@ -20,6 +20,14 @@ _USOS = {
     CATEGORIAS: [("gastos", "categoria_id"), ("planes_cuotas", "categoria_id")],
     MEDIOS_PAGO: [("gastos", "medio_pago_id"), ("planes_cuotas", "medio_pago_id")],
     PERSONAS: [("partes_gasto", "persona_id"), ("items_me_deben", "persona_id")],
+}
+
+# Para los mensajes: cómo se nombra un elemento de cada lista y la letra final
+# de "llamada/llamado", "archivada/archivado" (§3.10 del diseño).
+_NOMBRE_Y_GENERO = {
+    CATEGORIAS: ("una categoría", "a"),
+    MEDIOS_PAGO: ("un medio de pago", "o"),
+    PERSONAS: ("una persona", "a"),
 }
 
 
@@ -36,16 +44,20 @@ def _validar_nombre(
     # split + join quita espacios al principio y al final, y deja uno solo entre palabras.
     limpio = " ".join(nombre.split())
     if not limpio:
-        raise ErrorDeValidacion("El nombre no puede estar vacío.")
+        raise ErrorDeValidacion("Ingresá un nombre.", "nombre")
 
     # La comparación sin mayúsculas se hace en Python con casefold() porque
     # COLLATE NOCASE de SQLite no reconoce letras como Ñ o Á.
     for fila in con.execute(f"SELECT id, nombre, archivado FROM {tabla}"):
         if fila["id"] != excluir_id and fila["nombre"].casefold() == limpio.casefold():
-            mensaje = f'Ya existe "{fila["nombre"]}".'
+            un_elemento, g = _NOMBRE_Y_GENERO[tabla]
+            # Ej.: 'Ya existe una categoría llamada "Salud".'
+            mensaje = f'Ya existe {un_elemento} llamad{g} "{fila["nombre"]}"'
             if fila["archivado"]:
-                mensaje += " Está en la lista de archivados: podés desarchivarlo."
-            raise ErrorDeValidacion(mensaje)
+                mensaje += f" (está archivad{g}). Podés desarchivarl{g}."
+            else:
+                mensaje += "."
+            raise ErrorDeValidacion(mensaje, "nombre")
     return limpio
 
 
@@ -60,15 +72,7 @@ def listar(
     ).fetchall()
     # Se ordena en Python y no con ORDER BY porque SQLite pone "Árbol" después
     # de "Vivienda": no sabe que la Á es una A.
-    return sorted(filas, key=lambda fila: _clave_orden(fila["nombre"]))
-
-
-def _clave_orden(nombre: str) -> str:
-    # NFD separa cada letra de su acento ("Á" -> "A" + "´"); después se descartan
-    # los acentos (combining) y se pasa a minúsculas con casefold.
-    descompuesto = unicodedata.normalize("NFD", nombre)
-    sin_acentos = "".join(c for c in descompuesto if not unicodedata.combining(c))
-    return sin_acentos.casefold()
+    return sorted(filas, key=lambda fila: clave_orden(fila["nombre"]))
 
 
 def _exigir_existente(con: sqlite3.Connection, tabla: str, id_: int) -> None:

@@ -105,7 +105,7 @@ def test_ca_11_1_medios_distintos(con, mes_id):
 def test_ca_10_2_nombre_vacio_se_rechaza(con, tabla, nombre):
     # RN-50: el nombre no puede estar vacío (ni ser solo espacios).
     antes = len(_nombres(con, tabla, True))
-    with pytest.raises(ErrorDeValidacion, match="vacío"):
+    with pytest.raises(ErrorDeValidacion, match="^Ingresá un nombre.$"):
         catalogos.crear(con, tabla, nombre)
     assert len(_nombres(con, tabla, True)) == antes
 
@@ -141,8 +141,15 @@ def test_ca_10_2_repetido_de_un_archivado_avisa_que_esta_archivado(con, mes_id, 
     gym = catalogos.crear(con, tabla, "Gym")
     _agregar_gasto_con(con, mes_id, tabla, gym)
     assert catalogos.eliminar(con, tabla, gym) == "archivado"
-    with pytest.raises(ErrorDeValidacion, match="archivados"):
+    esperado = {
+        catalogos.CATEGORIAS: 'Ya existe una categoría llamada "Gym" (está archivada).'
+        " Podés desarchivarla.",
+        catalogos.MEDIOS_PAGO: 'Ya existe un medio de pago llamado "Gym" (está archivado).'
+        " Podés desarchivarlo.",
+    }[tabla]
+    with pytest.raises(ErrorDeValidacion) as error:
         catalogos.crear(con, tabla, "gym")
+    assert str(error.value) == esperado
 
 
 @AMBAS
@@ -343,3 +350,53 @@ def test_o5_orden_tambien_con_archivados_y_medios(con, mes_id):
         "Tarjeta de crédito",
         "Transferencia",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Ronda 5: mensajes de nombres según el diseño (BUG-07, §3.10)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("tabla", "existente", "mensaje"),
+    [
+        (catalogos.CATEGORIAS, "Salud", 'Ya existe una categoría llamada "Salud".'),
+        (
+            catalogos.MEDIOS_PAGO,
+            "Efectivo",
+            'Ya existe un medio de pago llamado "Efectivo".',
+        ),
+    ],
+)
+def test_mensaje_de_repetido_segun_el_diseno(con, tabla, existente, mensaje):
+    # BUG-07: el mensaje dice qué tipo de elemento es y muestra el nombre existente.
+    with pytest.raises(ErrorDeValidacion) as error:
+        catalogos.crear(con, tabla, existente.upper())
+    assert str(error.value) == mensaje
+
+
+def test_mensajes_de_personas(con):
+    # Personas: "una persona … llamada", "archivada", "desarchivarla".
+    sofia = catalogos.crear(con, catalogos.PERSONAS, "Sofía")
+    with pytest.raises(ErrorDeValidacion) as error:
+        catalogos.crear(con, catalogos.PERSONAS, "sofía")
+    assert str(error.value) == 'Ya existe una persona llamada "Sofía".'
+    with con:
+        con.execute(
+            "INSERT INTO items_me_deben (persona_id, descripcion, monto_cent, fecha) "
+            "VALUES (?, 'Préstamo', 500000, '2026-10-01')",
+            (sofia,),
+        )
+    catalogos.eliminar(con, catalogos.PERSONAS, sofia)
+    with pytest.raises(ErrorDeValidacion) as error:
+        catalogos.crear(con, catalogos.PERSONAS, "SOFÍA")
+    assert str(error.value) == (
+        'Ya existe una persona llamada "Sofía" (está archivada). Podés desarchivarla.'
+    )
+
+
+def test_renombrar_a_repetido_usa_el_mismo_mensaje(con):
+    otros = id_por_nombre(con, catalogos.CATEGORIAS, "Otros")
+    with pytest.raises(ErrorDeValidacion) as error:
+        catalogos.renombrar(con, catalogos.CATEGORIAS, otros, "salud")
+    assert str(error.value) == 'Ya existe una categoría llamada "Salud".'

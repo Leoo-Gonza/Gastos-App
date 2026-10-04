@@ -25,9 +25,9 @@ def mes_actual_calendario(hoy: date | None = None) -> tuple[int, int]:
 def validar_anio_mes(anio: int, mes: int) -> None:
     """RN-07: año de 4 dígitos y mes de 1 a 12."""
     if not 1000 <= anio <= 9999:
-        raise ErrorDeValidacion("El año tiene que tener 4 dígitos.")
+        raise ErrorDeValidacion("El año tiene que tener 4 dígitos.", "anio")
     if not 1 <= mes <= 12:
-        raise ErrorDeValidacion("El mes tiene que estar entre 1 y 12.")
+        raise ErrorDeValidacion("El mes tiene que estar entre 1 y 12.", "mes")
 
 
 def hay_meses(con: sqlite3.Connection) -> bool:
@@ -50,9 +50,11 @@ def crear_primer_mes(
             "Ya existe un mes. Los siguientes se crean con 'Mes nuevo'."
         )
     validar_anio_mes(anio, mes)
-    validar_centavos(sueldo_usd_cent, permitir_cero=True, que="El sueldo")
+    validar_centavos(
+        sueldo_usd_cent, permitir_cero=True, que="El sueldo", campo="sueldo"
+    )
     if cotizacion_cent is not None:
-        validar_centavos(cotizacion_cent, que="La cotización")
+        validar_centavos(cotizacion_cent, que="La cotización", campo="cotizacion")
 
     with con:
         cursor = con.execute(

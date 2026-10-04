@@ -6,6 +6,7 @@ import pytest
 from app.logica.errores import ErrorDeValidacion
 from app.logica.formato import (
     MONTO_MAXIMO_CENT,
+    clave_orden,
     formatear_ars,
     formatear_cotizacion,
     formatear_monto_para_editar,
@@ -385,8 +386,10 @@ def test_bug04_texto_de_mas_de_20_caracteres_se_rechaza_con_mensaje(texto):
 
 
 def test_bug04_texto_largo_y_mal_formado_da_el_mensaje_del_formato():
-    # Un texto largo con letras sigue diciendo "Monto inválido" (el patrón va primero).
-    with pytest.raises(ErrorDeValidacion, match="inválido"):
+    # Un texto largo con letras da el mensaje de formato (el patrón va primero).
+    with pytest.raises(
+        ErrorDeValidacion, match="^Escribí solo números. Ej.: 66.020,12$"
+    ):
         leer_monto("9" * 5000 + "abc")
 
 
@@ -456,4 +459,85 @@ def test_validar_centavos_personaliza_el_sujeto(monto, permitir_cero, que, mensa
     # O8: el parámetro "que" cambia el sujeto del mensaje.
     with pytest.raises(ErrorDeValidacion) as error:
         validar_centavos(monto, permitir_cero=permitir_cero, que=que)
+    assert str(error.value) == mensaje
+
+
+# ---------------------------------------------------------------------------
+# Ronda 5: clave_orden (BUG-05) y mensajes con "que" (BUG-07)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("texto", "clave"),
+    [
+        ("Árbol", "arbol"),
+        ("ÑANDÚ", "nandu"),
+        ("Psicólogo", "psicologo"),
+        ("Óptica", "optica"),
+        ("Pingüino", "pinguino"),
+        ("Nafta", "nafta"),
+        ("", ""),
+    ],
+)
+def test_clave_orden_quita_acentos_y_mayusculas(texto, clave):
+    # BUG-05: la clave de orden ignora acentos (Á como A, Ñ como N) y mayúsculas.
+    assert clave_orden(texto) == clave
+
+
+def test_clave_orden_ordena_como_un_diccionario():
+    nombres = ["Psicólogo", "Ómnibus", "nafta", "Árbol", "Zapatillas", "Ñoquis"]
+    assert sorted(nombres, key=clave_orden) == [
+        "Árbol",
+        "nafta",
+        "Ñoquis",
+        "Ómnibus",
+        "Psicólogo",
+        "Zapatillas",
+    ]
+
+
+@pytest.mark.parametrize("texto", ["abc", "12abc", "1.2345", "$ 100", "+500"])
+def test_texto_no_numerico_dice_escribi_solo_numeros(texto):
+    # BUG-07 / diseno.md §4: el mensaje de texto no numérico es el del diseño.
+    with pytest.raises(ErrorDeValidacion) as error:
+        leer_monto(texto)
+    assert str(error.value) == "Escribí solo números. Ej.: 66.020,12"
+
+
+@pytest.mark.parametrize(
+    ("texto", "permitir_cero", "que", "mensaje"),
+    [
+        ("-5", True, "El sueldo", "El sueldo no puede ser negativo."),
+        ("0", False, "La cotización", "La cotización tiene que ser mayor a 0."),
+        (
+            "999.999.999.999,01",
+            False,
+            "La cotización",
+            "La cotización es demasiado grande.",
+        ),
+        ("0" * 21, True, "El sueldo", "El sueldo es demasiado grande."),
+        ("-5", False, "El monto", "El monto no puede ser negativo."),
+        ("0", False, "El monto", "El monto tiene que ser mayor a 0."),
+    ],
+)
+def test_leer_monto_usa_que_en_los_mensajes(texto, permitir_cero, que, mensaje):
+    # BUG-07: "que" nombra el dato en los mensajes de negativo, cero y tope.
+    with pytest.raises(ErrorDeValidacion) as error:
+        leer_monto(texto, permitir_cero=permitir_cero, que=que)
+    assert str(error.value) == mensaje
+
+
+@pytest.mark.parametrize(
+    ("texto", "mensaje"),
+    [
+        ("", "Ingresá un monto."),
+        ("66020.12", "Usá coma para los decimales. Ej.: 66.020,12"),
+        ("66020,123", "Usá como máximo 2 decimales."),
+        ("abc", "Escribí solo números. Ej.: 66.020,12"),
+    ],
+)
+def test_mensajes_de_formato_no_cambian_con_que(texto, mensaje):
+    # Los mensajes de formato son iguales para cualquier dato.
+    with pytest.raises(ErrorDeValidacion) as error:
+        leer_monto(texto, que="La cotización")
     assert str(error.value) == mensaje

@@ -1006,7 +1006,7 @@ Mensajes comunes a todos los montos (RN-04, RN-05):
 |---|---|---|
 | Nombre | `ft.TextField(autofocus=True, max_length=60)` | Vacío: "Ingresá un nombre." |
 | Categoría | `ft.Dropdown` con categorías no archivadas + `ft.IconButton(ADD, tooltip="Nueva categoría")` | Sin elegir: "Elegí una categoría." El botón "+" muestra **dentro del mismo diálogo** una fila `[Nombre de la categoría] [Agregar]` (no abre otro diálogo). Si no hay ninguna categoría, la fila aparece abierta con el texto "Todavía no tenés categorías. Creá la primera." |
-| Monto | Campo de monto ARS (§2.4) | Mensajes comunes + RN-23 en edición: "No podés bajar el monto a menos de lo ya pagado ($ 60.000)." |
+| Monto | Campo de monto ARS (§2.4) | Mensajes comunes + RN-23 en edición: "No podés bajar el monto a menos de lo que ya pagaste ($ 60.000)." |
 | Tipo | `ft.SegmentedButton` con "Fijo mensual" y "Pago único" (por defecto Fijo) | – |
 | Medio de pago | `ft.Dropdown` con "Sin medio de pago" como primera opción + medios no archivados | Opcional. |
 | Compartido | `ft.Switch` | Se habilita desde el paso 5. |

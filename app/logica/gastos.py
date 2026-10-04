@@ -4,7 +4,7 @@ import sqlite3
 
 from app.logica import catalogos
 from app.logica.errores import ErrorDeValidacion
-from app.logica.formato import validar_centavos
+from app.logica.formato import formatear_ars, validar_centavos
 
 # Nombres para mostrar de cada tipo. Los gastos tipo "cuota" se crean desde un
 # plan de cuotas (paso 4), no con agregar_gasto.
@@ -15,7 +15,7 @@ _TIPOS_EDITABLES = ("fijo", "unico")
 def _validar_nombre(nombre: str) -> str:
     limpio = " ".join(nombre.split())
     if not limpio:
-        raise ErrorDeValidacion("Ingresá un nombre para el gasto.")
+        raise ErrorDeValidacion("Ingresá un nombre para el gasto.", "nombre")
     return limpio
 
 
@@ -26,21 +26,23 @@ def _validar_mes(con: sqlite3.Connection, mes_id: int) -> None:
 
 def _validar_tipo(tipo: str) -> None:
     if tipo not in _TIPOS_EDITABLES:
-        raise ErrorDeValidacion("El tipo tiene que ser 'Fijo mensual' o 'Pago único'.")
+        raise ErrorDeValidacion(
+            "El tipo tiene que ser 'Fijo mensual' o 'Pago único'.", "tipo"
+        )
 
 
 def _validar_categoria(
     con: sqlite3.Connection, categoria_id: int | None, id_actual: int | None = None
 ) -> None:
     if categoria_id is None:
-        raise ErrorDeValidacion("Elegí una categoría.")
+        raise ErrorDeValidacion("Elegí una categoría.", "categoria")
     fila = catalogos.obtener(con, catalogos.CATEGORIAS, categoria_id)
     if fila is None:
-        raise ErrorDeValidacion("La categoría elegida no existe.")
+        raise ErrorDeValidacion("La categoría elegida no existe.", "categoria")
     # Una categoría archivada no se puede elegir para cargar algo nuevo (RN-49),
     # pero un gasto que ya la tenía puede conservarla al editarse.
     if fila["archivado"] and categoria_id != id_actual:
-        raise ErrorDeValidacion("La categoría elegida está archivada.")
+        raise ErrorDeValidacion("La categoría elegida está archivada.", "categoria")
 
 
 def _validar_medio_pago(
@@ -50,9 +52,11 @@ def _validar_medio_pago(
         return  # El medio de pago es opcional.
     fila = catalogos.obtener(con, catalogos.MEDIOS_PAGO, medio_pago_id)
     if fila is None:
-        raise ErrorDeValidacion("El medio de pago elegido no existe.")
+        raise ErrorDeValidacion("El medio de pago elegido no existe.", "medio_pago")
     if fila["archivado"] and medio_pago_id != id_actual:
-        raise ErrorDeValidacion("El medio de pago elegido está archivado.")
+        raise ErrorDeValidacion(
+            "El medio de pago elegido está archivado.", "medio_pago"
+        )
 
 
 def total_pagado(con: sqlite3.Connection, gasto_id: int) -> int:
@@ -81,7 +85,7 @@ def agregar_gasto(
     _validar_mes(con, mes_id)
     nombre = _validar_nombre(nombre)
     _validar_categoria(con, categoria_id)
-    validar_centavos(monto_cent)
+    validar_centavos(monto_cent, campo="monto")
     _validar_tipo(tipo)
     _validar_medio_pago(con, medio_pago_id)
 
@@ -112,7 +116,7 @@ def editar_gasto(
 
     nombre = _validar_nombre(nombre)
     _validar_categoria(con, categoria_id, id_actual=actual["categoria_id"])
-    validar_centavos(monto_cent)
+    validar_centavos(monto_cent, campo="monto")
     _validar_tipo(tipo)
     _validar_medio_pago(con, medio_pago_id, id_actual=actual["medio_pago_id"])
 
@@ -120,7 +124,8 @@ def editar_gasto(
     pagado = total_pagado(con, gasto_id)
     if monto_cent < pagado:
         raise ErrorDeValidacion(
-            "El monto no puede ser menor a lo que ya pagaste. Borrá pagos primero."
+            f"No podés bajar el monto a menos de lo que ya pagaste ({formatear_ars(pagado)}).",
+            "monto",
         )
 
     with con:

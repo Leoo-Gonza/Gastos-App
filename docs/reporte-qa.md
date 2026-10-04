@@ -144,3 +144,83 @@ Ninguno.
 - Nota técnica: los casos con textos de miles de dígitos tienen `ids` cortos porque en Windows pytest guarda el nombre de la prueba en la variable de entorno PYTEST_CURRENT_TEST.
 
 **Estado de la parte 1a: terminada (todas las pruebas pasan).**
+
+---
+
+## Ronda 4 – Parte 1b (interfaz)
+
+- Fecha: 2026-10-04 · Probado por: Lucía (QA)
+- Alcance: main.py, app/interfaz/ y los cambios de lógica (`ErrorDeValidacion.campo`, mensaje nuevo de RN-23).
+- Método: sin abrir ventanas, con una `PaginaFalsa` (tests/ayudantes_interfaz.py) y llamando a los handlers directo. No se usó datos-privados/.
+- Cómo correr: `.venv/Scripts/python.exe -m pytest --cov=app`
+
+### Resultado
+| Archivo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_formato.py | 135 | 135 | 0 |
+| test_base_datos.py | 19 | 19 | 0 |
+| test_meses.py | 42 | 42 | 0 |
+| test_catalogos.py | 57 | 57 | 0 |
+| test_gastos.py | 58 | 58 | 0 |
+| test_errores_campo.py | 11 | 11 | 0 |
+| test_interfaz_primer_uso.py | 18 | 17 | 1 |
+| test_interfaz_gastos.py | 44 | 42 | 2 |
+| test_interfaz_ajustes.py | 27 | 25 | 2 |
+| test_interfaz_aplicacion.py | 22 | 22 | 0 |
+| test_interfaz_casos_borde.py | 10 | 9 | 1 |
+| **Total** | **443** | **437** | **6** |
+
+Cobertura: 99 % total; app/logica/ 100 %. Ruff sin errores.
+
+### Bugs
+- **BUG-05** – La tabla de gastos no ordena ignorando acentos ("Ómnibus" después de "Psicólogo"). Hipótesis: ordena con `casefold()` y no con la clave sin acentos de catalogos.
+- **BUG-06** – "TOTAL (1 gastos)" con un solo gasto. Hipótesis: plural fijo en `_tabla`.
+- **BUG-07** – Mensajes distintos del diseño: cotización "0" en primer uso ("El monto…" en vez de "La cotización…"); Ajustes nombre vacío ("El nombre no puede estar vacío." en vez de "Ingresá un nombre."); nombre repetido ('Ya existe "Salud".' en vez de 'Ya existe una categoría llamada "Salud".'). También "Monto inválido" vs. "Escribí solo números" (§4).
+- **BUG-08** – Ajustes avisa "eliminado" aunque la eliminación falló (elemento que ya no existe). Hipótesis: `_ejecutar` atrapa el error y no avisa a quien la llamó.
+
+### Observaciones
+- O10: con errores, no se pone el foco en el primer campo con error (§2.5).
+- O11: los tooltips dicen "Ctrl+N" también en macOS (§1.3 pide "⌘N").
+- O12: el tooltip de "Archivar" dice "Archivado" también en Categorías.
+- O13: el aviso de sueldo 0 aparece solo al salir del campo; con Enter no se ve.
+- O14: el texto de RN-23 en diseno.md §4.1 difiere del implementado.
+- O15: con la pantalla desactualizada: editar un gasto inexistente abre "Nuevo gasto"; borrarlo da TypeError; "El gasto ya no existe." se muestra debajo de Monto.
+- O16: la confirmación no pone el foco en "Cancelar".
+
+### Para que pruebe el usuario con la ventana real
+Aspecto visual (claro y oscuro), foco y Tab, filtros de los campos al pegar, nombres reales de teclas, Cmd en macOS, cierre real de diálogos y Esc, clic en pestañas, clic en el nombre de una fila, menú de tres puntos, duración del SnackBar y "Deshacer".
+
+---
+
+## Ronda 5
+
+- Fecha: 2026-10-04 · Probado por: Lucía (QA)
+- Motivo: verificar los arreglos de BUG-05 a BUG-08 y de O10, O11, O12, O14, O15 y O16 (O13 queda como está, lo aprobó el usuario).
+- Cómo correr: `.venv/Scripts/python.exe -m pytest --cov=app`
+
+### Resultado
+497 pruebas, pasan las 497. Cobertura 99 % (802 líneas, 2 sin cubrir: `main()` y un caso inalcanzable del diálogo de gasto); app/logica/ 100 %. Ruff sin errores.
+
+Se actualizaron 10 pruebas a los mensajes nuevos del diseño (texto exacto) y se agregó tests/test_interfaz_ronda5.py (27 pruebas).
+
+### Verificación de los arreglos
+| Ítem | Estado |
+|---|---|
+| BUG-05 orden sin acentos | Corregido |
+| BUG-06 "TOTAL (1 gasto)" | Corregido |
+| BUG-07 mensajes del diseño | Corregido |
+| BUG-08 avisos en Ajustes | Corregido |
+| O10 foco en el primer error | Corregido |
+| O11 atajos según el sistema | Corregido |
+| O12 tooltip de Archivar | Corregido |
+| O14 texto de RN-23 en el diseño | Corregido |
+| O15 gasto que ya no existe | Corregido |
+| O16 foco en Cancelar | Corregido |
+
+### Bugs nuevos
+Ninguno.
+
+### Observaciones nuevas
+- O17 (para el paso 4): si el mes se borra con el diálogo de gasto abierto, "El mes no existe." llama a `app.refrescar()`, que fallaría con TypeError. Probarlo cuando exista "Borrar mes".
+
+**Estado de la parte 1b: pruebas automáticas completas. Falta la prueba manual del usuario con la ventana real.**
