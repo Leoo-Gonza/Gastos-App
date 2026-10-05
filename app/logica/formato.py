@@ -6,6 +6,7 @@ Internamente todos los montos son enteros en centavos (RN-01). Este módulo es e
 
 import re
 import unicodedata
+from decimal import ROUND_HALF_UP, Decimal
 
 from app.logica.errores import ErrorDeValidacion
 
@@ -122,6 +123,15 @@ def formatear_monto_para_editar(centavos: int) -> str:
     return signo + _pesos_y_centavos(abs(centavos))
 
 
+def _negativo(que: str) -> str:
+    """ "negativa" si el dato es femenino ("La cotización", "La meta"); si no, "negativo".
+
+    El nombre del dato siempre empieza con su artículo, así que alcanza con mirarlo
+    (BUG-14). Evita "La cotización no puede ser negativo."
+    """
+    return "negativa" if que.split()[0] in ("La", "Las") else "negativo"
+
+
 def leer_monto(texto: str, permitir_cero: bool = False, que: str = "El monto") -> int:
     """Convierte lo que escribió el usuario a centavos: "66.020,12" -> 6602012.
 
@@ -134,7 +144,7 @@ def leer_monto(texto: str, permitir_cero: bool = False, que: str = "El monto") -
     if not limpio:
         raise ErrorDeValidacion("Ingresá un monto.")
     if limpio.startswith("-"):
-        raise ErrorDeValidacion(f"{que} no puede ser negativo.")
+        raise ErrorDeValidacion(f"{que} no puede ser {_negativo(que)}.")
 
     if _PATRON_MONTO.fullmatch(limpio) is None:
         if _PATRON_PUNTO_DECIMAL.fullmatch(limpio):
@@ -178,7 +188,7 @@ def validar_centavos(
         )
     if permitir_cero:
         if monto_cent < 0:
-            raise ErrorDeValidacion(f"{que} no puede ser negativo.", campo)
+            raise ErrorDeValidacion(f"{que} no puede ser {_negativo(que)}.", campo)
     elif monto_cent <= 0:
         raise ErrorDeValidacion(f"{que} tiene que ser mayor a 0.", campo)
     if monto_cent > MONTO_MAXIMO_CENT:
@@ -214,3 +224,33 @@ def formatear_fecha(fecha_iso: str) -> str:
     """
     anio, mes, dia = fecha_iso.split("-")
     return f"{dia}/{mes}/{anio}"
+
+
+def convertir_ars_a_usd(pesos_cent: int, cotizacion_cent: int) -> int:
+    """Dólares (en centavos) que equivalen a unos pesos (RN-15, RN-16).
+
+    pesos_cent × 100 ÷ cotizacion_cent, redondeado al centavo, mitad hacia arriba
+    (RN-03). Ej.: $ 1.434.617 a $ 1.600 -> 143461700 × 100 / 160000 = 89663,56
+    -> 89664 (US$ 896,64). Solo valores positivos (los negativos los maneja quien llama).
+    """
+    # Redondeo "mitad hacia arriba" con enteros: (2a + b) // (2b) es a/b redondeado.
+    numerador = pesos_cent * 100
+    return (2 * numerador + cotizacion_cent) // (2 * cotizacion_cent)
+
+
+def formatear_porcentaje(proporcion: float, decimales: int = 0) -> str:
+    """1.0112 -> "101 %"; con decimales=2 -> "101,12 %". Negativos: -0.3221 -> "-32 %".
+
+    Redondea "mitad hacia arriba", como el resto de la app (RN-03): 0.125 -> "13 %".
+    round() de Python no sirve acá porque redondea las mitades al par (12,5 -> 12).
+    Decimal trabaja con números decimales exactos y permite elegir el redondeo.
+    """
+    # str() antes de Decimal: así 0.125 se toma como 0,125 y no como el float
+    # binario aproximado (0,12499999…), que redondearía mal.
+    valor = Decimal(str(proporcion)) * 100
+    redondeado = valor.quantize(Decimal(1).scaleb(-decimales), rounding=ROUND_HALF_UP)
+    # BUG-13: Decimal guarda el signo también en el cero (-0,001 redondea a "-0").
+    # Si el resultado es cero, se usa un cero sin signo, como hace formatear_ars.
+    if redondeado == 0:
+        redondeado = abs(redondeado)
+    return f"{redondeado:.{decimales}f}".replace(".", ",") + " %"

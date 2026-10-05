@@ -7,10 +7,13 @@ import pytest
 from app.interfaz.aplicacion import Aplicacion
 from app.interfaz.pantalla_ajustes import PantallaAjustes
 from app.interfaz.pantalla_gastos import PantallaGastos
+from app.interfaz.pantalla_resumen import PantallaResumen
 from tests.ayudantes_interfaz import (
     PaginaFalsa,
     clic,
     dialogo_arriba,
+    ir,
+    nombre_visible,
     tecla,
     textos,
     titulo_dialogo,
@@ -29,17 +32,26 @@ def test_configuracion_de_la_ventana(app, pagina):
     assert pagina.on_keyboard_event == app._al_presionar_tecla
 
 
-def test_menu_lateral_tiene_gastos_y_ajustes(app, pagina):
-    # §6 Paso 1: el rail tiene 2 destinos.
-    rail = app._rail
-    assert [d.label for d in rail.destinations] == ["Gastos", "Ajustes"]
+def test_menu_lateral_tiene_resumen_gastos_y_ajustes(app_en_inicio):
+    # §6 Paso 3: el rail tiene 3 destinos en este orden y la app arranca en Resumen.
+    rail = app_en_inicio._rail
+    assert [d.label for d in rail.destinations] == ["Resumen", "Gastos", "Ajustes"]
     assert rail.selected_index == 0
-    assert isinstance(_pantalla_visible(app), PantallaGastos)
+    assert isinstance(_pantalla_visible(app_en_inicio), PantallaResumen)
+    assert app_en_inicio.page.title == "Gastos – Octubre 2026"
+
+
+def test_pantalla_por_nombre(app):
+    assert isinstance(app.pantalla("Resumen"), PantallaResumen)
+    assert isinstance(app.pantalla("Gastos"), PantallaGastos)
+    assert isinstance(app.pantalla("Ajustes"), PantallaAjustes)
+    with pytest.raises(ValueError):
+        app.pantalla("Cuotas")
 
 
 def test_cambiar_de_destino_con_el_rail(app):
     # Elegir "Ajustes" en el rail muestra Ajustes.
-    app._rail.selected_index = 1
+    app._rail.selected_index = 2
     app._rail.on_change(type("E", (), {"control": app._rail})())
     assert isinstance(_pantalla_visible(app), PantallaAjustes)
     assert app._contenido.content is _pantalla_visible(app).control
@@ -92,12 +104,26 @@ def test_avisar_con_deshacer(app, pagina):
 # ---------------------------------------------------------------------------
 
 
-def test_ctrl_2_y_ctrl_1_cambian_de_pantalla(app):
-    app._al_presionar_tecla(tecla("2", ctrl=True))
-    assert isinstance(_pantalla_visible(app), PantallaAjustes)
-    assert app._rail.selected_index == 1
-    app._al_presionar_tecla(tecla("1", ctrl=True))
-    assert isinstance(_pantalla_visible(app), PantallaGastos)
+@pytest.mark.parametrize(
+    ("key", "destino"), [("1", "Resumen"), ("2", "Gastos"), ("3", "Ajustes")]
+)
+def test_ctrl_numero_va_a_cada_destino(app_en_inicio, key, destino):
+    # §1.3: Ctrl+1/2/3 = Resumen, Gastos, Ajustes, en el orden del menú.
+    app_en_inicio._al_presionar_tecla(tecla(key, ctrl=True))
+    assert nombre_visible(app_en_inicio) == destino
+    assert app_en_inicio._rail.selected_index == int(key) - 1
+
+
+def test_ctrl_numeros_en_secuencia(app_en_inicio):
+    app = app_en_inicio
+    for key, destino in [
+        ("3", "Ajustes"),
+        ("1", "Resumen"),
+        ("2", "Gastos"),
+        ("1", "Resumen"),
+    ]:
+        app._al_presionar_tecla(tecla(key, ctrl=True))
+        assert nombre_visible(app) == destino
 
 
 def test_ctrl_coma_va_a_ajustes(app):
@@ -105,9 +131,9 @@ def test_ctrl_coma_va_a_ajustes(app):
     assert isinstance(_pantalla_visible(app), PantallaAjustes)
 
 
-@pytest.mark.parametrize("key", ["0", "3", "9"])
+@pytest.mark.parametrize("key", ["0", "4", "9"])
 def test_ctrl_numero_sin_pantalla_no_hace_nada(app, key):
-    # Solo hay 2 destinos en el paso 1: Ctrl+0, Ctrl+3... se ignoran sin error.
+    # Hay 3 destinos en el paso 3: Ctrl+0, Ctrl+4... se ignoran sin error.
     app._al_presionar_tecla(tecla(key, ctrl=True))
     assert isinstance(_pantalla_visible(app), PantallaGastos)
 
@@ -133,7 +159,7 @@ def test_ctrl_shift_n_no_abre_nuevo_gasto(app):
 
 def test_ctrl_n_en_ajustes_segun_la_pestana(app):
     # Ctrl+N en Ajustes: nuevo elemento de la pestaña visible.
-    app.ir_a(1)
+    ir(app, "Ajustes")
     app._al_presionar_tecla(tecla("N", ctrl=True))
     assert titulo_dialogo(dialogo_arriba(app)) == "Nueva categoría"
     app._al_presionar_tecla(tecla("Escape"))
@@ -177,14 +203,18 @@ def test_en_macos_se_usa_cmd(con, mes_id):
     pagina = PaginaFalsa(plataforma=ft.PagePlatform.MACOS)
     app = Aplicacion(pagina, con)
     app.iniciar()
-    app._al_presionar_tecla(tecla("2", ctrl=True))
-    assert isinstance(_pantalla_visible(app), PantallaGastos)
-    app._al_presionar_tecla(tecla("2", meta=True))
-    assert isinstance(_pantalla_visible(app), PantallaAjustes)
+    app._al_presionar_tecla(tecla("3", ctrl=True))
+    assert nombre_visible(app) == "Resumen"
+    app._al_presionar_tecla(tecla("3", meta=True))
+    assert nombre_visible(app) == "Ajustes"
+    app._al_presionar_tecla(tecla("K", meta=True))
+    assert titulo_dialogo(dialogo_arriba(app)) == "Cotización de Octubre 2026"
 
 
 def test_en_windows_cmd_no_hace_nada(app):
-    app._al_presionar_tecla(tecla("2", meta=True))
+    app._al_presionar_tecla(tecla("3", meta=True))
+    app._al_presionar_tecla(tecla("K", meta=True))
+    assert app.hay_dialogo_abierto() is False
     assert isinstance(_pantalla_visible(app), PantallaGastos)
 
 

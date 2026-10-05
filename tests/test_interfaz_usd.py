@@ -34,7 +34,7 @@ def _enfocado(pagina):
 
 
 def _nuevo(app):
-    app._pantallas[0].nuevo()
+    app.pantalla("Gastos").nuevo()
     return dialogo_gasto_abierto(app)
 
 
@@ -348,7 +348,7 @@ def test_corregir_despues_de_un_error_en_el_resultado(app, con):
 
 
 def _editar(app, gid):
-    app._pantallas[0].editar(gid)
+    app.pantalla("Gastos").editar(gid)
     return dialogo_gasto_abierto(app)
 
 
@@ -486,7 +486,7 @@ def test_ca_45_5_pesos_a_dolares_en_edicion(app, con, pagina):
 
 
 def _celda_monto(app, nombre):
-    return celda(app._pantallas[0], nombre, "Monto").content
+    return celda(app.pantalla("Gastos"), nombre, "Monto").content
 
 
 def test_ca_46_1_tabla_con_segunda_linea_y_tooltip(app, con):
@@ -509,10 +509,13 @@ def test_ca_46_1_tabla_con_segunda_linea_y_tooltip(app, con):
     ars = _celda_monto(app, "Gastos del mes")
     assert isinstance(ars, ft.Text) and ars.value == "$ 1.434.617"
     # El total sigue en pesos y suma los pesos del gasto en dólares.
-    total = filas_tabla(app._pantallas[0])[-1]
+    total = filas_tabla(app.pantalla("Gastos"))[-1]
     assert (total["Nombre"], total["Monto"]) == ("TOTAL (2 gastos)", "$ 1.466.617")
     assert not any("US$" in t for t in total.values() if t)
-    assert de_tipo(app._pantallas[0].cuerpo, ft.DataTable)[0].data_row_max_height == 64
+    assert (
+        de_tipo(app.pantalla("Gastos").cuerpo, ft.DataTable)[0].data_row_max_height
+        == 64
+    )
 
 
 def test_ca_46_2_cotizacion_con_decimales_en_la_tabla(app, con):
@@ -528,7 +531,7 @@ def test_la_moneda_no_cambia_el_orden(app, con):
     gastos.agregar_gasto(con, app.mes_id, "Alquiler", _otros(con), 100, "fijo")
     _usd(con, app.mes_id, 2000, 160000, nombre="Beta", tipo="unico")
     app.refrescar()
-    assert [f["Nombre"] for f in filas_tabla(app._pantallas[0])[:-1]] == [
+    assert [f["Nombre"] for f in filas_tabla(app.pantalla("Gastos"))[:-1]] == [
         "Alquiler",
         "Zeta",
         "Beta",
@@ -616,10 +619,18 @@ def test_main_muestra_el_error_si_la_base_no_abre(monkeypatch):
 def test_main_arranca_normal_si_la_base_abre(monkeypatch):
     # conectar reemplazado por una base en memoria: arranca en primer uso.
     original = base_datos.conectar
-    monkeypatch.setattr(base_datos, "conectar", lambda: original(":memory:"))
+    abiertas = []
+
+    def conectar_en_memoria():
+        abiertas.append(original(":memory:"))
+        return abiertas[-1]
+
+    monkeypatch.setattr(base_datos, "conectar", conectar_en_memoria)
     pagina = PaginaFalsa()
     main(pagina)
     assert pagina.title == "Gastos – Bienvenido"
+    for con in abiertas:  # la prueba cierra lo que abrió
+        con.close()
 
 
 # ---------------------------------------------------------------------------

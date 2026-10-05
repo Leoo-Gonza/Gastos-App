@@ -194,3 +194,14 @@ def _texto_celda(celda):
         t.value for t in recorrer(contenido) if isinstance(t, ft.Text) and t.value
     ]
     return " | ".join(partes) if partes else None
+
+
+def ir(app, nombre):
+    """Muestra la pantalla del menú con ese nombre ("Resumen", "Gastos", "Ajustes")."""
+    app.ir_a(app._pantallas.index(app.pantalla(nombre)))
+    return app.pantalla(nombre)
+
+
+def nombre_visible(app):
+    """Nombre de la pantalla que se está viendo, según el destino elegido en el menú."""
+    return app._rail.destinations[app._indice].label

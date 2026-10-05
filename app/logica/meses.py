@@ -73,3 +73,43 @@ def obtener_ultimo_mes(con: sqlite3.Connection) -> sqlite3.Row | None:
     return con.execute(
         "SELECT * FROM meses ORDER BY anio DESC, mes DESC LIMIT 1"
     ).fetchone()
+
+
+def exigir_mes(con: sqlite3.Connection, mes_id: int) -> sqlite3.Row:
+    """Devuelve el mes, o lanza un error si ya no existe (ej. se borró por detrás)."""
+    mes = obtener_mes(con, mes_id)
+    if mes is None:
+        raise ErrorDeValidacion("El mes no existe.")
+    return mes
+
+
+def editar_sueldo(con: sqlite3.Connection, mes_id: int, sueldo_usd_cent: int) -> None:
+    """RF-23: cambia el sueldo en USD del mes. Puede ser 0 (con aviso en pantalla)."""
+    exigir_mes(con, mes_id)
+    validar_centavos(
+        sueldo_usd_cent, permitir_cero=True, que="El sueldo", campo="sueldo"
+    )
+    with con:
+        con.execute(
+            "UPDATE meses SET sueldo_usd_cent = ? WHERE id = ?",
+            (sueldo_usd_cent, mes_id),
+        )
+
+
+def editar_cotizacion(
+    con: sqlite3.Connection, mes_id: int, cotizacion_cent: int
+) -> None:
+    """RF-25: cambia la cotización del mes en cualquier momento.
+
+    No se puede volver a dejar vacía (decisión del usuario): solo cambiarla por
+    otra. Los gastos en dólares ya cargados no cambian (RN-55).
+    """
+    exigir_mes(con, mes_id)
+    if cotizacion_cent is None:
+        raise ErrorDeValidacion("Ingresá la cotización.", "cotizacion")
+    validar_centavos(cotizacion_cent, que="La cotización", campo="cotizacion")
+    with con:
+        con.execute(
+            "UPDATE meses SET cotizacion_cent = ? WHERE id = ?",
+            (cotizacion_cent, mes_id),
+        )

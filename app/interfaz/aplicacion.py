@@ -12,15 +12,18 @@ import flet as ft
 
 from app.interfaz import estilos
 from app.interfaz.componentes import boton_peligroso, texto_ayuda
+from app.interfaz.dialogos import dialogos_valores
 from app.interfaz.pantalla_ajustes import PantallaAjustes
 from app.interfaz.pantalla_gastos import PantallaGastos
 from app.interfaz.pantalla_primer_uso import PantallaPrimerUso
+from app.interfaz.pantalla_resumen import PantallaResumen
 from app.logica import base_datos, meses
-from app.logica.formato import nombre_mes
+from app.logica.formato import formatear_cotizacion, nombre_mes
 
-# Destinos del menú lateral en el paso 1 (§6 del diseño). El número de cada uno
-# (1, 2, …) es también su atajo Ctrl + número.
+# Destinos del menú lateral (§1.1 del diseño). El número de cada uno (1, 2, …)
+# es también su atajo Ctrl + número. Resumen es la pantalla de inicio (paso 3).
 _DESTINOS = [
+    ("Resumen", ft.Icons.SPACE_DASHBOARD_OUTLINED, ft.Icons.SPACE_DASHBOARD),
     ("Gastos", ft.Icons.RECEIPT_LONG_OUTLINED, ft.Icons.RECEIPT_LONG),
     ("Ajustes", ft.Icons.SETTINGS_OUTLINED, ft.Icons.SETTINGS),
 ]
@@ -63,7 +66,11 @@ class Aplicacion:
 
     def mostrar_principal(self, mes_id: int) -> None:
         self.mes_id = mes_id
-        self._pantallas = [PantallaGastos(self), PantallaAjustes(self)]
+        self._pantallas = [
+            PantallaResumen(self),
+            PantallaGastos(self),
+            PantallaAjustes(self),
+        ]
 
         self._rail = ft.NavigationRail(
             selected_index=self._indice,
@@ -78,12 +85,27 @@ class Aplicacion:
             on_change=lambda e: self.ir_a(e.control.selected_index),
         )
         self._texto_mes = ft.Text(size=estilos.TAM_SECCION, weight=ft.FontWeight.W_600)
+        # Cotización siempre visible y editable con un clic o Ctrl+K (§1.2).
+        self._texto_cotizacion = ft.Text()
+        self._icono_cotizacion = ft.Icon(ft.Icons.EDIT_OUTLINED, size=18)
+        self._cotizacion = ft.Container(
+            padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+            border_radius=8,
+            ink=True,
+            tooltip=f"Editar la cotización ({self.atajo('K')})",
+            on_click=lambda e: self.editar_cotizacion(),
+            content=ft.Row(
+                [self._texto_cotizacion, self._icono_cotizacion], tight=True
+            ),
+        )
         barra_superior = ft.Container(
             height=64,
             padding=ft.Padding.symmetric(horizontal=24),
-            alignment=ft.Alignment.CENTER_LEFT,
             border=ft.Border.only(bottom=ft.BorderSide(1, estilos.BORDE)),
-            content=self._texto_mes,
+            content=ft.Row(
+                [self._texto_mes, self._cotizacion],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
         )
         self._contenido = ft.Container(expand=True, padding=24)
 
@@ -118,8 +140,35 @@ class Aplicacion:
         nombre = nombre_mes(mes["anio"], mes["mes"])
         self.page.title = f"Gastos – {nombre}"
         self._texto_mes.value = nombre
+        self._dibujar_cotizacion(mes["cotizacion_cent"])
         self._pantallas[self._indice].refrescar()
         self.page.update()
+
+    def _dibujar_cotizacion(self, cotizacion: int | None) -> None:
+        """Barra superior: la cotización, o un aviso naranja si falta (§1.2, RN-18)."""
+        if cotizacion is None:
+            self._texto_cotizacion.value = "Cotización sin cargar – Cargar"
+            self._icono_cotizacion.icon = ft.Icons.WARNING_AMBER
+            self._cotizacion.bgcolor = estilos.color(self.page, "pendiente_suave")
+            self._texto_cotizacion.color = estilos.color(self.page, "pendiente")
+            self._icono_cotizacion.color = estilos.color(self.page, "pendiente")
+        else:
+            self._texto_cotizacion.value = (
+                f"Cotización {formatear_cotizacion(cotizacion)}"
+            )
+            self._icono_cotizacion.icon = ft.Icons.EDIT_OUTLINED
+            self._cotizacion.bgcolor = None
+            self._texto_cotizacion.color = None
+            self._icono_cotizacion.color = None
+
+    def pantalla(self, nombre: str):
+        """La pantalla del menú con ese nombre ("Resumen", "Gastos", "Ajustes")."""
+        indice = [texto for texto, _, _ in _DESTINOS].index(nombre)
+        return self._pantallas[indice]
+
+    def editar_cotizacion(self) -> None:
+        """Abre el diálogo de cotización del mes (barra superior o Ctrl+K)."""
+        dialogos_valores.abrir_cotizacion(self, self.mes_id)
 
     # ------------------------------------------------------------------
     # Diálogos y avisos
@@ -232,6 +281,8 @@ class Aplicacion:
             return
         if e.key.isdigit():
             self.ir_a(int(e.key) - 1)
+        elif e.key.upper() == "K":
+            self.editar_cotizacion()
         elif e.key.upper() == "N" and not e.shift:
             self._pantallas[self._indice].nuevo()
         elif e.key == ",":

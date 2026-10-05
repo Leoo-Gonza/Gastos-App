@@ -10,6 +10,7 @@ from app.logica.formato import (
     formatear_ars,
     formatear_cotizacion,
     formatear_monto_para_editar,
+    formatear_porcentaje,
     formatear_usd,
     leer_monto,
     nombre_mes,
@@ -541,3 +542,121 @@ def test_mensajes_de_formato_no_cambian_con_que(texto, mensaje):
     with pytest.raises(ErrorDeValidacion) as error:
         leer_monto(texto, que="La cotización")
     assert str(error.value) == mensaje
+
+
+# ---------------------------------------------------------------------------
+# Ronda 13: formatear_porcentaje (BUG-12, O28)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("proporcion", "decimales", "texto"),
+    [
+        (1.0112, 0, "101 %"),  # CA-36.1
+        (1.0112, 2, "101,12 %"),  # tooltip de CA-36.1
+        (0.5056, 0, "51 %"),
+        (0.5056, 2, "50,56 %"),
+        (0.125, 0, "13 %"),  # mitad: round() de Python daría 12
+        (0.135, 0, "14 %"),
+        (
+            1.005,
+            0,
+            "101 %",
+        ),  # en float binario 1.005 es 1,00499…: igual tiene que subir
+        (0.00005, 2, "0,01 %"),  # mitad con 2 decimales
+        (0.0, 0, "0 %"),
+        (0, 2, "0,00 %"),
+        (1, 0, "100 %"),
+        (2.5, 0, "250 %"),  # más de 100 %: el número muestra el valor real (RN-39)
+        (-0.32213, 0, "-32 %"),  # CA-36.2 con déficit
+        (-0.32213, 2, "-32,21 %"),
+        (-0.125, 0, "-13 %"),  # mitad negativa: se aleja del 0, como formatear_ars
+        (-0.005, 0, "-1 %"),
+    ],
+)
+def test_formatear_porcentaje(proporcion, decimales, texto):
+    assert formatear_porcentaje(proporcion, decimales) == texto
+
+
+def test_formatear_porcentaje_por_defecto_sin_decimales():
+    assert formatear_porcentaje(0.3333) == "33 %"
+
+
+@pytest.mark.parametrize(("proporcion", "decimales"), [(-0.001, 0), (-0.00004, 2)])
+def test_formatear_porcentaje_negativo_que_redondea_a_cero_no_lleva_signo(
+    proporcion, decimales
+):
+    # Igual que formatear_ars (-0,49 → "$ 0"): un valor que se ve como 0 no lleva "-".
+    assert not formatear_porcentaje(proporcion, decimales).startswith("-")
+
+
+# ---------------------------------------------------------------------------
+# Ronda 14: BUG-13 (sin "-0 %") y BUG-14 (género en "no puede ser negativo/a")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("proporcion", "decimales", "texto"),
+    [
+        (-0.001, 0, "0 %"),  # −0,1 % redondea a 0: sin signo
+        (-0.00004, 2, "0,00 %"),  # −0,004 % con 2 decimales
+        (-0.0000499, 2, "0,00 %"),  # apenas debajo de la mitad
+        (-0.00005, 2, "-0,01 %"),  # la mitad ya se aleja del cero
+        (-0.004, 0, "0 %"),
+        (-0.005, 0, "-1 %"),  # sigue siendo −1 %
+        (0.004, 0, "0 %"),
+        (0.0, 0, "0 %"),
+        (-0.0, 0, "0 %"),  # cero negativo de float
+        (-0.0, 2, "0,00 %"),
+    ],
+)
+def test_bug13_porcentaje_cero_sin_signo(proporcion, decimales, texto):
+    assert formatear_porcentaje(proporcion, decimales) == texto
+
+
+QUE_DE_LA_APP = [
+    ("El sueldo", "negativo"),
+    ("La cotización", "negativa"),
+    ("La meta", "negativa"),
+    ("El monto", "negativo"),
+    ("El monto en dólares", "negativo"),
+    ("El monto en pesos", "negativo"),
+]
+
+
+@pytest.mark.parametrize(("que", "palabra"), QUE_DE_LA_APP)
+@pytest.mark.parametrize("texto", ["-1", "-0,50", "-1.000"])
+def test_bug14_leer_monto_negativo_con_genero(que, palabra, texto):
+    with pytest.raises(ErrorDeValidacion) as error:
+        leer_monto(texto, que=que)
+    assert str(error.value) == f"{que} no puede ser {palabra}."
+
+
+@pytest.mark.parametrize(("que", "palabra"), QUE_DE_LA_APP)
+def test_bug14_leer_monto_negativo_con_permitir_cero(que, palabra):
+    with pytest.raises(ErrorDeValidacion) as error:
+        leer_monto("-1", permitir_cero=True, que=que)
+    assert str(error.value) == f"{que} no puede ser {palabra}."
+
+
+@pytest.mark.parametrize(("que", "palabra"), QUE_DE_LA_APP)
+def test_bug14_validar_centavos_con_permitir_cero(que, palabra):
+    with pytest.raises(ErrorDeValidacion) as error:
+        validar_centavos(-1, permitir_cero=True, que=que, campo="x")
+    assert str(error.value) == f"{que} no puede ser {palabra}."
+    assert error.value.campo == "x"
+
+
+def test_bug14_por_defecto_el_monto():
+    with pytest.raises(ErrorDeValidacion, match="^El monto no puede ser negativo.$"):
+        leer_monto("-1")
+    with pytest.raises(ErrorDeValidacion, match="^El monto no puede ser negativo.$"):
+        validar_centavos(-1, permitir_cero=True)
+
+
+@pytest.mark.parametrize("que", ["La cotización", "La meta", "El sueldo"])
+def test_bug14_los_demas_mensajes_no_cambian(que):
+    # Sin permitir_cero, un negativo sigue diciendo "tiene que ser mayor a 0".
+    with pytest.raises(ErrorDeValidacion) as error:
+        validar_centavos(-1, que=que)
+    assert str(error.value) == f"{que} tiene que ser mayor a 0."

@@ -47,7 +47,7 @@ def hoy_fijo(monkeypatch):
 
 @pytest.fixture
 def pantalla(app):
-    return app._pantallas[0]
+    return app.pantalla("Gastos")
 
 
 def _otros(con):

@@ -55,7 +55,24 @@ def app_vacia(pagina, con):
 
 @pytest.fixture
 def app(pagina, con, mes_id):
-    """Aplicación con el mes 2026-10 creado: arranca en la pantalla Gastos."""
+    """Aplicación con el mes 2026-10 creado, mostrando la pantalla Gastos.
+
+    La app arranca en Resumen (paso 3); las pruebas de gastos, pagos y ajustes
+    se escribieron sobre Gastos, así que este fixture va ahí. Para probar el
+    arranque, usar app_en_inicio.
+    """
+    from app.interfaz.aplicacion import Aplicacion
+    from tests.ayudantes_interfaz import ir
+
+    aplicacion = Aplicacion(pagina, con)
+    aplicacion.iniciar()
+    ir(aplicacion, "Gastos")
+    return aplicacion
+
+
+@pytest.fixture
+def app_en_inicio(pagina, con, mes_id):
+    """Aplicación con el mes 2026-10 creado, tal como arranca (en Resumen)."""
     from app.interfaz.aplicacion import Aplicacion
 
     aplicacion = Aplicacion(pagina, con)

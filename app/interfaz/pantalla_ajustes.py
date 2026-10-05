@@ -6,9 +6,16 @@ Personas, meta de ahorro y apariencia se agregan en pasos siguientes.
 import flet as ft
 
 from app.interfaz import estilos
-from app.interfaz.componentes import dialogo_formulario, titulo
-from app.logica import catalogos
+from app.interfaz.componentes import (
+    campo_monto,
+    dialogo_formulario,
+    leer_campo_monto,
+    texto_ayuda,
+    titulo,
+)
+from app.logica import catalogos, configuracion
 from app.logica.errores import ErrorDeValidacion
+from app.logica.formato import formatear_monto_para_editar, formatear_usd
 
 # Textos de cada lista. Cambian el género ("archivada"/"archivado") y el nombre.
 _TEXTOS = {
@@ -232,6 +239,72 @@ class ListaCatalogo:
         return ok, resultado
 
 
+class PestanaMeta:
+    """Pestaña "Meta de ahorro" (RF-36, §3.10): el campo de la meta, sin diálogo."""
+
+    def __init__(self, app) -> None:
+        self.app = app
+        self.campo = campo_monto(
+            "Meta de ahorro mensual",
+            "USD",
+            hint_text="Ej.: 300,00",
+            width=320,
+            on_submit=lambda e: self.guardar(),
+        )
+        self.boton_quitar = ft.TextButton(
+            "Quitar meta", on_click=lambda e: self.quitar()
+        )
+        self.control = ft.Column(
+            [
+                texto_ayuda("Es la misma meta para todos los meses."),
+                self.campo,
+                ft.Row(
+                    [
+                        ft.FilledButton(
+                            "Guardar meta", on_click=lambda e: self.guardar()
+                        ),
+                        self.boton_quitar,
+                    ]
+                ),
+            ],
+            spacing=16,
+        )
+
+    def refrescar(self) -> None:
+        meta = configuracion.obtener_meta(self.app.con)
+        self.campo.value = formatear_monto_para_editar(meta) if meta is not None else ""
+        self.campo.error = None
+        self.boton_quitar.visible = meta is not None
+        self.app.page.update()
+
+    def nuevo(self) -> None:
+        """Atajo Ctrl+N en esta pestaña: lleva el cursor al campo."""
+        self.app.enfocar(self.campo)
+
+    def guardar(self) -> None:
+        self.campo.error = None
+        if not (self.campo.value or "").strip():
+            self.campo.error = "Ingresá la meta."
+        else:
+            meta = leer_campo_monto(self.campo, que="La meta")
+            if meta is not None:
+                try:
+                    configuracion.guardar_meta(self.app.con, meta)
+                except ErrorDeValidacion as error:
+                    self.campo.error = str(error)
+        if self.campo.error:
+            self.app.page.update()
+            self.app.enfocar(self.campo)
+            return
+        self.refrescar()
+        self.app.avisar(f"Meta de ahorro: {formatear_usd(meta)}")
+
+    def quitar(self) -> None:
+        configuracion.quitar_meta(self.app.con)
+        self.refrescar()
+        self.app.avisar("Meta de ahorro quitada")
+
+
 class PantallaAjustes:
     def __init__(self, app) -> None:
         self.app = app
@@ -239,10 +312,13 @@ class PantallaAjustes:
             ListaCatalogo(app, catalogos.CATEGORIAS),
             ListaCatalogo(app, catalogos.MEDIOS_PAGO),
         ]
+        self.meta = PestanaMeta(app)
+        # Todas las pestañas, en el orden en que se ven.
+        self._pestanas = [*self.listas, self.meta]
         # En Flet 1.0 las pestañas son tres piezas: Tabs (el conjunto),
         # TabBar (los títulos) y TabBarView (el contenido de cada una).
         self.pestanas = ft.Tabs(
-            length=len(self.listas),
+            length=len(self._pestanas),
             selected_index=0,
             expand=True,
             on_change=lambda e: self.refrescar(),
@@ -252,10 +328,11 @@ class PantallaAjustes:
                         tabs=[
                             ft.Tab(label="Categorías"),
                             ft.Tab(label="Medios de pago"),
+                            ft.Tab(label="Meta de ahorro"),
                         ]
                     ),
                     ft.TabBarView(
-                        expand=True, controls=[lista.control for lista in self.listas]
+                        expand=True, controls=[p.control for p in self._pestanas]
                     ),
                 ],
                 expand=True,
@@ -265,13 +342,13 @@ class PantallaAjustes:
             [titulo("Ajustes"), self.pestanas], spacing=16, expand=True
         )
 
-    def _lista_visible(self) -> ListaCatalogo:
-        return self.listas[self.pestanas.selected_index or 0]
+    def _lista_visible(self):
+        return self._pestanas[self.pestanas.selected_index or 0]
 
     def refrescar(self) -> None:
-        # Se refrescan las dos: así al cambiar de pestaña ya está actualizada.
-        for lista in self.listas:
-            lista.refrescar()
+        # Se refrescan todas: así al cambiar de pestaña ya está actualizada.
+        for pestana in self._pestanas:
+            pestana.refrescar()
 
     def nuevo(self) -> None:
         """Atajo Ctrl+N: nuevo elemento en la pestaña visible."""

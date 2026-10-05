@@ -136,8 +136,9 @@ def test_sueldo_distinto_de_cero_no_muestra_aviso_y_se_formatea(pantalla):
     assert pantalla.sueldo.value == "1.200,50"
 
 
-def test_crear_guarda_en_centavos_y_pasa_a_gastos(pantalla, app_vacia, pagina, con):
-    # CA-04.1: al crear, pasa a la estructura principal con la pantalla Gastos.
+def test_crear_guarda_en_centavos_y_pasa_al_resumen(pantalla, app_vacia, pagina, con):
+    # CA-04.1 y §3.1: al crear, pasa a la estructura principal con la pantalla
+    # Resumen (paso 3 en adelante).
     _completar(pantalla, sueldo="1.200", cotizacion="1.432,50")
     pantalla._crear()
     mes = meses.obtener_ultimo_mes(con)
@@ -145,8 +146,8 @@ def test_crear_guarda_en_centavos_y_pasa_a_gastos(pantalla, app_vacia, pagina, c
     assert (mes["sueldo_usd_cent"], mes["cotizacion_cent"]) == (120000, 143250)
     assert pagina.title == "Gastos – Octubre 2026"
     assert app_vacia._texto_mes.value == "Octubre 2026"
-    assert "Gastos de Octubre 2026" in textos(pagina.controls[0])
-    assert "Todavía no cargaste gastos en Octubre 2026." in textos(pagina.controls[0])
+    assert "Resumen de Octubre 2026" in textos(pagina.controls[0])
+    assert app_vacia._rail.selected_index == 0
 
 
 def test_enter_en_el_sueldo_crea_el_mes(pantalla, con):

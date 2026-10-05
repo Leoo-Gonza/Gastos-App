@@ -458,6 +458,15 @@ Los pagos únicos y los ingresos extra no se cuentan.
 6. "Guardar" → se cierra el diálogo, SnackBar "Cambio registrado", y las tarjetas Pesos a
    cubrir, USD a cambiar y Ahorro se actualizan en el momento (RN-19).
 
+
+**Textos en pantalla (decisión del usuario, paso 3).** En la app se usan "dólares" y "pesos"
+en lugar de las siglas, porque se leen más natural: "Dólares a cambiar" (en vez de "USD a
+cambiar"), "CAMBIOS DE DÓLARES REALIZADOS", columnas "Dólares cambiados" y "Pesos
+recibidos", y la ayuda "Calculado: US$ 500,00 × $ 1.500". Los montos siguen llevando `$` y
+`US$`. El desglose de capacidad junta "Gastos fijos y cuotas del mes" en una sola línea.
+Los porcentajes de la meta se redondean "mitad hacia arriba" (12,5 % → "13 %") y el número
+muestra el valor real aunque sea negativo ("-32 %"); solo la barra se limita entre 0 y 100 %.
+
 ---
 
 ### 3.3 Gastos (RF-06 a RF-15, RF-22, RF-29 marca, gastos en dólares)

@@ -26,7 +26,7 @@ from tests.ayudantes_interfaz import (
 
 @pytest.fixture
 def pantalla(app):
-    return app._pantallas[0]
+    return app.pantalla("Gastos")
 
 
 def _cat(con, nombre):

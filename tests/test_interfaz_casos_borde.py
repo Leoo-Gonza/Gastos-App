@@ -12,6 +12,7 @@ from tests.ayudantes_interfaz import (
     clic,
     dialogo_arriba,
     dialogo_gasto_abierto,
+    ir,
     titulo_dialogo,
 )
 
@@ -42,7 +43,7 @@ def test_medio_archivado_con_el_dialogo_abierto_marca_el_campo_medio(app, con):
     # debajo de "Medio de pago".
     visa = catalogos.crear(con, catalogos.MEDIOS_PAGO, "Visa Santander")
     otros = id_por_nombre(con, catalogos.CATEGORIAS, "Otros")
-    app._pantallas[0].nuevo()
+    app.pantalla("Gastos").nuevo()
     d = dialogo_gasto_abierto(app)
     d.nombre.value = "Seguro"
     d.categoria.value = str(otros)
@@ -55,7 +56,7 @@ def test_medio_archivado_con_el_dialogo_abierto_marca_el_campo_medio(app, con):
 
 
 def test_error_inesperado_al_crear_categoria_en_linea(app, monkeypatch):
-    app._pantallas[0].nuevo()
+    app.pantalla("Gastos").nuevo()
     d = dialogo_gasto_abierto(app)
     monkeypatch.setattr(catalogos, "crear", _falla)
     d.nueva_categoria.value = "Educación"
@@ -67,7 +68,7 @@ def test_error_inesperado_al_borrar_gasto(app, con, monkeypatch):
     otros = id_por_nombre(con, catalogos.CATEGORIAS, "Otros")
     gid = gastos.agregar_gasto(con, app.mes_id, "Nafta", otros, 100, "fijo")
     app.refrescar()
-    app._pantallas[0].borrar(gid)
+    app.pantalla("Gastos").borrar(gid)
     monkeypatch.setattr(gastos, "borrar_gasto", _falla)
     clic(dialogo_arriba(app), "Borrar")
     assert titulo_dialogo(dialogo_arriba(app)) == "No se pudo guardar"
@@ -75,8 +76,8 @@ def test_error_inesperado_al_borrar_gasto(app, con, monkeypatch):
 
 
 def test_error_inesperado_al_guardar_un_nombre_en_ajustes(app, monkeypatch):
-    app.ir_a(1)
-    lista = app._pantallas[1].listas[0]
+    ir(app, "Ajustes")
+    lista = app.pantalla("Ajustes").listas[0]
     lista.nuevo()
     dialogo = dialogo_arriba(app)
     monkeypatch.setattr(catalogos, "crear", _falla)
@@ -89,8 +90,8 @@ def test_error_inesperado_al_guardar_un_nombre_en_ajustes(app, monkeypatch):
 def test_eliminar_algo_que_ya_no_existe_no_dice_eliminado(app, con, pagina):
     # Si al confirmar el elemento ya no existe, el aviso tiene que ser solo el error
     # ("Ese elemento ya no existe."), sin un segundo aviso de "eliminado".
-    app.ir_a(1)
-    lista = app._pantallas[1].listas[0]
+    ir(app, "Ajustes")
+    lista = app.pantalla("Ajustes").listas[0]
     [tile] = [t for t in lista.lista.controls if t.title.value == "Mercado"]
     clic(tile, "Eliminar")
     # Se borra "por otro lado" antes de confirmar.
@@ -103,8 +104,8 @@ def test_eliminar_algo_que_ya_no_existe_no_dice_eliminado(app, con, pagina):
 
 
 def test_error_inesperado_en_una_accion_de_ajustes(app, con, monkeypatch):
-    app.ir_a(1)
-    lista = app._pantallas[1].listas[0]
+    ir(app, "Ajustes")
+    lista = app.pantalla("Ajustes").listas[0]
     [tile] = [t for t in lista.lista.controls if t.title.value == "Mercado"]
     clic(tile, "Eliminar")
     monkeypatch.setattr(catalogos, "eliminar", _falla)

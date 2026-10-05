@@ -11,6 +11,7 @@ from tests.ayudantes_interfaz import (
     clic,
     dialogo_arriba,
     hay_boton,
+    ir,
     textos,
     titulo_dialogo,
 )
@@ -18,8 +19,8 @@ from tests.ayudantes_interfaz import (
 
 @pytest.fixture
 def ajustes(app):
-    app.ir_a(1)
-    return app._pantallas[1]
+    ir(app, "Ajustes")
+    return app.pantalla("Ajustes")
 
 
 @pytest.fixture
@@ -63,6 +64,7 @@ def test_pestanas_y_titulo(ajustes):
     assert [t.label for t in ajustes.pestanas.content.controls[0].tabs] == [
         "Categorías",
         "Medios de pago",
+        "Meta de ahorro",
     ]
 
 
@@ -292,8 +294,8 @@ def test_categoria_renombrada_se_ve_en_gastos_y_en_el_dialogo(app, con, categori
         id_por_nombre(con, "categorias", "Salud"),
         "Salud y bienestar",
     )
-    app.ir_a(0)
-    pantalla = app._pantallas[0]
+    ir(app, "Gastos")
+    pantalla = app.pantalla("Gastos")
     assert "Salud y bienestar" in textos(pantalla.cuerpo)
 
 
@@ -302,8 +304,8 @@ def test_ca_10_4_desarchivada_vuelve_al_dialogo_de_gasto(app, con, categorias):
     _usar_en_gasto(app, con, catalogos.CATEGORIAS, "Vivienda")
     categorias.refrescar()
     clic(_tile(categorias, "Vivienda"), "Archivar")
-    app.ir_a(0)
-    app._pantallas[0].nuevo()
+    ir(app, "Gastos")
+    app.pantalla("Gastos").nuevo()
     dialogo = dialogo_arriba(app)
     opciones = [
         o.text for o in boton(dialogo, "Guardar").on_click.__self__.categoria.options
@@ -312,7 +314,7 @@ def test_ca_10_4_desarchivada_vuelve_al_dialogo_de_gasto(app, con, categorias):
     app.cerrar_dialogo(dialogo)
     pagina_aviso = app.page.ultimo_aviso()
     pagina_aviso.on_action(None)  # Deshacer = desarchivar
-    app._pantallas[0].nuevo()
+    app.pantalla("Gastos").nuevo()
     dialogo = dialogo_arriba(app)
     opciones = [
         o.text for o in boton(dialogo, "Guardar").on_click.__self__.categoria.options

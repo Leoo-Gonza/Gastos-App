@@ -16,6 +16,7 @@ from tests.ayudantes_interfaz import (
     dialogo_arriba,
     dialogo_gasto_abierto,
     filas_tabla,
+    ir,
     textos,
 )
 
@@ -104,7 +105,7 @@ def test_primer_uso_si_ya_existe_un_mes_muestra_el_error_en_mes(primer_uso, con)
 def test_o10_dialogo_gasto_enfoca_el_primer_error(
     app, con, pagina, nombre, con_categoria, monto, campo
 ):
-    app._pantallas[0].nuevo()
+    app.pantalla("Gastos").nuevo()
     d = dialogo_gasto_abierto(app)
     d.nombre.value = nombre
     d.categoria.value = str(_otros(con)) if con_categoria else None
@@ -115,7 +116,7 @@ def test_o10_dialogo_gasto_enfoca_el_primer_error(
 
 def test_o10_error_de_la_logica_en_medio_enfoca_medio(app, con, pagina):
     visa = catalogos.crear(con, catalogos.MEDIOS_PAGO, "Visa Santander")
-    app._pantallas[0].nuevo()
+    app.pantalla("Gastos").nuevo()
     d = dialogo_gasto_abierto(app)
     d.nombre.value = "Seguro"
     d.categoria.value = str(_otros(con))
@@ -130,7 +131,7 @@ def test_o10_error_de_la_logica_en_medio_enfoca_medio(app, con, pagina):
 def test_o10_rn_23_enfoca_el_monto(app, con, pagina):
     gid = gastos.agregar_gasto(con, app.mes_id, "Seguro", _otros(con), 18000000, "fijo")
     insertar_pago(con, gid, 6000000)
-    app._pantallas[0].editar(gid)
+    app.pantalla("Gastos").editar(gid)
     d = dialogo_gasto_abierto(app)
     d.monto.value = "50.000"
     d._guardar()
@@ -138,8 +139,8 @@ def test_o10_rn_23_enfoca_el_monto(app, con, pagina):
 
 
 def test_o10_dialogo_de_nombre_en_ajustes_enfoca_el_campo(app, pagina):
-    app.ir_a(1)
-    app._pantallas[1].listas[0].nuevo()
+    ir(app, "Ajustes")
+    app.pantalla("Ajustes").listas[0].nuevo()
     dialogo = dialogo_arriba(app)
     clic(dialogo, "Guardar")
     campo = dialogo.content.controls[0]
@@ -155,6 +156,7 @@ def test_o10_dialogo_de_nombre_en_ajustes_enfoca_el_campo(app, pagina):
 def _app_en(plataforma, con):
     aplicacion = Aplicacion(PaginaFalsa(plataforma=plataforma), con)
     aplicacion.iniciar()
+    ir(aplicacion, "Gastos")
     return aplicacion
 
 
@@ -169,14 +171,14 @@ def _app_en(plataforma, con):
 def test_o11_textos_de_atajos_segun_el_sistema(con, mes_id, plataforma, atajo):
     aplicacion = _app_en(plataforma, con)
     assert aplicacion.atajo("N") == atajo
-    gastos_pantalla = aplicacion._pantallas[0]
+    gastos_pantalla = aplicacion.pantalla("Gastos")
     assert (
         boton(gastos_pantalla.control, "Agregar gasto").tooltip
         == f"Agregar gasto ({atajo})"
     )
     # Estado vacío: el botón lleva el atajo en el texto.
     assert f"Agregar gasto ({atajo})" in textos(gastos_pantalla.cuerpo)
-    ajustes = aplicacion._pantallas[1]
+    ajustes = aplicacion.pantalla("Ajustes")
     assert boton(ajustes.listas[0].control, "Nueva categoría").tooltip == (
         f"Nueva categoría ({atajo})"
     )
@@ -200,8 +202,8 @@ def test_o12_tooltip_de_archivar(app, con):
         "fijo",
         id_por_nombre(con, catalogos.MEDIOS_PAGO, "Efectivo"),
     )
-    app.ir_a(1)
-    categorias, medios = app._pantallas[1].listas
+    ir(app, "Ajustes")
+    categorias, medios = app.pantalla("Ajustes").listas
     [vivienda] = [t for t in categorias.lista.controls if t.title.value == "Vivienda"]
     [efectivo] = [t for t in medios.lista.controls if t.title.value == "Efectivo"]
     assert boton(vivienda, "Archivar").tooltip == (
@@ -222,11 +224,11 @@ def test_o15_editar_o_borrar_un_gasto_que_ya_no_existe(app, con, pagina, accion)
     gid = gastos.agregar_gasto(con, app.mes_id, "Nafta", _otros(con), 100, "fijo")
     app.refrescar()
     gastos.borrar_gasto(con, gid)  # se borra "por detrás"; la tabla quedó vieja
-    getattr(app._pantallas[0], accion)(gid)
+    getattr(app.pantalla("Gastos"), accion)(gid)
     assert app.hay_dialogo_abierto() is False
     assert pagina.avisos()[-1] == "Ese gasto ya no existe."
     assert "Todavía no cargaste gastos en Octubre 2026." in textos(
-        app._pantallas[0].cuerpo
+        app.pantalla("Gastos").cuerpo
     )
 
 
@@ -235,7 +237,7 @@ def test_o15_gasto_borrado_con_el_dialogo_de_edicion_abierto(app, con, pagina):
     gid = gastos.agregar_gasto(con, app.mes_id, "Nafta", _otros(con), 100, "fijo")
     gastos.agregar_gasto(con, app.mes_id, "Alquiler", _otros(con), 100, "fijo")
     app.refrescar()
-    app._pantallas[0].editar(gid)
+    app.pantalla("Gastos").editar(gid)
     d = dialogo_gasto_abierto(app)
     gastos.borrar_gasto(con, gid)
     d.monto.value = "200"
@@ -243,7 +245,9 @@ def test_o15_gasto_borrado_con_el_dialogo_de_edicion_abierto(app, con, pagina):
     assert d.dialogo.open is False
     assert app.hay_dialogo_abierto() is False
     assert pagina.avisos()[-1] == "El gasto ya no existe."
-    assert [f["Nombre"] for f in filas_tabla(app._pantallas[0])[:-1]] == ["Alquiler"]
+    assert [f["Nombre"] for f in filas_tabla(app.pantalla("Gastos"))[:-1]] == [
+        "Alquiler"
+    ]
     assert len(gastos.listar_gastos(con, app.mes_id)) == 1  # no se creó otro
 
 
@@ -255,15 +259,15 @@ def test_o15_gasto_borrado_con_el_dialogo_de_edicion_abierto(app, con, pagina):
 def test_o16_cancelar_tiene_el_foco_en_la_confirmacion(app, con):
     gid = gastos.agregar_gasto(con, app.mes_id, "Nafta", _otros(con), 100, "fijo")
     app.refrescar()
-    app._pantallas[0].borrar(gid)
+    app.pantalla("Gastos").borrar(gid)
     confirmacion = dialogo_arriba(app)
     assert boton(confirmacion, "Cancelar").autofocus is True
     assert not boton(confirmacion, "Borrar").autofocus
 
 
 def test_o16_tambien_en_eliminar_de_ajustes(app):
-    app.ir_a(1)
-    categorias = app._pantallas[1].listas[0]
+    ir(app, "Ajustes")
+    categorias = app.pantalla("Ajustes").listas[0]
     [mercado] = [t for t in categorias.lista.controls if t.title.value == "Mercado"]
     clic(mercado, "Eliminar")
     assert boton(dialogo_arriba(app), "Cancelar").autofocus is True
@@ -281,14 +285,14 @@ def test_bug06_total_singular_y_plural(app, con, cantidad, texto):
     for i in range(cantidad):
         gastos.agregar_gasto(con, app.mes_id, f"Gasto {i}", _otros(con), 100, "fijo")
     app.refrescar()
-    assert filas_tabla(app._pantallas[0])[-1]["Nombre"] == texto
+    assert filas_tabla(app.pantalla("Gastos"))[-1]["Nombre"] == texto
 
 
 def test_bug08_eliminar_que_paso_a_estar_en_uso_avisa_archivado(app, con, pagina):
     # La lista mostraba "Eliminar", pero al confirmar ya estaba en uso: la lógica lo
     # archiva y el aviso dice "archivado" (con Deshacer), no "eliminado".
-    app.ir_a(1)
-    categorias = app._pantallas[1].listas[0]
+    ir(app, "Ajustes")
+    categorias = app.pantalla("Ajustes").listas[0]
     [mercado] = [t for t in categorias.lista.controls if t.title.value == "Mercado"]
     clic(mercado, "Eliminar")
     gastos.agregar_gasto(
@@ -307,8 +311,8 @@ def test_bug08_eliminar_que_paso_a_estar_en_uso_avisa_archivado(app, con, pagina
 
 
 def test_bug08_desarchivar_algo_que_ya_no_existe_no_avisa_exito(app, con, pagina):
-    app.ir_a(1)
-    categorias = app._pantallas[1].listas[0]
+    ir(app, "Ajustes")
+    categorias = app.pantalla("Ajustes").listas[0]
     gym = catalogos.crear(con, catalogos.CATEGORIAS, "Gym")
     gastos.agregar_gasto(con, app.mes_id, "X", gym, 100, "fijo")
     catalogos.eliminar(con, catalogos.CATEGORIAS, gym)

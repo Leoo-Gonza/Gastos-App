@@ -363,3 +363,105 @@ Ninguno.
 - O25 (menor): `app.abrir_dialogo` no se fija si el diálogo ya estaba en la lista. Si el calendario se cerrara sin elegir y Flet no avisara, al reabrirlo quedaría anotado dos veces.
 
 **Estado del paso 2: pruebas automáticas completas. Falta la prueba manual del usuario.**
+
+---
+
+## Ronda 11 – Paso 3a (lógica del resumen)
+
+- Fecha: 2026-10-04 · Probado por: Lucía (QA)
+- Alcance: `formato.convertir_ars_a_usd`, `meses` (exigir_mes, editar_sueldo, editar_cotizacion), `ingresos.py`, `cambios.py`, `configuracion.py` y `resumen.py`. RF-23 a RF-27, RF-35 a RF-37; RN-12 a RN-19, RN-38, RN-39. CA-23.x a CA-27.x (menos CA-27.6, paso 4), CA-35.1, 35.3, 35.4, CA-36.x, CA-37.x y las partes del paso 3 de CA-43.1, 43.2, 43.7 y 45.1.
+- Datos: base en memoria, datos inventados, fechas fijas. Valores esperados calculados a mano con las fórmulas de los requisitos.
+
+### Resultado
+| Grupo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_resumen.py (nuevo) | 105 | 105 | 0 |
+| Resto de la lógica | 493 | 493 | 0 |
+| **Lógica, total** | **598** | **598** | **0** |
+
+Cobertura de app/logica/: 100 % (547 líneas). Ruff sin errores. (Las pruebas de interfaz fallan porque el código de la 3b ya cambió la pantalla de inicio a Resumen; se actualizan en la ronda de la 3b.)
+
+### Bugs
+Ninguno.
+
+### Observaciones
+- O26: con cotización vacía y F = 0 el ahorro se calcula pero la capacidad es None: la pantalla debe mirar `capacidad is None`.
+- O27: `avance_meta` puede ser negativo o mayor a 1; la barra se limita en la pantalla.
+- Se corrigió una prueba propia de la ronda 6 que dejaba abierta una conexión en memoria.
+
+---
+
+## Ronda 12 – Paso 3b (interfaz del resumen)
+
+- Fecha: 2026-10-04 · Probado por: Lucía (QA)
+- Alcance: barra superior con la cotización y Ctrl/Cmd+K, PantallaResumen, diálogos de sueldo/cotización/meta, DialogoIngreso, DialogoCambio, pestaña "Meta de ahorro" y el menú Resumen / Gastos / Ajustes.
+- Método: página falsa, "hoy" fijo en 04/10/2026.
+
+### Resultado
+| Archivo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_interfaz_resumen.py (nuevo) | 88 | 81 | 7 |
+| Interfaz actualizada a pantallas por nombre | 263 | 263 | 0 |
+| Lógica | 598 | 598 | 0 |
+| **Total** | **949** | **942** | **7** |
+
+Cobertura 98 % (1.875 líneas). Ruff sin errores; sin conexiones sin cerrar.
+
+### Bugs
+- **BUG-11** – Los diálogos de sueldo, cotización y meta se cierran con un monto inválido ("0", "1600.5", etc.): el error aparece como aviso y se pierde lo escrito. Hipótesis: `_dialogo_un_monto` trata todo error sin campo como "cambió algo por detrás", y `leer_monto` lanza sus errores sin campo.
+- **BUG-12** – Con déficit el porcentaje de la meta dice "0 %" en vez del valor real ("-32 %"). Hipótesis: `max(round(avance * 100), 0)`.
+
+### Observaciones
+- O28: `round()` de Python redondea las mitades al par (12,5 % → "12 %").
+- O29: textos que difieren del diseño ("Dólares a cambiar" vs "USD a cambiar", etc.).
+- O30: CA-36.3 se verificó solo en la lógica (elegir otro mes en pantalla llega en el paso 4).
+
+---
+
+## Ronda 13
+
+- Fecha: 2026-10-04 · Probado por: Lucía (QA)
+- Motivo: verificar BUG-11 (diálogos de un monto), BUG-12 y O28 (`formatear_porcentaje`). O29 resuelto en el diseño; O30 se prueba en el paso 4.
+
+### Resultado
+| Archivo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_formato.py (+19) | 177 | 175 | 2 |
+| test_interfaz_resumen.py (+28) | 116 | 113 | 3 |
+| Resto | 703 | 703 | 0 |
+| **Total** | **996** | **991** | **5** |
+
+Cobertura 98 %; app/logica/ 100 %. Ruff sin errores; sin conexiones sin cerrar.
+
+| Ítem | Estado |
+|---|---|
+| BUG-11 | Corregido (17 inválidos en los tres diálogos: el diálogo queda abierto con el error en el campo) |
+| BUG-12 | Corregido ("-32 %" con déficit) |
+| O28 | Corregido (mitad hacia arriba: 12,5 % → "13 %") |
+
+### Bugs nuevos
+- **BUG-13** – Un porcentaje negativo que redondea a cero se ve "-0 %" (ahorro −US$ 0,01 con meta 300). Hipótesis: `Decimal.quantize` conserva el signo del cero.
+- **BUG-14** – "La cotización no puede ser negativo." / "La meta no puede ser negativo.": el mensaje no concuerda en género. Hipótesis: `f"{que} no puede ser negativo."` en `leer_monto` y `validar_centavos`.
+
+---
+
+## Ronda 14
+
+- Fecha: 2026-10-05 · Probado por: Lucía (QA)
+- Motivo: verificar BUG-13 (sin "-0 %") y BUG-14 (género en "no puede ser negativo/a").
+
+### Resultado
+1.052 pruebas, pasan las 1.052 (56 nuevas). Cobertura 98 %; app/logica/ 100 %. Ruff sin errores; sin conexiones sin cerrar.
+
+| Ítem | Estado |
+|---|---|
+| BUG-13 (formato y pantalla) | Corregido |
+| BUG-14 (lógica y pantalla, todos los diálogos) | Corregido |
+
+### Bugs nuevos
+Ninguno.
+
+### Observaciones
+- O31 (menor, a futuro): `_negativo` no contempla datos en plural ("Las…"/"Los…") ni un nombre vacío. Hoy todos los nombres de la app son singulares.
+
+**Estado del paso 3: pruebas automáticas completas. Falta la prueba manual del usuario.**
