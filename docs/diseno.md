@@ -973,8 +973,12 @@ No es una pantalla, son dos diálogos que se abren desde la barra superior.
    día" pasa a ser la cotización del mes nuevo (la del campo de arriba); los pesos se
    recalculan con ella (decisión aprobada). La línea "(2 en dólares: …)" solo aparece si hay
    alguno. Si el usuario deja la cotización vacía y hay fijos en dólares, la línea cambia a
-   *pendiente*: "Sin cotización, los 2 gastos en dólares no se pueden pasar a pesos." (qué
-   hacer en ese caso está en Observaciones).
+   *pendiente*: "Sin cotización, los 2 gastos en dólares conservan la cotización con la que
+   se cargaron." (o, con uno solo, "el gasto en dólares conserva la cotización con la que se
+   cargó"). Así lo define RN-57: sin cotización del mes nuevo, cada fijo en dólares conserva
+   la suya.
+   Si con la cotización nueva algún fijo en dólares diera $ 0 o un monto demasiado grande,
+   el mes no se crea y el error aparece en el campo cotización (BUG-15).
 5. "Crear mes" → la app selecciona el mes nuevo, muestra Resumen y SnackBar "Noviembre 2026
    creado: 12 gastos fijos y 4 cuotas."
 

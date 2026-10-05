@@ -266,6 +266,8 @@ class PantallaGastos:
 
     def nuevo(self) -> None:
         """Abre el diálogo de gasto nuevo. También lo usa el atajo Ctrl+N."""
+        if not self.app.verificar_mes():
+            return
         DialogoGasto(
             self.app, self.app.mes_id, self._nombre_mes(), al_guardar=self._al_guardar
         ).abrir()

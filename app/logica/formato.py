@@ -254,3 +254,10 @@ def formatear_porcentaje(proporcion: float, decimales: int = 0) -> str:
     if redondeado == 0:
         redondeado = abs(redondeado)
     return f"{redondeado:.{decimales}f}".replace(".", ",") + " %"
+
+
+def unir_con_y(partes: list[str]) -> str:
+    """["a", "b", "c"] -> "a, b y c" (BUG-17). Con uno solo, lo devuelve tal cual."""
+    if len(partes) <= 1:
+        return "".join(partes)
+    return ", ".join(partes[:-1]) + " y " + partes[-1]

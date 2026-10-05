@@ -465,3 +465,101 @@ Ninguno.
 - O31 (menor, a futuro): `_negativo` no contempla datos en plural ("Las…"/"Los…") ni un nombre vacío. Hoy todos los nombres de la app son singulares.
 
 **Estado del paso 3: pruebas automáticas completas. Falta la prueba manual del usuario.**
+
+---
+
+## Ronda 15 – Paso 4a (lógica del historial)
+
+- Fecha: 2026-10-05 · Probado por: Lucía (QA)
+- Alcance: `meses.py` (siguiente, anterior, listar_meses, obtener_mes_por_fecha, mes_inicial, sugerencias_mes_siguiente, crear_mes, crear_mes_siguiente, borrar_ultimo_mes). RF-01 a RF-05, RF-47, RN-07 a RN-11, RN-57. CA-01.1, CA-02.1, CA-02.2, CA-03.1 (sin cuotas), CA-03.2, CA-03.3, CA-03.5, CA-03.6 (parte del fijo archivado), CA-05.1, CA-05.3, CA-27.6, CA-36.3 (O30) y CA-47.1 a CA-47.5.
+
+### Resultado
+| Grupo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_historial.py (nuevo) | 66 | 64 | 2 |
+| Resto de la lógica | 763 | 763 | 0 |
+| Interfaz (sin el código nuevo de la 4a) | 289 | 289 | 0 |
+
+Cobertura de app/logica/: 100 %. Ruff sin errores. Con el código de interfaz de la 4a ya cargado fallan 3 pruebas de interfaz viejas (Ctrl+Shift+N ahora abre "Mes nuevo"; ya no existe `_texto_mes`): se actualizan en la ronda de interfaz.
+
+### Bugs
+- **BUG-15** – Al crear el mes, un fijo en dólares que se recalcula fuera de rango da un error técnico (`IntegrityError` si da $ 0, `OverflowError` si es enorme) o se copia por encima del tope. Hipótesis: `crear_mes` no valida el resultado de `convertir_usd_a_ars` con `validar_centavos`. Severidad baja (casos extremos); el mes no queda a medias.
+
+### Observaciones
+- O32: ver arriba (pruebas de interfaz a actualizar).
+
+---
+
+## Ronda 16 – Paso 4a (interfaz del historial)
+
+- Fecha: 2026-10-05 · Probado por: Lucía (QA)
+- Alcance: arreglo del BUG-15; barra superior (selector de mes, flechas, "Mes nuevo", "Borrar este mes", franja); Alt+←/→ y Ctrl/Cmd+Shift+N; DialogoMesNuevo, confirmar_borrar_mes, seleccionar_mes, mes_vecino, despues_de_borrar_mes y O17. "Hoy" fijo en octubre 2026.
+- Nota: la ronda se cortó dos veces por errores 529 del servidor antes de empezar; se retomó sin cambios perdidos.
+
+### Resultado
+| Archivo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_interfaz_historial.py (nuevo) | 52 | 50 | 2 |
+| test_historial.py (+4) | 70 | 70 | 0 |
+| 3 pruebas viejas de O32 (actualizadas) | 3 | 3 | 0 |
+| Resto | 1.049 | 1.049 | 0 |
+| **Total** | **1.174** | **1.172** | **2** |
+
+Cobertura 98 %; app/logica/ y aplicacion.py 100 %. Ruff sin errores.
+
+BUG-15: corregido (en la lógica y desde el diálogo, con el error en el campo cotización).
+
+### Bugs nuevos
+- **BUG-16** – Con el mes borrado por detrás, Alt+← y las flechas dan `TypeError`. Hipótesis: `mes_vecino` no verifica si el mes existe (como sí hace `refrescar`, O17).
+- **BUG-17** – La confirmación de borrar mes une la lista con comas y le falta la "y" antes del último elemento.
+
+### Observaciones
+- O33: el texto de §3.9 del diseño sobre fijos en dólares sin cotización contradice RN-57.
+- O34: en macOS el tooltip dice "⌘Shift+N"; la convención es "⇧⌘N".
+
+---
+
+## Ronda 17
+
+- Fecha: 2026-10-05 · Probado por: Lucía (QA)
+- Motivo: verificar BUG-16 (`verificar_mes` en cada punto de entrada), BUG-17 (`unir_con_y`) y O34 (atajos con Shift en macOS). O33 resuelto en el diseño.
+
+### Resultado
+| Archivo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_interfaz_historial.py (+35) | 87 | 85 | 2 |
+| test_formato.py (+6) | 227 | 227 | 0 |
+| Resto | 901 | 901 | 0 |
+| **Total** | **1.215** | **1.213** | **2** |
+
+Cobertura 98 %; app/logica/ y aplicacion.py 100 %. Ruff sin errores.
+
+| Ítem | Estado |
+|---|---|
+| BUG-16 | Corregido en los 13 puntos de entrada pedidos |
+| BUG-17 | Corregido |
+| O34 | Corregido ("⇧⌘N" en macOS) |
+
+### Bugs nuevos
+- **BUG-18** – "Borrar este mes" y "Editar" de un cambio lanzan `ErrorDeValidacion: El mes no existe.` sin atrapar si el mes se borró por detrás. Hipótesis: no llaman a `app.verificar_mes()`. (Búsqueda posterior en el código: también "Editar ingreso", "Borrar ingreso" y "Borrar cambio" usan el mes sin verificarlo.)
+
+---
+
+## Ronda 18
+
+- Fecha: 2026-10-05 · Probado por: Lucía (QA)
+- Motivo: verificar BUG-18 (`verificar_mes` en borrar mes, editar/borrar ingreso y editar/borrar cambio) y agregar una prueba de inventario contra acciones nuevas sin protección.
+
+### Resultado
+1.236 pruebas, pasan las 1.236 (21 nuevas). Cobertura 98 %; app/logica/ y aplicacion.py 100 %. Ruff sin errores.
+
+- BUG-18: corregido en los 5 puntos de entrada (mes borrado por detrás, único mes borrado y mes existente).
+- Inventario: `test_inventario_ninguna_accion_rompe_con_el_mes_borrado` dispara todas las acciones de la barra superior, el menú lateral y las pantallas Resumen (15), Gastos (26) y Ajustes (10) con el mes borrado, y exige que ninguna falle. Se comprobó que detecta una acción sin protección (con `verificar_mes` desactivado encuentra "Borrar este mes").
+
+### Bugs nuevos
+Ninguno.
+
+### Observaciones
+- O35 (menor): "Mes nuevo" no llama a `verificar_mes`; no se rompe (crea el siguiente al último que existe), pero la pantalla de atrás sigue mostrando el mes borrado mientras el diálogo está abierto. Se deja como está.
+
+**Estado de la parte 4a: pruebas automáticas completas. Falta la prueba manual del usuario.**

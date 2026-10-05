@@ -151,10 +151,11 @@ def test_ctrl_n_en_gastos_abre_nuevo_gasto(app, key):
     assert titulo_dialogo(dialogo_arriba(app)) == "Nuevo gasto – Octubre 2026"
 
 
-def test_ctrl_shift_n_no_abre_nuevo_gasto(app):
-    # Ctrl+Shift+N queda reservado para "Mes nuevo" (paso 4).
+def test_ctrl_shift_n_abre_mes_nuevo_y_no_nuevo_gasto(app):
+    # §1.3: Ctrl+Shift+N es "Mes nuevo" (paso 4), no el "nuevo" de la pantalla.
     app._al_presionar_tecla(tecla("N", ctrl=True, shift=True))
-    assert app.hay_dialogo_abierto() is False
+    assert titulo_dialogo(dialogo_arriba(app)) == "Crear Noviembre 2026"
+    assert len(app._dialogos) == 1
 
 
 def test_ctrl_n_en_ajustes_segun_la_pestana(app):

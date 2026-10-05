@@ -205,3 +205,10 @@ def ir(app, nombre):
 def nombre_visible(app):
     """Nombre de la pantalla que se está viendo, según el destino elegido en el menú."""
     return app._rail.destinations[app._indice].label
+
+
+def mes_seleccionado(app):
+    """Texto del mes elegido en el selector de la barra, sin " · mes actual"."""
+    selector = app._selector_mes
+    [opcion] = [o for o in selector.options if o.key == selector.value]
+    return opcion.text.split(" · ")[0]

@@ -467,9 +467,7 @@ class PantallaResumen:
                             # i=i: cada menú usa su propio ingreso (no el último del for).
                             ft.DataCell(
                                 self._menu(
-                                    lambda i=i: DialogoIngreso(
-                                        self.app, self.app.mes_id, i["id"]
-                                    ).abrir(),
+                                    lambda i=i: self._editar_ingreso(i),
                                     lambda i=i: self._borrar_ingreso(i),
                                 )
                             ),
@@ -551,9 +549,7 @@ class PantallaResumen:
                 ),
                 ft.DataCell(
                     self._menu(
-                        lambda: DialogoCambio(
-                            self.app, self.app.mes_id, c["id"]
-                        ).abrir(),
+                        lambda: self._editar_cambio(c),
                         lambda: self._borrar_cambio(c),
                     )
                 ),
@@ -569,21 +565,41 @@ class PantallaResumen:
         self.nuevo_cambio()
 
     def nuevo_cambio(self) -> None:
+        if not self.app.verificar_mes():
+            return
         DialogoCambio(self.app, self.app.mes_id).abrir()
 
     def nuevo_ingreso(self) -> None:
+        if not self.app.verificar_mes():
+            return
         DialogoIngreso(self.app, self.app.mes_id).abrir()
 
     def editar_sueldo(self) -> None:
+        if not self.app.verificar_mes():
+            return
         dialogos_valores.abrir_sueldo(self.app, self.app.mes_id)
 
     def editar_cotizacion(self) -> None:
-        dialogos_valores.abrir_cotizacion(self.app, self.app.mes_id)
+        self.app.editar_cotizacion()  # Ya verifica que el mes exista.
 
     def editar_meta(self) -> None:
         dialogos_valores.abrir_meta(self.app)
 
+    # Todas las acciones de las tablas verifican antes que el mes exista
+    # (BUG-18): si se borró, la app pasa al último mes y avisa.
+
+    def _editar_ingreso(self, ingreso) -> None:
+        if self.app.verificar_mes():
+            DialogoIngreso(self.app, self.app.mes_id, ingreso["id"]).abrir()
+
+    def _editar_cambio(self, cambio) -> None:
+        if self.app.verificar_mes():
+            DialogoCambio(self.app, self.app.mes_id, cambio["id"]).abrir()
+
     def _borrar_ingreso(self, ingreso) -> None:
+        if not self.app.verificar_mes():
+            return
+
         def confirmado():
             try:
                 ingresos.borrar_ingreso(self.app.con, ingreso["id"])
@@ -605,6 +621,9 @@ class PantallaResumen:
         )
 
     def _borrar_cambio(self, cambio) -> None:
+        if not self.app.verificar_mes():
+            return
+
         def confirmado():
             try:
                 cambios.borrar_cambio(self.app.con, cambio["id"])

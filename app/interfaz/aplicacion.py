@@ -12,7 +12,7 @@ import flet as ft
 
 from app.interfaz import estilos
 from app.interfaz.componentes import boton_peligroso, texto_ayuda
-from app.interfaz.dialogos import dialogos_valores
+from app.interfaz.dialogos import dialogos_mes, dialogos_valores
 from app.interfaz.pantalla_ajustes import PantallaAjustes
 from app.interfaz.pantalla_gastos import PantallaGastos
 from app.interfaz.pantalla_primer_uso import PantallaPrimerUso
@@ -53,13 +53,16 @@ class Aplicacion:
     # ------------------------------------------------------------------
 
     def iniciar(self) -> None:
-        if meses.hay_meses(self.con):
-            self.mostrar_principal(meses.obtener_ultimo_mes(self.con)["id"])
+        # Al abrir se ve el mes del calendario si existe; si no, el último (§1.2).
+        inicial = meses.mes_inicial(self.con)
+        if inicial is not None:
+            self.mostrar_principal(inicial["id"])
         else:
             self.mostrar_primer_uso()
 
     def mostrar_primer_uso(self) -> None:
         """Pantalla completa sin menú, para crear el primer mes (§3.1)."""
+        self._pantallas = []  # Sin menú: los atajos no hacen nada en esta pantalla.
         self.page.title = "Gastos – Bienvenido"
         self.page.controls.clear()
         self.page.add(PantallaPrimerUso(self).control)
@@ -84,7 +87,51 @@ class Aplicacion:
             ],
             on_change=lambda e: self.ir_a(e.control.selected_index),
         )
-        self._texto_mes = ft.Text(size=estilos.TAM_SECCION, weight=ft.FontWeight.W_600)
+        # Selector de mes con flechas, "Mes nuevo" y "Borrar este mes" (§1.2).
+        self._selector_mes = ft.Dropdown(
+            width=260,
+            on_select=lambda e: self.seleccionar_mes(int(e.control.value)),
+        )
+        self._boton_anterior = ft.IconButton(
+            ft.Icons.CHEVRON_LEFT,
+            tooltip="Mes anterior (Alt+←)",
+            on_click=lambda e: self.mes_vecino(-1),
+        )
+        self._boton_siguiente = ft.IconButton(
+            ft.Icons.CHEVRON_RIGHT,
+            tooltip="Mes siguiente (Alt+→)",
+            on_click=lambda e: self.mes_vecino(+1),
+        )
+        self._boton_mes_nuevo = ft.OutlinedButton(
+            "Mes nuevo", icon=ft.Icons.ADD, on_click=lambda e: self.crear_mes_nuevo()
+        )
+        self._item_borrar_mes = ft.PopupMenuItem(
+            content="Borrar este mes",
+            icon=ft.Icons.DELETE_OUTLINE,
+            on_click=lambda e: self.borrar_mes(),
+        )
+        self._menu_mes = ft.PopupMenuButton(
+            icon=ft.Icons.MORE_VERT,
+            tooltip="Más opciones",
+            items=[self._item_borrar_mes],
+        )
+        # Franja que avisa que se está viendo un mes que no es el actual (§1.2).
+        self._texto_franja = ft.Text(color=estilos.color(self.page, "info"))
+        self._franja = ft.Container(
+            padding=ft.Padding.symmetric(horizontal=24, vertical=8),
+            bgcolor=estilos.color(self.page, "info_suave"),
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.INFO_OUTLINE,
+                        color=estilos.color(self.page, "info"),
+                        size=18,
+                    ),
+                    self._texto_franja,
+                ]
+            ),
+            visible=False,
+        )
         # Cotización siempre visible y editable con un clic o Ctrl+K (§1.2).
         self._texto_cotizacion = ft.Text()
         self._icono_cotizacion = ft.Icon(ft.Icons.EDIT_OUTLINED, size=18)
@@ -103,7 +150,19 @@ class Aplicacion:
             padding=ft.Padding.symmetric(horizontal=24),
             border=ft.Border.only(bottom=ft.BorderSide(1, estilos.BORDE)),
             content=ft.Row(
-                [self._texto_mes, self._cotizacion],
+                [
+                    ft.Row(
+                        [
+                            self._boton_anterior,
+                            self._selector_mes,
+                            self._boton_siguiente,
+                            self._boton_mes_nuevo,
+                            self._menu_mes,
+                        ],
+                        spacing=4,
+                    ),
+                    self._cotizacion,
+                ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
         )
@@ -116,7 +175,9 @@ class Aplicacion:
                     self._rail,
                     ft.VerticalDivider(width=1),
                     ft.Column(
-                        [barra_superior, self._contenido], expand=True, spacing=0
+                        [barra_superior, self._franja, self._contenido],
+                        expand=True,
+                        spacing=0,
                     ),
                 ],
                 expand=True,
@@ -137,9 +198,14 @@ class Aplicacion:
     def refrescar(self) -> None:
         """Vuelve a pedir los datos a la lógica y redibuja la pantalla visible."""
         mes = meses.obtener_mes(self.con, self.mes_id)
+        if mes is None:
+            # O17: el mes que se veía ya no existe (se borró). Se pasa al último
+            # que quede, o a la pantalla de primer uso si no queda ninguno.
+            self.despues_de_borrar_mes()
+            return
         nombre = nombre_mes(mes["anio"], mes["mes"])
         self.page.title = f"Gastos – {nombre}"
-        self._texto_mes.value = nombre
+        self._dibujar_selector_de_mes(mes)
         self._dibujar_cotizacion(mes["cotizacion_cent"])
         self._pantallas[self._indice].refrescar()
         self.page.update()
@@ -161,6 +227,93 @@ class Aplicacion:
             self._texto_cotizacion.color = None
             self._icono_cotizacion.color = None
 
+    def _dibujar_selector_de_mes(self, mes) -> None:
+        """Selector, flechas, "Mes nuevo", "Borrar este mes" y franja (§1.2)."""
+        todos = meses.listar_meses(self.con)  # Del más nuevo al más viejo.
+        actual = meses.mes_actual_calendario()
+        opciones = []
+        for m in todos:
+            texto = nombre_mes(m["anio"], m["mes"])
+            if (m["anio"], m["mes"]) == actual:
+                texto += " · mes actual"
+            opciones.append(ft.DropdownOption(key=str(m["id"]), text=texto))
+        self._selector_mes.options = opciones
+        self._selector_mes.value = str(mes["id"])
+
+        ids = [m["id"] for m in todos]
+        posicion = ids.index(mes["id"])
+        # La lista va del más nuevo al más viejo: "anterior" es el que sigue en la lista.
+        self._boton_anterior.disabled = posicion == len(ids) - 1
+        self._boton_siguiente.disabled = posicion == 0
+        siguiente = nombre_mes(*meses.siguiente(todos[0]["anio"], todos[0]["mes"]))
+        self._boton_mes_nuevo.tooltip = (
+            f"Crear {siguiente} ({self.atajo('N', shift=True)})"
+        )
+
+        es_ultimo = posicion == 0
+        self._item_borrar_mes.disabled = not es_ultimo
+        self._item_borrar_mes.content = (
+            "Borrar este mes"
+            if es_ultimo
+            else f"Solo se puede borrar el último mes ({nombre_mes(todos[0]['anio'], todos[0]['mes'])})"
+        )
+
+        es_actual = (mes["anio"], mes["mes"]) == actual
+        self._franja.visible = not es_actual
+        self._texto_franja.value = (
+            f"Estás viendo {nombre_mes(mes['anio'], mes['mes'])}. "
+            "Los cambios que hagas se guardan en ese mes."
+        )
+
+    def seleccionar_mes(self, mes_id: int, pantalla: str | None = None) -> None:
+        """Cambia el mes que se está viendo (y opcionalmente la pantalla)."""
+        self.mes_id = mes_id
+        if pantalla is not None:
+            self.ir_a([texto for texto, _, _ in _DESTINOS].index(pantalla))
+        else:
+            self.refrescar()
+
+    def verificar_mes(self) -> bool:
+        """True si el mes que se está viendo todavía existe.
+
+        Si se borró (la pantalla quedó vieja), pasa al último mes que quede (o al
+        primer uso), avisa y devuelve False: quien llamó no debe seguir (BUG-16).
+        """
+        if self.mes_id is not None and meses.obtener_mes(self.con, self.mes_id):
+            return True
+        self.despues_de_borrar_mes()
+        self.avisar("El mes que estabas viendo ya no existe.")
+        return False
+
+    def mes_vecino(self, paso: int) -> None:
+        """paso = -1: mes anterior; +1: mes siguiente (flechas y Alt+←/→)."""
+        if not self.verificar_mes():
+            return
+        mes = meses.obtener_mes(self.con, self.mes_id)
+        mover = meses.anterior if paso < 0 else meses.siguiente
+        vecino = meses.obtener_mes_por_fecha(self.con, *mover(mes["anio"], mes["mes"]))
+        if vecino is not None:
+            self.seleccionar_mes(vecino["id"])
+
+    def borrar_mes(self) -> None:
+        """Menú "Borrar este mes": pide confirmación (solo el último mes)."""
+        if not self.verificar_mes():  # BUG-18
+            return
+        dialogos_mes.confirmar_borrar_mes(self, self.mes_id)
+
+    def crear_mes_nuevo(self) -> None:
+        """Botón "Mes nuevo" y Ctrl+Shift+N."""
+        dialogos_mes.DialogoMesNuevo(self).abrir()
+
+    def despues_de_borrar_mes(self) -> None:
+        """Se selecciona el nuevo último mes; si no queda ninguno, primer uso (§3.9)."""
+        ultimo = meses.obtener_ultimo_mes(self.con)
+        if ultimo is None:
+            self.mes_id = None
+            self.mostrar_primer_uso()
+        else:
+            self.seleccionar_mes(ultimo["id"])
+
     def pantalla(self, nombre: str):
         """La pantalla del menú con ese nombre ("Resumen", "Gastos", "Ajustes")."""
         indice = [texto for texto, _, _ in _DESTINOS].index(nombre)
@@ -168,6 +321,8 @@ class Aplicacion:
 
     def editar_cotizacion(self) -> None:
         """Abre el diálogo de cotización del mes (barra superior o Ctrl+K)."""
+        if not self.verificar_mes():
+            return
         dialogos_valores.abrir_cotizacion(self, self.mes_id)
 
     # ------------------------------------------------------------------
@@ -192,11 +347,14 @@ class Aplicacion:
     def hay_dialogo_abierto(self) -> bool:
         return bool(self._dialogos)
 
-    def atajo(self, tecla: str) -> str:
-        """Texto de un atajo para mostrar: "Ctrl+N" en Windows, "⌘N" en macOS."""
+    def atajo(self, tecla: str, shift: bool = False) -> str:
+        """Texto de un atajo para mostrar, con la convención de cada sistema.
+
+        Windows: "Ctrl+N", "Ctrl+Shift+N". macOS: "⌘N", "⇧⌘N" (O34).
+        """
         if self.page.platform == ft.PagePlatform.MACOS:
-            return f"⌘{tecla}"
-        return f"Ctrl+{tecla}"
+            return f"{'⇧' if shift else ''}⌘{tecla}"
+        return f"Ctrl+{'Shift+' if shift else ''}{tecla}"
 
     def enfocar(self, control: ft.Control) -> None:
         # focus() en Flet 1.0 es asíncrona (async): run_task la ejecuta sin
@@ -274,6 +432,14 @@ class Aplicacion:
         if not self._pantallas:
             return  # Todavía en la pantalla de primer uso.
 
+        # Alt+← / Alt+→ (Option en macOS): mes anterior / siguiente.
+        if e.alt and e.key in ("Arrow Left", "ArrowLeft"):
+            self.mes_vecino(-1)
+            return
+        if e.alt and e.key in ("Arrow Right", "ArrowRight"):
+            self.mes_vecino(+1)
+            return
+
         # En macOS se usa Cmd (meta) en lugar de Ctrl.
         es_mac = self.page.platform == ft.PagePlatform.MACOS
         modificador = e.meta if es_mac else e.ctrl
@@ -283,7 +449,9 @@ class Aplicacion:
             self.ir_a(int(e.key) - 1)
         elif e.key.upper() == "K":
             self.editar_cotizacion()
-        elif e.key.upper() == "N" and not e.shift:
+        elif e.key.upper() == "N" and e.shift:
+            self.crear_mes_nuevo()
+        elif e.key.upper() == "N":
             self._pantallas[self._indice].nuevo()
         elif e.key == ",":
             self.ir_a(len(_DESTINOS) - 1)  # Ajustes, como en macOS.

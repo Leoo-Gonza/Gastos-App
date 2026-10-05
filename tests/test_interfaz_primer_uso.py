@@ -8,7 +8,7 @@ import pytest
 
 from app.interfaz.pantalla_primer_uso import PantallaPrimerUso
 from app.logica import meses
-from tests.ayudantes_interfaz import de_tipo, textos
+from tests.ayudantes_interfaz import de_tipo, mes_seleccionado, textos
 
 
 @pytest.fixture
@@ -145,7 +145,7 @@ def test_crear_guarda_en_centavos_y_pasa_al_resumen(pantalla, app_vacia, pagina,
     assert (mes["anio"], mes["mes"]) == (2026, 10)
     assert (mes["sueldo_usd_cent"], mes["cotizacion_cent"]) == (120000, 143250)
     assert pagina.title == "Gastos – Octubre 2026"
-    assert app_vacia._texto_mes.value == "Octubre 2026"
+    assert mes_seleccionado(app_vacia) == "Octubre 2026"
     assert "Resumen de Octubre 2026" in textos(pagina.controls[0])
     assert app_vacia._rail.selected_index == 0
 

@@ -20,6 +20,7 @@ from tests.ayudantes_interfaz import (
     dialogo_arriba,
     hay_boton,
     ir,
+    mes_seleccionado,
     nombre_visible,
     tecla,
     textos,
@@ -130,7 +131,7 @@ def _campo(dialogo):
 
 
 def test_barra_con_cotizacion(app):
-    assert app._texto_mes.value == "Octubre 2026"
+    assert mes_seleccionado(app) == "Octubre 2026"
     assert app._texto_cotizacion.value == "Cotización $ 1.600 por US$"
     assert app._icono_cotizacion.icon == ft.Icons.EDIT_OUTLINED
     assert app._cotizacion.bgcolor is None

@@ -14,6 +14,7 @@ from app.logica.formato import (
     formatear_usd,
     leer_monto,
     nombre_mes,
+    unir_con_y,
     validar_centavos,
 )
 
@@ -660,3 +661,28 @@ def test_bug14_los_demas_mensajes_no_cambian(que):
     with pytest.raises(ErrorDeValidacion) as error:
         validar_centavos(-1, que=que)
     assert str(error.value) == f"{que} tiene que ser mayor a 0."
+
+
+# ---------------------------------------------------------------------------
+# Ronda 17: unir_con_y (BUG-17)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("partes", "texto"),
+    [
+        ([], ""),
+        (["3 gastos"], "3 gastos"),
+        (["3 gastos", "2 pagos"], "3 gastos y 2 pagos"),
+        (["3 gastos", "2 pagos", "1 cambio"], "3 gastos, 2 pagos y 1 cambio"),
+        (["a", "b", "c", "d"], "a, b, c y d"),
+    ],
+)
+def test_unir_con_y(partes, texto):
+    assert unir_con_y(partes) == texto
+
+
+def test_unir_con_y_no_modifica_la_lista():
+    partes = ["a", "b", "c"]
+    unir_con_y(partes)
+    assert partes == ["a", "b", "c"]
