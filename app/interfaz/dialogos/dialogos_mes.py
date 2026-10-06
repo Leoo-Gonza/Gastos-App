@@ -109,8 +109,9 @@ class DialogoMesNuevo:
             return
         s = self.sugerencias
         try:
+            avisos: list[str] = []  # RN-37: partes repartidas en partes iguales.
             mes_id = meses.crear_mes(
-                self.app.con, s["anio"], s["mes"], sueldo, cotizacion
+                self.app.con, s["anio"], s["mes"], sueldo, cotizacion, avisos=avisos
             )
         except ErrorDeValidacion as error:
             campos = {"sueldo": self.sueldo, "cotizacion": self.cotizacion}
@@ -131,7 +132,7 @@ class DialogoMesNuevo:
         creado = _plural(s["fijos"], "gasto fijo", "gastos fijos")
         if s["cuotas"]:
             creado += f" y {_plural(s['cuotas'], 'cuota', 'cuotas')}"
-        self.app.avisar(f"{self.nombre} creado: {creado}.")
+        self.app.avisar(" ".join([f"{self.nombre} creado: {creado}.", *avisos]))
 
     def _enfocar_error(self) -> None:
         self.app.page.update()
@@ -148,7 +149,9 @@ def confirmar_borrar_mes(app, mes_id: int) -> None:
              (SELECT COUNT(*) FROM pagos p JOIN gastos g ON g.id = p.gasto_id
                WHERE g.mes_id = :m) AS pagos,
              (SELECT COUNT(*) FROM ingresos_extra WHERE mes_id = :m) AS extras,
-             (SELECT COUNT(*) FROM cambios WHERE mes_id = :m) AS cambios""",
+             (SELECT COUNT(*) FROM cambios WHERE mes_id = :m) AS cambios,
+             (SELECT COUNT(*) FROM partes_gasto pg JOIN gastos g ON g.id = pg.gasto_id
+               WHERE g.mes_id = :m) AS partes""",
         {"m": mes_id},
     ).fetchone()
     detalle = unir_con_y(
@@ -174,8 +177,14 @@ def confirmar_borrar_mes(app, mes_id: int) -> None:
 
     app.confirmar(
         f"¿Borrar {nombre}?",
-        f"Se borran {detalle} de este mes. No se borran los planes de cuotas ni los "
-        'ítems cargados a mano en "Me deben". Esta acción no se puede deshacer.',
+        f"Se borran {detalle} de este mes. "
+        + (
+            'Las partes compartidas de este mes desaparecen de "Me deben". '
+            if contar["partes"]
+            else ""
+        )
+        + 'No se borran los planes de cuotas ni los ítems cargados a mano en "Me deben". '
+        "Esta acción no se puede deshacer.",
         "Borrar mes",
         confirmado,
     )

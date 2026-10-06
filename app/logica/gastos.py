@@ -7,7 +7,7 @@ pagos funcionan igual para los dos.
 
 import sqlite3
 
-from app.logica import catalogos
+from app.logica import catalogos, compartidos
 from app.logica.errores import ErrorDeValidacion
 from app.logica.formato import (
     clave_orden,
@@ -123,11 +123,14 @@ def agregar_gasto(
     moneda: str = "ARS",
     monto_usd_cent: int | None = None,
     cotizacion_cent: int | None = None,
+    partes: list[tuple[int, int | None]] | None = None,
 ) -> int:
     """RF-06 / RF-44: da de alta un gasto y devuelve su id.
 
     En pesos se pasa monto_cent. En dólares se pasa moneda="USD", monto_usd_cent
     y cotizacion_cent (la del día); monto_cent se ignora y se calcula.
+    partes: si el gasto es compartido, [(persona_id, monto_manual o None), …]
+    (RF-29, RF-30). Se guarda todo junto, en una transacción.
     """
     _validar_mes(con, mes_id)
     nombre = _validar_nombre(nombre)
@@ -137,6 +140,10 @@ def agregar_gasto(
     )
     _validar_tipo(tipo)
     validar_medio_pago(con, medio_pago_id)
+    partes = partes or []
+    compartidos.validar_personas(con, partes, None, tipo)
+    if partes:
+        compartidos.calcular_partes(monto_cent, partes)  # Valida antes de guardar.
 
     with con:
         cursor = con.execute(
@@ -155,6 +162,8 @@ def agregar_gasto(
                 cotizacion_cent,
             ),
         )
+        if partes:
+            compartidos.guardar_partes(con, cursor.lastrowid, monto_cent, partes)
     return cursor.lastrowid
 
 
@@ -169,11 +178,13 @@ def editar_gasto(
     moneda: str = "ARS",
     monto_usd_cent: int | None = None,
     cotizacion_cent: int | None = None,
+    partes: list[tuple[int, int | None]] | None = None,
 ) -> None:
     """RF-07 / RF-45: modifica un gasto. Solo afecta a este mes (RN-11).
 
     Se puede cambiar la moneda (RN-56). Los parámetros son los mismos que en
-    agregar_gasto.
+    agregar_gasto. partes=None mantiene las mismas personas y partes manuales y
+    recalcula las automáticas con el monto nuevo (RN-34); [] deja de compartirlo.
     """
     actual = obtener_gasto(con, gasto_id)
     if actual is None:
@@ -204,6 +215,13 @@ def editar_gasto(
             "monto",
         )
 
+    if partes is None:
+        partes = compartidos.personas_actuales(con, gasto_id)
+    compartidos.validar_personas(con, partes, gasto_id, tipo)
+    if partes:
+        # RN-34: si con el monto nuevo tu parte quedaría negativa, se rechaza todo.
+        compartidos.calcular_partes(monto_cent, partes)
+
     with con:
         con.execute(
             """UPDATE gastos
@@ -222,6 +240,7 @@ def editar_gasto(
                 gasto_id,
             ),
         )
+        compartidos.guardar_partes(con, gasto_id, monto_cent, partes)
 
 
 def borrar_gasto(con: sqlite3.Connection, gasto_id: int) -> None:
@@ -260,7 +279,9 @@ def listar_gastos(con: sqlite3.Connection, mes_id: int) -> list[sqlite3.Row]:
                   g.categoria_id, c.nombre AS categoria, c.archivado AS categoria_archivada,
                   g.medio_pago_id, m.nombre AS medio_pago, m.archivado AS medio_pago_archivado,
                   (SELECT COALESCE(SUM(p.monto_cent), 0)
-                     FROM pagos p WHERE p.gasto_id = g.id) AS pagado_cent
+                     FROM pagos p WHERE p.gasto_id = g.id) AS pagado_cent,
+                  (SELECT COUNT(*) FROM partes_gasto pg
+                    WHERE pg.gasto_id = g.id) AS personas_compartido
              FROM gastos g
              JOIN categorias c ON c.id = g.categoria_id
              LEFT JOIN medios_pago m ON m.id = g.medio_pago_id

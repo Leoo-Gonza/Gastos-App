@@ -309,6 +309,7 @@ def test_arranca_en_el_resumen(app, resumen):
         "Dólares a cambiar",
         "Ahorro del mes",
         "Capacidad de endeudamiento",
+        "Te deben (todas las personas)",
     ]
 
 
@@ -1151,7 +1152,9 @@ def test_enter_en_la_pestana_meta_guarda(app, pestana_meta):
 
 
 def test_ctrl_n_en_la_pestana_meta_enfoca_el_campo(app, pestana_meta, pagina):
-    app.pantalla("Ajustes").pestanas.selected_index = 2
+    app.pantalla(
+        "Ajustes"
+    ).pestanas.selected_index = 3  # Meta (paso 5: después de Personas)
     app._al_presionar_tecla(tecla("N", ctrl=True))
     assert _enfocado(pagina) is pestana_meta.campo
     assert app.hay_dialogo_abierto() is False

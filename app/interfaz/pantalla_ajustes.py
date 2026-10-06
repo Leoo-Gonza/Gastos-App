@@ -39,6 +39,17 @@ _TEXTOS = {
         "eliminar": "¿Eliminar el medio de pago {}?",
         "vacio": "No hay medios de pago.",
     },
+    # "persona" es femenino para cualquier persona: "archivada" vale para todos.
+    catalogos.PERSONAS: {
+        "singular": "persona",
+        "nuevo": "Nueva persona",
+        "archivado": "Archivada",
+        "mostrar": "Mostrar archivadas",
+        "tooltip_archivar": "Tiene gastos compartidos o ítems en Me deben: no se puede "
+        "borrar. Archivada no aparece al compartir gastos nuevos.",
+        "eliminar": "¿Eliminar a la persona {}?",
+        "vacio": "No hay personas. Agregá a las personas con las que compartís gastos.",
+    },
 }
 
 
@@ -311,6 +322,7 @@ class PantallaAjustes:
         self.listas = [
             ListaCatalogo(app, catalogos.CATEGORIAS),
             ListaCatalogo(app, catalogos.MEDIOS_PAGO),
+            ListaCatalogo(app, catalogos.PERSONAS),
         ]
         self.meta = PestanaMeta(app)
         # Todas las pestañas, en el orden en que se ven.
@@ -328,6 +340,7 @@ class PantallaAjustes:
                         tabs=[
                             ft.Tab(label="Categorías"),
                             ft.Tab(label="Medios de pago"),
+                            ft.Tab(label="Personas"),
                             ft.Tab(label="Meta de ahorro"),
                         ]
                     ),

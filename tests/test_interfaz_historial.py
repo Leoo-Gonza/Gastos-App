@@ -19,6 +19,7 @@ from app.logica import (
     cuotas,
     gastos,
     ingresos,
+    me_deben,
     meses,
     pagos,
 )
@@ -1093,6 +1094,12 @@ def _app_con_de_todo(pantalla):
         con, "Moto", otros, None, 500000, 12, 2026, 8, hoy=HOY
     )
     cuotas.cancelar_plan(con, cancelado, hoy=HOY)
+    # Paso 5: un gasto compartido en Noviembre y un ítem a mano en "Me deben".
+    sofia = catalogos.crear(con, catalogos.PERSONAS, "Sofía")
+    gastos.agregar_gasto(
+        con, nov, "Internet", otros, 3870000, "fijo", partes=[(sofia, None)]
+    )
+    me_deben.agregar_item(con, sofia, "Préstamo", 2000000, HOY)
     app, pagina = _app(con)
     app.seleccionar_mes(nov, pantalla=pantalla)
     return con, app, pagina, nov, oct_
@@ -1128,7 +1135,13 @@ def _disparar(control, evento):
     handler(SimpleNamespace(control=control, data=None))
 
 
-MINIMO_DE_ACCIONES = {"Resumen": 15, "Gastos": 33, "Cuotas": 16, "Ajustes": 10}
+MINIMO_DE_ACCIONES = {
+    "Resumen": 15,
+    "Gastos": 39,
+    "Cuotas": 16,
+    "Me deben": 13,
+    "Ajustes": 38,
+}
 
 
 def _fallas_del_inventario(pantalla):
@@ -1147,8 +1160,9 @@ def _fallas_del_inventario(pantalla):
             # Después de la acción: o la app ya pasó a un mes que existe (o al primer
             # uso), o el usuario está en un diálogo que no depende del mes borrado
             # (ej. "Mes nuevo", que crea el siguiente al último que queda).
-            # Ajustes no depende del mes: ahí alcanza con que no haya excepción.
-            if pantalla != "Ajustes":
+            # Ajustes y Me deben (acumulado) no dependen del mes: ahí alcanza con
+            # que no haya excepción.
+            if pantalla not in ("Ajustes", "Me deben"):
                 existe = app.mes_id is None or meses.obtener_mes(con, app.mes_id)
                 assert existe or app.hay_dialogo_abierto()
         except Exception as error:  # noqa: BLE001 (a propósito: se juntan todas las fallas)
@@ -1160,7 +1174,9 @@ def _fallas_del_inventario(pantalla):
     return fallas, cantidad
 
 
-@pytest.mark.parametrize("pantalla", ["Resumen", "Gastos", "Cuotas", "Ajustes"])
+@pytest.mark.parametrize(
+    "pantalla", ["Resumen", "Gastos", "Cuotas", "Me deben", "Ajustes"]
+)
 def test_inventario_ninguna_accion_rompe_con_el_mes_borrado(pantalla):
     fallas, cantidad = _fallas_del_inventario(pantalla)
     # Si alguien saca acciones de la pantalla, el inventario lo nota (y se revisa).

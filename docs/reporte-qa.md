@@ -641,3 +641,48 @@ Ninguno.
 - O39 (informativa): el filtro de Cuotas se mantiene al cambiar de mes y de pantalla; vuelve a "Activos" solo si la pantalla se arma de nuevo (primer uso). Comportamiento esperado.
 
 **Estado del paso 4: pruebas automáticas completas.** La prueba manual del usuario queda pendiente porque Windows bloquea la ventana de Flet en este equipo (Control de aplicaciones).
+
+---
+
+## Ronda 22 – Paso 5a (lógica de compartidos)
+
+- Fecha: 2026-10-06 · Probado por: Lucía (QA)
+- Alcance: `compartidos.py`, `me_deben.py`, `gastos.agregar_gasto`/`editar_gasto` con partes, `meses.crear_mes(…, avisos)` y `total_me_deben` en el resumen. RF-28 a RF-34, RN-32 a RN-37, RN-40. CA-28.x (lógica), CA-29.x a CA-34.x, CA-35.2, CA-05.2, CA-43.6 (partes), CA-45.7 y CA-47.6 a CA-47.8.
+
+### Resultado
+1.498 pruebas, pasan las 1.498 (78 nuevas en test_compartidos.py). app/logica/ al 100 %. Ruff sin errores.
+
+### Bugs
+Ninguno.
+
+### Observaciones
+- O40: si se saca a una persona de un gasto compartido cuya parte ya estaba cobrada, la parte (y lo cobrado) desaparece de "me deben". Los requisitos no lo definen.
+- O41: si una parte con diferencia ("a devolver $ 2.900") se marca y se desmarca, lo ya cobrado vuelve a 0 y se pierde ese registro.
+
+---
+
+## Ronda 23 – Paso 5b (interfaz de compartidos)
+
+- Fecha: 2026-10-06 · Probado por: Lucía (QA)
+- Alcance: O41 en la lógica, `formatear_mes_corto`, `personas_compartido`; sección "Compartido" del diálogo de gasto; ícono y texto al borrar en Gastos; pantalla Me deben; DialogoItem; pestaña Personas; tarjeta "Te deben"; textos al crear y borrar el mes; "Me deben" en el inventario de acciones. (La ronda se cortó una vez por el límite de uso y se retomó.)
+
+### Resultado
+| Archivo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_interfaz_compartidos.py (nuevo) | 62 | 62 | 0 |
+| test_interfaz_historial.py (+1) | 110 | 110 | 0 |
+| Pruebas viejas actualizadas | 11 | 11 | 0 |
+| **Total** | **1.562** | **1.562** | **0** |
+
+Cobertura 97 %; app/logica/ 100 %. Ruff sin errores. El inventario pasa en las 5 pantallas: Resumen (15), Gastos (39), Cuotas (16), Me deben (13) y Ajustes (38).
+
+Verificado en pantalla: CA-28.x, 29.x, 30.x, 31.x, 32.x, 33.x, 34.x, 35.2, 05.2, 43.6, 45.7, 47.8; O40 (aviso al sacar a alguien que ya pagó) y O41 ("Deshacer" restaura exactamente).
+
+### Bugs nuevos
+Ninguno.
+
+### Observaciones
+- O42 (informativa): el tooltip y el texto de borrar listan las personas en el orden en que se guardaron las partes (desde el diálogo, alfabético).
+- O43 (informativa): "Archivada" en la tarjeta es un texto chico, no un chip.
+
+**Estado del paso 5: pruebas automáticas completas.** La prueba manual queda pendiente (ventana bloqueada por Windows).

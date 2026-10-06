@@ -261,3 +261,26 @@ def unir_con_y(partes: list[str]) -> str:
     if len(partes) <= 1:
         return "".join(partes)
     return ", ".join(partes[:-1]) + " y " + partes[-1]
+
+
+_MESES_CORTOS = [
+    "ene",
+    "feb",
+    "mar",
+    "abr",
+    "may",
+    "jun",
+    "jul",
+    "ago",
+    "sep",
+    "oct",
+    "nov",
+    "dic",
+]
+
+
+def formatear_mes_corto(anio: int, mes: int) -> str:
+    """(2026, 10) -> "oct 2026" (formato corto de tablas, diseño §2.3)."""
+    if not 1 <= mes <= 12:
+        raise ValueError(f"Mes inválido: {mes}")
+    return f"{_MESES_CORTOS[mes - 1]} {anio}"

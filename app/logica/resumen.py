@@ -14,7 +14,7 @@ Nombres de las variables, igual que en los requisitos:
 import sqlite3
 from dataclasses import dataclass
 
-from app.logica import cambios, configuracion, ingresos, pagos
+from app.logica import cambios, configuracion, ingresos, me_deben, pagos
 from app.logica.formato import convertir_ars_a_usd, convertir_usd_a_ars
 from app.logica.meses import exigir_mes
 
@@ -44,7 +44,7 @@ class Resumen:
     meta_usd: int | None  # None = sin meta
     avance_meta: float | None  # ahorro / meta (1.0 = 100 %); None sin meta o sin ahorro
     pendiente_de_pago: int  # RN-20
-    total_me_deben: int  # RN-40 (llega en el paso 5; por ahora 0)
+    total_me_deben: int  # RN-40: acumulado de todas las personas (no depende del mes)
 
     @property
     def falta_cotizacion(self) -> bool:
@@ -113,5 +113,5 @@ def calcular_resumen(con: sqlite3.Connection, mes_id: int) -> Resumen:
         meta_usd=meta,
         avance_meta=avance,
         pendiente_de_pago=totales_pago["pendiente"],
-        total_me_deben=0,
+        total_me_deben=me_deben.total_general(con),
     )

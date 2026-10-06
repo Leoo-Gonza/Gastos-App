@@ -1,6 +1,7 @@
-"""Diálogo de alta y edición de un gasto (RF-06, RF-07, RF-43 a RF-45, docs/diseno.md §4.1).
+"""Diálogo de alta y edición de un gasto (RF-06, RF-07, RF-29 a RF-31, RF-43 a RF-45).
 
-El gasto puede ser en pesos o en dólares. La sección "Compartido" llega en el paso 5.
+Diseño: docs/diseno.md §4.1. El gasto puede ser en pesos o en dólares, y
+compartido con otras personas (la sección "Compartido" está en seccion_compartido.py).
 """
 
 from collections.abc import Callable
@@ -14,6 +15,7 @@ from app.interfaz.componentes import (
     leer_campo_monto,
     texto_ayuda,
 )
+from app.interfaz.dialogos.seccion_compartido import SeccionCompartido
 from app.logica import catalogos, gastos, meses
 from app.logica.errores import ErrorDeValidacion
 from app.logica.formato import (
@@ -95,6 +97,8 @@ class DialogoGasto:
         # on_change se dispara en cada tecla: así el resultado se ve al instante.
         self.monto_usd.on_change = lambda e: self._actualizar_resultado()
         self.cotizacion.on_change = lambda e: self._actualizar_resultado()
+        # Al cambiar el monto en pesos, las partes compartidas se recalculan.
+        self.monto.on_change = lambda e: self.compartido.recalcular()
         self.boton_usar_la_del_mes = ft.TextButton(
             visible=False, on_click=self._usar_la_del_mes
         )
@@ -149,6 +153,8 @@ class DialogoGasto:
         self._preparar_cotizacion()
         if self.actual:
             self._precargar()
+        # Va después de precargar: necesita el monto del gasto para las partes.
+        self.compartido = SeccionCompartido(app, gasto_id, self._monto_en_pesos)
         self._mostrar_bloque_de_la_moneda()
 
         boton_borrar = None
@@ -184,6 +190,7 @@ class DialogoGasto:
                 self.tipo,
                 self.ayuda_tipo,
                 self.medio,
+                self.compartido.control,
             ],
             al_guardar=self._guardar,
             al_cancelar=lambda e: app.cerrar_dialogo(self.dialogo),
@@ -195,6 +202,20 @@ class DialogoGasto:
 
     def _moneda_elegida(self) -> str:
         return self.moneda.selected[0]
+
+    def _monto_en_pesos(self) -> int | None:
+        """El monto actual en pesos según lo escrito, o None si todavía no es válido.
+
+        En dólares es el resultado de la conversión: las partes son en pesos (§4.1).
+        """
+        try:
+            if self._moneda_elegida() == "ARS":
+                return leer_monto(self.monto.value or "")
+            usd = leer_monto(self.monto_usd.value or "")
+            cotizacion = leer_monto(self.cotizacion.value or "")
+        except ErrorDeValidacion:
+            return None
+        return convertir_usd_a_ars(usd, cotizacion)
 
     # ------------------------------------------------------------------
     # Carga inicial
@@ -318,6 +339,12 @@ class DialogoGasto:
         self.app.page.update()
 
     def _actualizar_resultado(self) -> None:
+        self._actualizar_texto_resultado()
+        # hasattr: la primera vez se llama antes de crear la sección compartida.
+        if hasattr(self, "compartido"):
+            self.compartido.recalcular(actualizar=False)
+
+    def _actualizar_texto_resultado(self) -> None:
         """Muestra "US$ 20,00 × $ 1.600 = $ 32.000 a pagar" mientras se escribe.
 
         Si todavía falta un dato o no es válido, muestra una ayuda (sin color de
@@ -412,7 +439,13 @@ class DialogoGasto:
         if not self.categoria.value:
             self.categoria.error_text = "Elegí una categoría."
         montos = self._leer_montos()
-        if self.nombre.error or self.categoria.error_text or montos is None:
+        partes = self.compartido.leer()
+        if (
+            self.nombre.error
+            or self.categoria.error_text
+            or montos is None
+            or partes is None
+        ):
             self._enfocar_primer_error()
             return
 
@@ -423,6 +456,7 @@ class DialogoGasto:
             "tipo": self.tipo.selected[0],
             "medio_pago_id": medio,
             **montos,  # ** "desarma" el diccionario: agrega sus claves a datos.
+            "partes": partes,
         }
         try:
             if self.actual:
@@ -463,6 +497,8 @@ class DialogoGasto:
             self.categoria.error_text = mensaje
         elif error.campo == "medio_pago":
             self.medio.error_text = mensaje
+        elif error.campo in ("partes", "compartido"):
+            self.compartido.mostrar_error(mensaje)
         elif error.campo == "resultado":
             # Ej. RN-23 en dólares: el problema es el resultado en pesos (§4.1).
             self.texto_resultado.value = mensaje

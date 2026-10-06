@@ -13,7 +13,7 @@ from app.interfaz.dialogos.dialogo_gasto import DialogoGasto
 from app.interfaz.dialogos.dialogo_pago import DialogoPago
 from app.interfaz.dialogos.dialogo_plan import DialogoPlan
 from app.interfaz.dialogos.dialogo_ver_pagos import DialogoVerPagos
-from app.logica import cuotas, gastos, meses, pagos
+from app.logica import compartidos, cuotas, gastos, meses, pagos
 from app.logica.errores import ErrorDeValidacion
 from app.logica.formato import (
     clave_orden,
@@ -22,6 +22,7 @@ from app.logica.formato import (
     formatear_detalle_usd,
     formatear_usd,
     nombre_mes,
+    unir_con_y,
 )
 
 # Cómo se muestra cada tipo en la tabla, y en qué orden van los grupos (§3.3).
@@ -259,7 +260,7 @@ class PantallaGastos:
                 ft.DataCell(tilde),
                 # Clic en el nombre también abre "Editar" (§2.5).
                 ft.DataCell(
-                    ft.Text(f["nombre"]), on_tap=lambda e, f=f: self.editar(f["id"])
+                    self._celda_nombre(f), on_tap=lambda e, f=f: self.editar(f["id"])
                 ),
                 ft.DataCell(categoria),
                 ft.DataCell(ft.Text(self._texto_tipo(f))),
@@ -269,6 +270,27 @@ class PantallaGastos:
                 ft.DataCell(self._celda_pendiente(pendiente)),
                 ft.DataCell(acciones),
             ]
+        )
+
+    def _celda_nombre(self, f) -> ft.Control:
+        """El nombre y, si es compartido, un ícono con las personas en el tooltip."""
+        if not f["personas_compartido"]:
+            return ft.Text(f["nombre"])
+        personas = [
+            p["persona"] for p in compartidos.obtener_partes(self.app.con, f["id"])
+        ]
+        return ft.Row(
+            [
+                ft.Text(f["nombre"]),
+                ft.Icon(
+                    ft.Icons.PEOPLE,
+                    size=16,
+                    color=estilos.TEXTO_SECUNDARIO,
+                    tooltip=f"Compartido con {unir_con_y(personas)}",
+                ),
+            ],
+            tight=True,
+            spacing=6,
         )
 
     def _texto_tipo(self, f) -> str:
@@ -402,10 +424,15 @@ class PantallaGastos:
                 confirmado,
             )
             return
+        explicacion = f"Se borran también sus pagos ({formatear_ars(pagado)} pagado). "
+        personas = [
+            p["persona"] for p in compartidos.obtener_partes(self.app.con, gasto_id)
+        ]
+        if personas:
+            explicacion += f'También desaparecen las partes de {unir_con_y(personas)} de "Me deben". '
         self.app.confirmar(
             f"¿Borrar el gasto {gasto['nombre']}?",
-            f"Se borran también sus pagos ({formatear_ars(pagado)} pagado). "
-            "Esta acción no se puede deshacer.",
+            explicacion + "Esta acción no se puede deshacer.",
             "Borrar",
             confirmado,
         )

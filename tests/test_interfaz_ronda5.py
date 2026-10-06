@@ -202,15 +202,25 @@ def test_o12_tooltip_de_archivar(app, con):
         "fijo",
         id_por_nombre(con, catalogos.MEDIOS_PAGO, "Efectivo"),
     )
+    # Paso 5: también una persona en uso (con un ítem en "Me deben").
+    from app.logica import me_deben
+
+    sofia = catalogos.crear(con, catalogos.PERSONAS, "Sofía")
+    me_deben.agregar_item(con, sofia, "Préstamo", 100)
     ir(app, "Ajustes")
-    categorias, medios = app.pantalla("Ajustes").listas
+    categorias, medios, personas = app.pantalla("Ajustes").listas
     [vivienda] = [t for t in categorias.lista.controls if t.title.value == "Vivienda"]
     [efectivo] = [t for t in medios.lista.controls if t.title.value == "Efectivo"]
+    [persona] = [t for t in personas.lista.controls if t.title.value == "Sofía"]
     assert boton(vivienda, "Archivar").tooltip == (
         "Se usa en gastos: no se puede borrar. Archivada no aparece al cargar datos nuevos."
     )
     assert boton(efectivo, "Archivar").tooltip == (
         "Se usa en gastos: no se puede borrar. Archivado no aparece al cargar datos nuevos."
+    )
+    assert boton(persona, "Archivar").tooltip == (
+        "Tiene gastos compartidos o ítems en Me deben: no se puede borrar. "
+        "Archivada no aparece al compartir gastos nuevos."
     )
 
 

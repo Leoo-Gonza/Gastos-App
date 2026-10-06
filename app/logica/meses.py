@@ -6,6 +6,7 @@ Reglas: RF-01 a RF-05, RN-07 a RN-11 y RN-57 (docs/requisitos.md).
 import sqlite3
 from datetime import date
 
+from app.logica import compartidos
 from app.logica.errores import ErrorDeValidacion
 from app.logica.formato import MONTO_MAXIMO_CENT, convertir_usd_a_ars, validar_centavos
 
@@ -184,13 +185,18 @@ def crear_mes(
     mes: int,
     sueldo_usd_cent: int,
     cotizacion_cent: int | None = None,
+    avisos: list[str] | None = None,
 ) -> int:
     """RF-03: crea un mes nuevo, que tiene que ser el siguiente al último (RN-08).
 
     Copia los gastos fijos del último mes sin pagos (RN-09); los fijos en dólares
     toman la cotización del mes nuevo, o conservan la suya si el mes nuevo no
-    tiene (RN-57). No copia pagos únicos, ingresos extra ni cambios.
+    tiene (RN-57). Los fijos compartidos se copian con sus partes, sin cobrar (RN-37).
+    No copia pagos únicos, ingresos extra ni cambios.
     Todo pasa en una sola transacción: o se crea el mes completo, o nada.
+
+    avisos (opcional): lista donde se agregan mensajes para mostrar al usuario,
+    por ejemplo si las partes de un gasto se repartieron en partes iguales.
     """
     ultimo = obtener_ultimo_mes(con)
     if ultimo is None:
@@ -241,7 +247,7 @@ def crear_mes(
         nuevo_id = cursor.lastrowid
         for gasto, monto_cent, cotizacion_gasto in copias:
             # Se copian aunque la categoría o el medio estén archivados (RN-09).
-            con.execute(
+            copia = con.execute(
                 """INSERT INTO gastos (mes_id, nombre, categoria_id, monto_cent, tipo,
                                        medio_pago_id, moneda, monto_usd_cent, cotizacion_cent)
                    VALUES (?, ?, ?, ?, 'fijo', ?, ?, ?, ?)""",
@@ -256,6 +262,16 @@ def crear_mes(
                     cotizacion_gasto,
                 ),
             )
+            # RN-37: las partes, sin cobrar. Si hubo que repartirlas en partes
+            # iguales (la parte del usuario quedaba negativa), se avisa.
+            repartido = compartidos.copiar_partes(
+                con, gasto["id"], copia.lastrowid, monto_cent
+            )
+            if repartido and avisos is not None:
+                avisos.append(
+                    f"Las partes de {gasto['nombre']} se repartieron en partes iguales "
+                    "porque cambió el monto."
+                )
         # RN-09: una cuota por cada plan activo en el mes nuevo, en la misma
         # transacción. Se importa acá adentro porque cuotas.py usa este módulo
         # (meses): importarlo arriba armaría un círculo de imports.

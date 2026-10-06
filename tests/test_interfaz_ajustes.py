@@ -64,6 +64,7 @@ def test_pestanas_y_titulo(ajustes):
     assert [t.label for t in ajustes.pestanas.content.controls[0].tabs] == [
         "Categorías",
         "Medios de pago",
+        "Personas",
         "Meta de ahorro",
     ]
 

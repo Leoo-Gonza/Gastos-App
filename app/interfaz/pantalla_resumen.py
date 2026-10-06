@@ -91,7 +91,7 @@ class PantallaResumen:
                     self._tarjeta_ahorro(r),
                 ]
             ),
-            ft.ResponsiveRow([self._tarjeta_capacidad(r)]),
+            ft.ResponsiveRow([self._tarjeta_capacidad(r), self._tarjeta_te_deben(r)]),
             self._como_se_calcula(r),
             self._tabla_ingresos(),
             self._tabla_cambios(),
@@ -291,6 +291,25 @@ class PantallaResumen:
             ],
             spacing=2,
         )
+
+    def _tarjeta_te_deben(self, r: Resumen) -> ft.Card:
+        """RN-40: lo que te deben entre todas las personas, acumulado (§3.2)."""
+        if r.total_me_deben == 0:
+            abajo = [texto_ayuda("Nadie te debe nada.")]
+        else:
+            abajo = [texto_ayuda("Acumulado de todos los meses.")]
+        rol = "negativo" if r.total_me_deben < 0 else None
+        return self._tarjeta(
+            "Te deben (todas las personas)",
+            self._monto(formatear_ars(r.total_me_deben), rol),
+            abajo,
+            accion=ft.TextButton("Ver", on_click=lambda e: self._ir_a_me_deben()),
+            md=6,
+        )
+
+    def _ir_a_me_deben(self) -> None:
+        if self.app.verificar_mes():
+            self.app.seleccionar_mes(self.app.mes_id, pantalla="Me deben")
 
     def _tarjeta_capacidad(self, r: Resumen) -> ft.Card:
         if r.capacidad is None:

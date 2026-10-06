@@ -12,34 +12,25 @@ from app.interfaz.componentes import estado_vacio, texto_ayuda, titulo
 from app.interfaz.dialogos.dialogo_plan import DialogoPlan
 from app.logica import catalogos, cuotas, gastos, meses
 from app.logica.errores import ErrorDeValidacion
-from app.logica.formato import formatear_ars, nombre_mes, unir_con_y
+from app.logica.formato import (
+    formatear_ars,
+    formatear_mes_corto,
+    nombre_mes,
+    unir_con_y,
+)
 
 _ETIQUETAS = {
     cuotas.ACTIVO: "Activos",
     cuotas.TERMINADO: "Terminados",
     cuotas.CANCELADO: "Cancelados",
 }
-_MES_CORTO = [
-    "ene",
-    "feb",
-    "mar",
-    "abr",
-    "may",
-    "jun",
-    "jul",
-    "ago",
-    "sep",
-    "oct",
-    "nov",
-    "dic",
-]
 
 
 def _mes_corto(anio_mes: tuple[int, int] | None) -> str:
-    """(2026, 10) -> "oct 2026" (formato corto de tablas, §2.3). None -> "—"."""
+    """(2026, 10) -> "oct 2026"; None (plan sin cuotas) -> "—"."""
     if anio_mes is None:
         return "—"
-    return f"{_MES_CORTO[anio_mes[1] - 1]} {anio_mes[0]}"
+    return formatear_mes_corto(*anio_mes)
 
 
 class PantallaCuotas:

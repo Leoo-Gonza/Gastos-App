@@ -16,6 +16,7 @@ from app.interfaz.dialogos import dialogos_mes, dialogos_valores
 from app.interfaz.pantalla_ajustes import PantallaAjustes
 from app.interfaz.pantalla_cuotas import PantallaCuotas
 from app.interfaz.pantalla_gastos import PantallaGastos
+from app.interfaz.pantalla_me_deben import PantallaMeDeben
 from app.interfaz.pantalla_primer_uso import PantallaPrimerUso
 from app.interfaz.pantalla_resumen import PantallaResumen
 from app.logica import base_datos, meses
@@ -27,6 +28,7 @@ _DESTINOS = [
     ("Resumen", ft.Icons.SPACE_DASHBOARD_OUTLINED, ft.Icons.SPACE_DASHBOARD),
     ("Gastos", ft.Icons.RECEIPT_LONG_OUTLINED, ft.Icons.RECEIPT_LONG),
     ("Cuotas", ft.Icons.CREDIT_CARD_OUTLINED, ft.Icons.CREDIT_CARD),
+    ("Me deben", ft.Icons.PEOPLE_OUTLINE, ft.Icons.PEOPLE),
     ("Ajustes", ft.Icons.SETTINGS_OUTLINED, ft.Icons.SETTINGS),
 ]
 
@@ -75,6 +77,7 @@ class Aplicacion:
             PantallaResumen(self),
             PantallaGastos(self),
             PantallaCuotas(self),
+            PantallaMeDeben(self),
             PantallaAjustes(self),
         ]
 

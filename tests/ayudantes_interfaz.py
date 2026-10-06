@@ -187,8 +187,8 @@ def fila_de(pantalla_gastos, nombre):
     """La DataRow del gasto con ese nombre."""
     i = columna(pantalla_gastos, "Nombre")
     for fila in tabla_gastos(pantalla_gastos).rows:
-        contenido = fila.cells[i].content
-        if isinstance(contenido, ft.Text) and contenido.value == nombre:
+        # La celda puede ser un texto o, si el gasto es compartido, texto + ícono.
+        if _texto_celda(fila.cells[i]) == nombre:
             return fila
     raise AssertionError(f"No hay fila {nombre!r}")
 
