@@ -143,6 +143,7 @@ def test_ca_03_2_sugerencias(con, mes_id, otros):
         "cotizacion_cent": 160000,
         "fijos": 2,
         "fijos_en_dolares": 1,
+        "cuotas": 0,  # paso 4b: cuántas cuotas se generarían (acá no hay planes)
     }
 
 
@@ -150,7 +151,7 @@ def test_sugerencias_cruzan_el_anio_y_usan_el_ultimo(con, tres_meses):
     sug = meses.sugerencias_mes_siguiente(con)
     assert (sug["anio"], sug["mes"]) == (2027, 1)
     assert (sug["sueldo_usd_cent"], sug["cotizacion_cent"]) == (130000, 170000)
-    assert (sug["fijos"], sug["fijos_en_dolares"]) == (0, 0)
+    assert (sug["fijos"], sug["fijos_en_dolares"], sug["cuotas"]) == (0, 0, 0)
 
 
 def test_sugerencias_sin_cotizacion(con):

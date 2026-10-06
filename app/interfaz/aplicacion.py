@@ -14,6 +14,7 @@ from app.interfaz import estilos
 from app.interfaz.componentes import boton_peligroso, texto_ayuda
 from app.interfaz.dialogos import dialogos_mes, dialogos_valores
 from app.interfaz.pantalla_ajustes import PantallaAjustes
+from app.interfaz.pantalla_cuotas import PantallaCuotas
 from app.interfaz.pantalla_gastos import PantallaGastos
 from app.interfaz.pantalla_primer_uso import PantallaPrimerUso
 from app.interfaz.pantalla_resumen import PantallaResumen
@@ -25,6 +26,7 @@ from app.logica.formato import formatear_cotizacion, nombre_mes
 _DESTINOS = [
     ("Resumen", ft.Icons.SPACE_DASHBOARD_OUTLINED, ft.Icons.SPACE_DASHBOARD),
     ("Gastos", ft.Icons.RECEIPT_LONG_OUTLINED, ft.Icons.RECEIPT_LONG),
+    ("Cuotas", ft.Icons.CREDIT_CARD_OUTLINED, ft.Icons.CREDIT_CARD),
     ("Ajustes", ft.Icons.SETTINGS_OUTLINED, ft.Icons.SETTINGS),
 ]
 
@@ -72,6 +74,7 @@ class Aplicacion:
         self._pantallas = [
             PantallaResumen(self),
             PantallaGastos(self),
+            PantallaCuotas(self),
             PantallaAjustes(self),
         ]
 
@@ -362,9 +365,18 @@ class Aplicacion:
         self.page.run_task(control.focus)
 
     def confirmar(
-        self, pregunta: str, explicacion: str, texto_boton: str, al_confirmar: Callable
+        self,
+        pregunta: str,
+        explicacion: str,
+        texto_boton: str,
+        al_confirmar: Callable,
+        texto_volver: str = "Cancelar",
     ) -> None:
-        """Confirmación antes de borrar algo (§2.5). Cancelar es lo más fácil."""
+        """Confirmación antes de borrar algo (§2.5). Cancelar es lo más fácil.
+
+        texto_volver cambia el botón de salir: "Volver" cuando la acción misma se
+        llama "Cancelar plan", para no tener dos "Cancelar" opuestos (§3.4).
+        """
 
         def confirmar(e):
             self.cerrar_dialogo(dialogo)
@@ -377,7 +389,7 @@ class Aplicacion:
             actions=[
                 # autofocus: si se aprieta Enter sin pensar, se cancela (no se borra).
                 ft.TextButton(
-                    "Cancelar",
+                    texto_volver,
                     autofocus=True,
                     on_click=lambda e: self.cerrar_dialogo(dialogo),
                 ),

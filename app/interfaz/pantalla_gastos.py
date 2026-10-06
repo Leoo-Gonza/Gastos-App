@@ -8,11 +8,12 @@ llega en el paso 4.
 import flet as ft
 
 from app.interfaz import estilos
-from app.interfaz.componentes import estado_vacio, titulo
+from app.interfaz.componentes import estado_vacio, texto_ayuda, titulo
 from app.interfaz.dialogos.dialogo_gasto import DialogoGasto
 from app.interfaz.dialogos.dialogo_pago import DialogoPago
+from app.interfaz.dialogos.dialogo_plan import DialogoPlan
 from app.interfaz.dialogos.dialogo_ver_pagos import DialogoVerPagos
-from app.logica import gastos, meses, pagos
+from app.logica import cuotas, gastos, meses, pagos
 from app.logica.errores import ErrorDeValidacion
 from app.logica.formato import (
     clave_orden,
@@ -66,11 +67,21 @@ class PantallaGastos:
                 ft.Row(
                     [
                         self.titulo,
-                        ft.FilledButton(
-                            "Agregar gasto",
-                            icon=ft.Icons.ADD,
-                            tooltip=f"Agregar gasto ({app.atajo('N')})",
-                            on_click=lambda e: self.nuevo(),
+                        ft.Row(
+                            [
+                                ft.OutlinedButton(
+                                    "Plan de cuotas",
+                                    icon=ft.Icons.CREDIT_CARD,
+                                    on_click=lambda e: self.nuevo_plan(),
+                                ),
+                                ft.FilledButton(
+                                    "Agregar gasto",
+                                    icon=ft.Icons.ADD,
+                                    tooltip=f"Agregar gasto ({app.atajo('N')})",
+                                    on_click=lambda e: self.nuevo(),
+                                ),
+                            ],
+                            tight=True,
                         ),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -107,7 +118,7 @@ class PantallaGastos:
             filas, key=lambda f: (_ORDEN_TIPO[f["tipo"]], clave_orden(f["nombre"]))
         )
         totales = pagos.totales_del_mes(self.app.con, self.app.mes_id)
-        self.cuerpo.controls = [self._tabla(filas, totales)]
+        self.cuerpo.controls = [self._tabla(filas, totales), self._por_medio_de_pago()]
 
     def _tabla(self, filas, totales: dict[str, int]) -> ft.DataTable:
         negrita = ft.FontWeight.W_700
@@ -251,13 +262,64 @@ class PantallaGastos:
                     ft.Text(f["nombre"]), on_tap=lambda e, f=f: self.editar(f["id"])
                 ),
                 ft.DataCell(categoria),
-                ft.DataCell(ft.Text(_TIPO_CORTO[f["tipo"]])),
+                ft.DataCell(ft.Text(self._texto_tipo(f))),
                 ft.DataCell(medio),
                 ft.DataCell(_celda_monto(f)),
                 ft.DataCell(self._celda_pagado(f)),
                 ft.DataCell(self._celda_pendiente(pendiente)),
                 ft.DataCell(acciones),
             ]
+        )
+
+    def _texto_tipo(self, f) -> str:
+        """ "Fijo", "Único" o "Cuota 3/6" (une tipo y cuota actual, §3.3)."""
+        if f["plan_cuotas_id"] is None:
+            return _TIPO_CORTO[f["tipo"]]
+        plan = cuotas.obtener_plan(self.app.con, f["plan_cuotas_id"])
+        mes = meses.obtener_mes(self.app.con, self.app.mes_id)
+        n = cuotas.numero_de_cuota(plan, mes["anio"], mes["mes"])
+        return f"Cuota {n}/{plan['cantidad_cuotas']}"
+
+    def _por_medio_de_pago(self) -> ft.Card:
+        """RF-22: total por medio de pago. Reemplaza "Tarjetas de Crédito" de la planilla."""
+        filas = gastos.totales_por_medio(self.app.con, self.app.mes_id)
+        tabla = ft.DataTable(
+            heading_row_color=estilos.SUPERFICIE_VARIANTE,
+            columns=[
+                ft.DataColumn(ft.Text("Medio de pago")),
+                ft.DataColumn(ft.Text("Total"), numeric=True),
+            ],
+            rows=[
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(nombre)),
+                        ft.DataCell(ft.Text(formatear_ars(total))),
+                    ]
+                )
+                for nombre, total in filas
+            ],
+        )
+        return ft.Card(
+            content=ft.Container(
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "POR MEDIO DE PAGO",
+                            size=estilos.TAM_AYUDA,
+                            weight=ft.FontWeight.W_600,
+                            color=estilos.TEXTO_SECUNDARIO,
+                        ),
+                        texto_ayuda(
+                            "Incluye todos los gastos del mes (fijos, cuotas y únicos, "
+                            "en pesos y en dólares) agrupados por cómo se pagan. "
+                            "Los gastos en dólares se suman por sus pesos."
+                        ),
+                        tabla,
+                    ],
+                    spacing=8,
+                ),
+            )
         )
 
     # ------------------------------------------------------------------
@@ -282,6 +344,11 @@ class PantallaGastos:
 
     def editar(self, gasto_id: int) -> None:
         if self._gasto_que_ya_no_existe(gasto_id):
+            return
+        gasto = gastos.obtener_gasto(self.app.con, gasto_id)
+        if gasto["plan_cuotas_id"] is not None:
+            # Una cuota es parte de un plan: se edita desde el plan.
+            DialogoPlan(self.app, gasto["plan_cuotas_id"]).abrir()
             return
         DialogoGasto(
             self.app,
@@ -314,8 +381,27 @@ class PantallaGastos:
                 self.app.error_inesperado(error)
                 return
             self.app.refrescar()
-            self.app.avisar(f'Gasto "{gasto["nombre"]}" borrado')
+            if gasto["plan_cuotas_id"] is not None:
+                self.app.avisar(f'Cuota de "{gasto["nombre"]}" borrada')
+            else:
+                self.app.avisar(f'Gasto "{gasto["nombre"]}" borrado')
 
+        if gasto["plan_cuotas_id"] is not None:
+            # Confirmación especial para la cuota de un plan (§3.3, RN-52).
+            mes = meses.obtener_mes(self.app.con, gasto["mes_id"])
+            nombre = nombre_mes(mes["anio"], mes["mes"])
+            plan = cuotas.obtener_plan(self.app.con, gasto["plan_cuotas_id"])
+            n = cuotas.numero_de_cuota(plan, mes["anio"], mes["mes"])
+            self.app.confirmar(
+                f"¿Borrar la cuota {n}/{plan['cantidad_cuotas']} de {plan['nombre']} "
+                f"en {nombre}?",
+                f"Se borra solo la cuota de este mes. El plan sigue en los demás meses y "
+                f"esta cuota no se vuelve a generar en {nombre}. Si querés terminar la "
+                'deuda antes, usá "Cancelar plan" en la pantalla Cuotas.',
+                "Borrar cuota",
+                confirmado,
+            )
+            return
         self.app.confirmar(
             f"¿Borrar el gasto {gasto['nombre']}?",
             f"Se borran también sus pagos ({formatear_ars(pagado)} pagado). "
@@ -414,3 +500,8 @@ class PantallaGastos:
         DialogoVerPagos(
             self.app, gasto_id, al_registrar_otro=lambda: self.registrar_pago(gasto_id)
         ).abrir()
+
+    def nuevo_plan(self) -> None:
+        """Botón "Plan de cuotas": el mismo diálogo que en la pantalla Cuotas."""
+        if self.app.verificar_mes():
+            DialogoPlan(self.app).abrir()

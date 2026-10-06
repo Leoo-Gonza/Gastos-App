@@ -133,10 +133,31 @@ def tecla(key, ctrl=False, meta=False, shift=False, alt=False):
     return SimpleNamespace(key=key, ctrl=ctrl, meta=meta, shift=shift, alt=alt)
 
 
+def _titulos_de(tabla):
+    return [c.label.value for c in tabla.columns]
+
+
 def tabla_gastos(pantalla_gastos):
-    tablas = de_tipo(pantalla_gastos.cuerpo, ft.DataTable)
-    assert len(tablas) == 1, "No hay tabla de gastos"
+    """La tabla de gastos (la que empieza con la columna "Pag."), no la de
+    "Por medio de pago" que va debajo (paso 4b)."""
+    tablas = [
+        t
+        for t in de_tipo(pantalla_gastos.cuerpo, ft.DataTable)
+        if _titulos_de(t)[:1] == ["Pag."]
+    ]
+    assert len(tablas) == 1, "No hay (una sola) tabla de gastos"
     return tablas[0]
+
+
+def tabla_por_medio(pantalla_gastos):
+    """La tabla "Por medio de pago" de la pantalla Gastos como [(medio, total)]."""
+    tablas = [
+        t
+        for t in de_tipo(pantalla_gastos.cuerpo, ft.DataTable)
+        if _titulos_de(t) == ["Medio de pago", "Total"]
+    ]
+    assert len(tablas) == 1, "No hay tabla por medio de pago"
+    return [tuple(c.content.value for c in fila.cells) for fila in tablas[0].rows]
 
 
 def titulos(pantalla_gastos):

@@ -168,7 +168,14 @@ def sugerencias_mes_siguiente(con: sqlite3.Connection) -> dict:
         "cotizacion_cent": ultimo["cotizacion_cent"],
         "fijos": fijos["total"],
         "fijos_en_dolares": fijos["en_dolares"],
+        "cuotas": _cuotas_que_se_generarian(con, anio, mes),
     }
+
+
+def _cuotas_que_se_generarian(con: sqlite3.Connection, anio: int, mes: int) -> int:
+    from app.logica import cuotas  # Ver la nota en crear_mes sobre el import.
+
+    return cuotas.cuotas_que_se_generarian(con, anio, mes)
 
 
 def crear_mes(
@@ -249,6 +256,12 @@ def crear_mes(
                     cotizacion_gasto,
                 ),
             )
+        # RN-09: una cuota por cada plan activo en el mes nuevo, en la misma
+        # transacción. Se importa acá adentro porque cuotas.py usa este módulo
+        # (meses): importarlo arriba armaría un círculo de imports.
+        from app.logica import cuotas
+
+        cuotas.generar_cuotas_del_mes(con, nuevo_id)
     return nuevo_id
 
 

@@ -12,7 +12,16 @@ import flet as ft
 import pytest
 
 from app.interfaz.aplicacion import Aplicacion
-from app.logica import base_datos, cambios, catalogos, gastos, ingresos, meses, pagos
+from app.logica import (
+    base_datos,
+    cambios,
+    catalogos,
+    cuotas,
+    gastos,
+    ingresos,
+    meses,
+    pagos,
+)
 from tests.ayudantes import id_por_nombre
 from tests.ayudantes_interfaz import (
     PaginaFalsa,
@@ -1065,7 +1074,9 @@ def test_bug18_con_el_mes_existente_abre_lo_de_siempre(tres, entrada):
 
 def _app_con_de_todo(pantalla):
     """App nueva (base en memoria) con tres meses; en Noviembre hay gastos (uno
-    pagado, uno en dólares), un ingreso, un cambio, y sin meta. Muestra Noviembre."""
+    pagado, uno en dólares), un ingreso, un cambio, y sin meta; además, planes de
+    cuotas activo (con cuota en Noviembre), que no empezó y cancelado (paso 4b).
+    Muestra Noviembre."""
     con = base_datos.conectar(":memory:")
     _, oct_, nov = _crear_meses(con)
     otros = _otros(con)
@@ -1076,6 +1087,12 @@ def _app_con_de_todo(pantalla):
     )
     pagos.marcar_pagado(con, a, HOY)
     _con_ingreso_y_cambio(SimpleNamespace(con=con), nov)
+    cuotas.crear_plan(con, "Heladera", otros, None, 1000000, 6, 2026, 8, hoy=HOY)
+    cuotas.crear_plan(con, "Futuro", otros, None, 1000000, 3, 2027, 3, hoy=HOY)
+    cancelado = cuotas.crear_plan(
+        con, "Moto", otros, None, 500000, 12, 2026, 8, hoy=HOY
+    )
+    cuotas.cancelar_plan(con, cancelado, hoy=HOY)
     app, pagina = _app(con)
     app.seleccionar_mes(nov, pantalla=pantalla)
     return con, app, pagina, nov, oct_
@@ -1111,10 +1128,9 @@ def _disparar(control, evento):
     handler(SimpleNamespace(control=control, data=None))
 
 
-MINIMO_DE_ACCIONES = {"Resumen": 15, "Gastos": 26, "Ajustes": 10}
+MINIMO_DE_ACCIONES = {"Resumen": 15, "Gastos": 33, "Cuotas": 16, "Ajustes": 10}
 
 
-@pytest.mark.parametrize("pantalla", ["Resumen", "Gastos", "Ajustes"])
 def _fallas_del_inventario(pantalla):
     """Para cada acción visible: app nueva, mes borrado por detrás, disparar la acción.
     Devuelve la lista de fallas (vacía si todo anduvo) y cuántas acciones probó."""
@@ -1144,7 +1160,7 @@ def _fallas_del_inventario(pantalla):
     return fallas, cantidad
 
 
-@pytest.mark.parametrize("pantalla", ["Resumen", "Gastos", "Ajustes"])
+@pytest.mark.parametrize("pantalla", ["Resumen", "Gastos", "Cuotas", "Ajustes"])
 def test_inventario_ninguna_accion_rompe_con_el_mes_borrado(pantalla):
     fallas, cantidad = _fallas_del_inventario(pantalla)
     # Si alguien saca acciones de la pantalla, el inventario lo nota (y se revisa).

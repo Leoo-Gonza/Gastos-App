@@ -563,3 +563,81 @@ Ninguno.
 - O35 (menor): "Mes nuevo" no llama a `verificar_mes`; no se rompe (crea el siguiente al último que existe), pero la pantalla de atrás sigue mostrando el mes borrado mientras el diálogo está abierto. Se deja como está.
 
 **Estado de la parte 4a: pruebas automáticas completas. Falta la prueba manual del usuario.**
+
+---
+
+## Ronda 19 – Paso 4b (lógica de cuotas)
+
+- Fecha: 2026-10-05 · Probado por: Lucía (QA)
+- Alcance: `cuotas.py` (funciones puras, consultas, alta, edición, cancelación, sincronización y generación al crear un mes), `meses.crear_mes` con cuotas y la clave "cuotas" de las sugerencias, `gastos.borrar_gasto` (cuota omitida) y `gastos.totales_por_medio`. RF-16 a RF-22, RN-24 a RN-31, RN-52. CA-16.x a CA-22.x, CA-08.2, CA-08.3, CA-03.1 (cuota), CA-03.4, CA-03.6 (cuota con medio archivado) y CA-37.x con planes reales.
+
+### Resultado
+| Grupo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_cuotas.py (nuevo) | 111 | 109 | 2 |
+| test_historial.py (sugerencias actualizadas) | 70 | 70 | 0 |
+| Resto de la lógica | 667 | 667 | 0 |
+| **Lógica, total** | **848** | **846** | **2** |
+
+Cobertura: cuotas.py, gastos.py y meses.py al 100 %. Ruff sin errores. (79 pruebas de interfaz viejas fallan porque ya entró la interfaz de la 4b: se actualizan en la ronda de interfaz.)
+
+### Bugs
+- **BUG-19** – Cancelar un plan ya terminado (o que todavía no empezó) le cambia la "última cuota" a un mes sin cuota (ej. plan de ene–mar cancelado en octubre → última 2026-09). Hipótesis: `cancelar_plan` no mira el estado y `ultima_cuota` de un cancelado no se limita a la última real.
+- **BUG-20** – `listar_planes` no ignora los acentos al ordenar (usa `ORDER BY … COLLATE NOCASE`).
+
+### Observaciones
+- O36: ver arriba (pruebas de interfaz a actualizar).
+
+---
+
+## Ronda 20 – Paso 4b (interfaz de cuotas)
+
+- Fecha: 2026-10-05 · Probado por: Lucía (QA)
+- Alcance: arreglos de BUG-19 y BUG-20; pantalla Cuotas, DialogoPlan, cuotas en Gastos ("Cuota n/N", editar, borrar), tarjeta "Por medio de pago", cuotas en "Mes nuevo"; menú con 4 destinos; Cuotas en el inventario de acciones. (La ronda se cortó una vez por el límite de uso y se retomó.)
+
+### Resultado
+| Archivo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_interfaz_cuotas.py (nuevo) | 52 | 51 | 1 |
+| test_cuotas.py (+8) | 119 | 119 | 0 |
+| test_interfaz_historial.py (+1) | 109 | 108 | 1 |
+| **Total** | **1.409** | **1.407** | **2** |
+
+Cobertura 98 %; app/logica/ 100 %. Ruff sin errores. Las 79 pruebas viejas de O36 pasan (la tabla de gastos se busca por su primera columna; navegación con 4 destinos).
+
+| Ítem | Estado |
+|---|---|
+| BUG-19 (lógica y pantalla) | Corregido |
+| BUG-20 | Corregido |
+
+### Bugs nuevos
+- **BUG-21** – El texto de ayuda de "Por medio de pago" es la versión anterior a los gastos en dólares (§3.3).
+- **BUG-22** – En Cuotas, cambiar el filtro con el mes visto borrado por detrás da `TypeError`. Lo encontró el inventario de acciones. Hipótesis: `_cambiar_filtro` llama al `refrescar` de la pantalla sin `verificar_mes`.
+
+### Observaciones
+- O37: "Nuevo plan" en Cuotas no llama a `verificar_mes` (el botón de Gastos sí). No rompe.
+- O38: el aviso al editar un plan difiere del ejemplo del diseño ("ej."): no es bug.
+
+---
+
+## Ronda 21
+
+- Fecha: 2026-10-06 · Probado por: Lucía (QA)
+- Motivo: verificar BUG-21 (texto de "Por medio de pago"), BUG-22 (filtro de Cuotas con el mes borrado) y O37 ("Nuevo plan" verifica el mes). O38 queda como está.
+
+### Resultado
+1.420 pruebas, pasan las 1.420 (11 nuevas). Cobertura 98 %. Ruff sin errores. El inventario de acciones pasa en las 4 pantallas: Resumen (15), Gastos (33), Cuotas (16) y Ajustes (10).
+
+| Ítem | Estado |
+|---|---|
+| BUG-21 | Corregido |
+| BUG-22 | Corregido (el filtro elegido se respeta al pasar al último mes) |
+| O37 | Corregido |
+
+### Bugs nuevos
+Ninguno.
+
+### Observaciones
+- O39 (informativa): el filtro de Cuotas se mantiene al cambiar de mes y de pantalla; vuelve a "Activos" solo si la pantalla se arma de nuevo (primer uso). Comportamiento esperado.
+
+**Estado del paso 4: pruebas automáticas completas.** La prueba manual del usuario queda pendiente porque Windows bloquea la ventana de Flet en este equipo (Control de aplicaciones).

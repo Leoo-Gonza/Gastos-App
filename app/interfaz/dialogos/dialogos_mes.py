@@ -49,6 +49,12 @@ class DialogoMesNuevo:
         ]
         if s["fijos_en_dolares"]:
             copia.append(self.aviso_dolares)
+        if s["cuotas"]:
+            copia.append(
+                ft.Text(
+                    f"• {_plural(s['cuotas'], 'cuota', 'cuotas')} de planes activos"
+                )
+            )
         copia.append(
             texto_ayuda("No se copian pagos únicos, ingresos extra ni cambios.")
         )
@@ -122,9 +128,10 @@ class DialogoMesNuevo:
             return
         self.app.cerrar_dialogo(self.dialogo)
         self.app.seleccionar_mes(mes_id, pantalla="Resumen")
-        self.app.avisar(
-            f"{self.nombre} creado: {_plural(s['fijos'], 'gasto fijo', 'gastos fijos')}."
-        )
+        creado = _plural(s["fijos"], "gasto fijo", "gastos fijos")
+        if s["cuotas"]:
+            creado += f" y {_plural(s['cuotas'], 'cuota', 'cuotas')}"
+        self.app.avisar(f"{self.nombre} creado: {creado}.")
 
     def _enfocar_error(self) -> None:
         self.app.page.update()

@@ -174,7 +174,7 @@ def test_orden_fijos_cuotas_unicos_y_por_nombre(app, pantalla, con, mes_id):
     assert [f["Tipo"] for f in filas_tabla(pantalla)[:-1]] == [
         "Fijo",
         "Fijo",
-        "Cuota",
+        "Cuota 3/6",
         "Único",
         "Único",
     ]

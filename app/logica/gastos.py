@@ -9,7 +9,12 @@ import sqlite3
 
 from app.logica import catalogos
 from app.logica.errores import ErrorDeValidacion
-from app.logica.formato import convertir_usd_a_ars, formatear_ars, validar_centavos
+from app.logica.formato import (
+    clave_orden,
+    convertir_usd_a_ars,
+    formatear_ars,
+    validar_centavos,
+)
 
 # Nombres para mostrar de cada tipo. Los gastos tipo "cuota" se crean desde un
 # plan de cuotas (paso 4), no con agregar_gasto.
@@ -36,7 +41,7 @@ def _validar_tipo(tipo: str) -> None:
         )
 
 
-def _validar_categoria(
+def validar_categoria(
     con: sqlite3.Connection, categoria_id: int | None, id_actual: int | None = None
 ) -> None:
     if categoria_id is None:
@@ -50,7 +55,7 @@ def _validar_categoria(
         raise ErrorDeValidacion("La categoría elegida está archivada.", "categoria")
 
 
-def _validar_medio_pago(
+def validar_medio_pago(
     con: sqlite3.Connection, medio_pago_id: int | None, id_actual: int | None = None
 ) -> None:
     if medio_pago_id is None:
@@ -126,12 +131,12 @@ def agregar_gasto(
     """
     _validar_mes(con, mes_id)
     nombre = _validar_nombre(nombre)
-    _validar_categoria(con, categoria_id)
+    validar_categoria(con, categoria_id)
     monto_cent, monto_usd_cent, cotizacion_cent = _resolver_monto(
         moneda, monto_cent, monto_usd_cent, cotizacion_cent
     )
     _validar_tipo(tipo)
-    _validar_medio_pago(con, medio_pago_id)
+    validar_medio_pago(con, medio_pago_id)
 
     with con:
         cursor = con.execute(
@@ -177,12 +182,12 @@ def editar_gasto(
         raise ErrorDeValidacion("Las cuotas se editan desde su plan de cuotas.")
 
     nombre = _validar_nombre(nombre)
-    _validar_categoria(con, categoria_id, id_actual=actual["categoria_id"])
+    validar_categoria(con, categoria_id, id_actual=actual["categoria_id"])
     monto_cent, monto_usd_cent, cotizacion_cent = _resolver_monto(
         moneda, monto_cent, monto_usd_cent, cotizacion_cent
     )
     _validar_tipo(tipo)
-    _validar_medio_pago(con, medio_pago_id, id_actual=actual["medio_pago_id"])
+    validar_medio_pago(con, medio_pago_id, id_actual=actual["medio_pago_id"])
 
     # RN-23: el monto en pesos no puede quedar por debajo de lo que ya se pagó.
     # En dólares se controla sobre el resultado de la conversión (RN-55).
@@ -224,8 +229,22 @@ def borrar_gasto(con: sqlite3.Connection, gasto_id: int) -> None:
     gracias a ON DELETE CASCADE en la base de datos.
 
     La confirmación ("¿Seguro?") la pide la pantalla antes de llamar a esta función.
+    Si es la cuota de un plan, ese mes queda como "cuota omitida" para que la
+    cuota no se vuelva a generar ahí; el plan sigue en los demás meses (RN-52).
     """
+    gasto = con.execute(
+        """SELECT g.plan_cuotas_id, m.anio, m.mes
+             FROM gastos g JOIN meses m ON m.id = g.mes_id WHERE g.id = ?""",
+        (gasto_id,),
+    ).fetchone()
     with con:
+        if gasto is not None and gasto["plan_cuotas_id"] is not None:
+            # INSERT OR IGNORE: si ya estaba omitida, no pasa nada.
+            con.execute(
+                "INSERT OR IGNORE INTO cuotas_omitidas (plan_cuotas_id, anio, mes) "
+                "VALUES (?, ?, ?)",
+                (gasto["plan_cuotas_id"], gasto["anio"], gasto["mes"]),
+            )
         con.execute("DELETE FROM gastos WHERE id = ?", (gasto_id,))
 
 
@@ -237,7 +256,7 @@ def listar_gastos(con: sqlite3.Connection, mes_id: int) -> list[sqlite3.Row]:
     """
     return con.execute(
         """SELECT g.id, g.nombre, g.monto_cent, g.tipo,
-                  g.moneda, g.monto_usd_cent, g.cotizacion_cent,
+                  g.moneda, g.monto_usd_cent, g.cotizacion_cent, g.plan_cuotas_id,
                   g.categoria_id, c.nombre AS categoria, c.archivado AS categoria_archivada,
                   g.medio_pago_id, m.nombre AS medio_pago, m.archivado AS medio_pago_archivado,
                   (SELECT COALESCE(SUM(p.monto_cent), 0)
@@ -258,3 +277,25 @@ def total_gastos(con: sqlite3.Connection, mes_id: int) -> int:
         (mes_id,),
     ).fetchone()
     return fila["total"]
+
+
+def totales_por_medio(con: sqlite3.Connection, mes_id: int) -> list[tuple[str, int]]:
+    """RF-22: total del mes por medio de pago, en centavos: [(nombre, total), …].
+
+    Incluye todos los tipos de gasto (fijos, cuotas, únicos; en pesos y en dólares
+    por su monto en pesos). Reemplaza la línea "Tarjetas de Crédito" de la
+    planilla. Ordenado por nombre, con "Sin medio de pago" siempre al final.
+    """
+    filas = con.execute(
+        """SELECT m.nombre AS medio, SUM(g.monto_cent) AS total
+             FROM gastos g LEFT JOIN medios_pago m ON m.id = g.medio_pago_id
+            WHERE g.mes_id = ?
+            GROUP BY g.medio_pago_id""",
+        (mes_id,),
+    ).fetchall()
+    con_medio = sorted(
+        ((f["medio"], f["total"]) for f in filas if f["medio"] is not None),
+        key=lambda par: clave_orden(par[0]),
+    )
+    sin_medio = [("Sin medio de pago", f["total"]) for f in filas if f["medio"] is None]
+    return con_medio + sin_medio
