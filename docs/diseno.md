@@ -855,7 +855,7 @@ cuotas, y cuándo se libera plata por cuotas que terminan.
 | Octubre 2026 (mes actual). Solo gastos fijos y cuotas; sin inflación ni ingresos extra.    |
 |                                                                                            |
 | +----------------------------------------------------------------------------------------+ |
-| | Mes       | Gastos estimados | USD a cambiar | Ahorro estimado | Se libera              | |
+| | Mes       | Gastos estimados | Dólares a cambiar | Ahorro estimado | Se libera          | |
 | | nov 2026  |        $ 810.000 |    US$ 506,25 |      US$ 693,75 | Avant +$ 41.117        | |
 | | dic 2026  |        $ 810.000 |    US$ 506,25 |      US$ 693,75 |                        | |
 | | ...       |                  |               |                 |                        | |

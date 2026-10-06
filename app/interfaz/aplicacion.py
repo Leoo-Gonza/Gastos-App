@@ -16,10 +16,12 @@ from app.interfaz.dialogos import dialogos_mes, dialogos_valores
 from app.interfaz.pantalla_ajustes import PantallaAjustes
 from app.interfaz.pantalla_cuotas import PantallaCuotas
 from app.interfaz.pantalla_gastos import PantallaGastos
+from app.interfaz.pantalla_graficos import PantallaGraficos
 from app.interfaz.pantalla_me_deben import PantallaMeDeben
+from app.interfaz.pantalla_prevision import PantallaPrevision
 from app.interfaz.pantalla_primer_uso import PantallaPrimerUso
 from app.interfaz.pantalla_resumen import PantallaResumen
-from app.logica import base_datos, meses
+from app.logica import base_datos, configuracion, meses
 from app.logica.formato import formatear_cotizacion, nombre_mes
 
 # Destinos del menú lateral (§1.1 del diseño). El número de cada uno (1, 2, …)
@@ -29,6 +31,8 @@ _DESTINOS = [
     ("Gastos", ft.Icons.RECEIPT_LONG_OUTLINED, ft.Icons.RECEIPT_LONG),
     ("Cuotas", ft.Icons.CREDIT_CARD_OUTLINED, ft.Icons.CREDIT_CARD),
     ("Me deben", ft.Icons.PEOPLE_OUTLINE, ft.Icons.PEOPLE),
+    ("Previsión", ft.Icons.TRENDING_UP, ft.Icons.TRENDING_UP),
+    ("Gráficos", ft.Icons.BAR_CHART_OUTLINED, ft.Icons.BAR_CHART),
     ("Ajustes", ft.Icons.SETTINGS_OUTLINED, ft.Icons.SETTINGS),
 ]
 
@@ -49,7 +53,8 @@ class Aplicacion:
         page.window.min_width = 1100
         page.window.min_height = 700
         page.padding = 0
-        estilos.aplicar_tema(page)
+        # El tema elegido en Ajustes → Apariencia (por defecto, como el sistema).
+        estilos.aplicar_tema(page, configuracion.obtener_tema(con))
         page.on_keyboard_event = self._al_presionar_tecla
 
     # ------------------------------------------------------------------
@@ -78,6 +83,8 @@ class Aplicacion:
             PantallaGastos(self),
             PantallaCuotas(self),
             PantallaMeDeben(self),
+            PantallaPrevision(self),
+            PantallaGraficos(self),
             PantallaAjustes(self),
         ]
 

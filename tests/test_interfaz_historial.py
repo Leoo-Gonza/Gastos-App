@@ -1140,7 +1140,9 @@ MINIMO_DE_ACCIONES = {
     "Gastos": 39,
     "Cuotas": 16,
     "Me deben": 13,
-    "Ajustes": 38,
+    "Previsión": 8,
+    "Gráficos": 7,
+    "Ajustes": 39,
 }
 
 
@@ -1175,7 +1177,8 @@ def _fallas_del_inventario(pantalla):
 
 
 @pytest.mark.parametrize(
-    "pantalla", ["Resumen", "Gastos", "Cuotas", "Me deben", "Ajustes"]
+    "pantalla",
+    ["Resumen", "Gastos", "Cuotas", "Me deben", "Previsión", "Gráficos", "Ajustes"],
 )
 def test_inventario_ninguna_accion_rompe_con_el_mes_borrado(pantalla):
     fallas, cantidad = _fallas_del_inventario(pantalla)

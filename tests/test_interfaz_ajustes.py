@@ -66,6 +66,7 @@ def test_pestanas_y_titulo(ajustes):
         "Medios de pago",
         "Personas",
         "Meta de ahorro",
+        "Apariencia",
     ]
 
 

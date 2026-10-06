@@ -198,7 +198,7 @@ número CA-xx.y, donde xx es el número del RF.
   estimados, USD a cambiar y ahorro estimado. Solo considera sueldo, gastos fijos mensuales
   (los en dólares, convertidos con la cotización actual) y cuotas (RN-41 a RN-43, RN-45).
 - **RF-39** En cada mes de la previsión se indica qué cuotas se liberan ese mes y cuánto
-  (ej. "desde abril: Avant +41.117 libres") (RN-44).
+  (ej. en la fila de abril: "Avant +$ 41.117") (RN-44).
 
 ### Módulo I – Gráficos
 
@@ -1001,7 +1001,7 @@ Avant 41.117 con última cuota 2026-10, plan B de 10.000 con última cuota 2027-
 - **CA-38.6** Si la cuota de 2026-12 del plan B fue borrada a mano (cuota omitida), la fila
   2026-12 muestra 800.000 y las demás no cambian.
 - **CA-38.7** Sin cotización en el mes actual: se ven los gastos ARS y el aviso de que falta
-  la cotización. Si 2026-10 no existe (último mes 2026-09): se ve "Creá el mes 2026-10 para
+  la cotización. Si 2026-10 no existe (último mes 2026-09): se ve "Creá el mes Octubre 2026 para
   ver la previsión".
 - **CA-38.8** A la base se agrega en 2026-10 el fijo "Claude" US$ 20,00 guardado con
   cotización 1.600 (32.000) y después se cambia la cotización de 2026-10 a 1.700 (Claude sigue
@@ -1014,8 +1014,8 @@ Avant 41.117 con última cuota 2026-10, plan B de 10.000 con última cuota 2027-
   la previsión muestra gastos 842.000 en 2026-11 (Claude a 1.600, la cotización del gasto) y
   el aviso de que falta la cotización.
 - **CA-38.11** Un pago único en USD de 2026-10 no aparece en la previsión.
-- **CA-39.1** La fila 2026-11 indica "Avant +41.117 libres" y la fila 2027-03 "Plan B +10.000
-  libres". Ninguna otra fila indica liberaciones.
+- **CA-39.1** La fila 2026-11 indica "Avant +$ 41.117" y la fila 2027-03 "Plan B +$ 10.000".
+  Ninguna otra fila indica liberaciones.
 - **CA-39.2** Un plan con última cuota 2027-10 no muestra liberación en la tabla.
 
 ### Módulo I – Gráficos

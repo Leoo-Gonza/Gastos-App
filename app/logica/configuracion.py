@@ -37,3 +37,28 @@ def quitar_meta(con: sqlite3.Connection) -> None:
     """Sin meta, el resumen no muestra la barra de avance (RN-39)."""
     with con:
         con.execute("DELETE FROM configuracion WHERE clave = ?", (_META,))
+
+
+# Apariencia (diseño §3.10): "claro", "oscuro" o "sistema" (como Windows/macOS).
+TEMAS = ("claro", "oscuro", "sistema")
+_TEMA = "tema"
+
+
+def obtener_tema(con: sqlite3.Connection) -> str:
+    """El tema elegido; "sistema" si nunca se eligió uno."""
+    fila = con.execute(
+        "SELECT valor FROM configuracion WHERE clave = ?", (_TEMA,)
+    ).fetchone()
+    return fila["valor"] if fila and fila["valor"] in TEMAS else "sistema"
+
+
+def guardar_tema(con: sqlite3.Connection, tema: str) -> None:
+    if tema not in TEMAS:
+        raise ErrorDeValidacion(
+            "El tema tiene que ser claro, oscuro o sistema.", "tema"
+        )
+    with con:
+        con.execute(
+            "INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?)",
+            (_TEMA, tema),
+        )

@@ -316,6 +316,55 @@ class PestanaMeta:
         self.app.avisar("Meta de ahorro quitada")
 
 
+class PestanaApariencia:
+    """Pestaña "Apariencia" (§3.10): tema claro, oscuro o como el sistema."""
+
+    def __init__(self, app) -> None:
+        self.app = app
+        self.opciones = ft.RadioGroup(
+            content=ft.Column(
+                [
+                    ft.Radio(value="claro", label="Claro"),
+                    ft.Radio(value="oscuro", label="Oscuro"),
+                    ft.Radio(value="sistema", label="Como el sistema"),
+                ]
+            ),
+            on_change=lambda e: self.elegir(e.control.value),
+        )
+        self.control = ft.Column(
+            [
+                self.opciones,
+                texto_ayuda(
+                    f"Atajos: {app.atajo('N')} nuevo, {app.atajo('K')} cotización, "
+                    f"{app.atajo('N', shift=True)} mes nuevo, Alt+← / Alt+→ cambiar de mes."
+                ),
+            ],
+            spacing=16,
+        )
+
+    def refrescar(self) -> None:
+        self.opciones.value = configuracion.obtener_tema(self.app.con)
+        self.app.page.update()
+
+    def nuevo(self) -> None:
+        """Ctrl+N no tiene acción en esta pestaña."""
+
+    def elegir(self, tema: str) -> None:
+        configuracion.guardar_tema(self.app.con, tema)
+        estilos.aplicar_tema(self.app.page, tema)
+        # Algunos colores se eligen al dibujar: se vuelve a armar la ventana con
+        # el tema nuevo, sin perder el mes ni la pantalla.
+        self.app.mostrar_principal(self.app.mes_id)
+        # BUG-23: la pantalla de Ajustes se armó de nuevo y arrancaría en la
+        # primera pestaña: se vuelve a Apariencia para ver lo que se eligió.
+        if self.app.mes_id is not None:
+            ajustes = self.app.pantalla("Ajustes")
+            ajustes.pestanas.selected_index = ajustes.indice_de(ajustes.apariencia)
+            ajustes.refrescar()
+            self.app.page.update()
+        self.app.avisar("Tema actualizado")
+
+
 class PantallaAjustes:
     def __init__(self, app) -> None:
         self.app = app
@@ -325,8 +374,9 @@ class PantallaAjustes:
             ListaCatalogo(app, catalogos.PERSONAS),
         ]
         self.meta = PestanaMeta(app)
+        self.apariencia = PestanaApariencia(app)
         # Todas las pestañas, en el orden en que se ven.
-        self._pestanas = [*self.listas, self.meta]
+        self._pestanas = [*self.listas, self.meta, self.apariencia]
         # En Flet 1.0 las pestañas son tres piezas: Tabs (el conjunto),
         # TabBar (los títulos) y TabBarView (el contenido de cada una).
         self.pestanas = ft.Tabs(
@@ -342,6 +392,7 @@ class PantallaAjustes:
                             ft.Tab(label="Medios de pago"),
                             ft.Tab(label="Personas"),
                             ft.Tab(label="Meta de ahorro"),
+                            ft.Tab(label="Apariencia"),
                         ]
                     ),
                     ft.TabBarView(
@@ -354,6 +405,10 @@ class PantallaAjustes:
         self.control = ft.Column(
             [titulo("Ajustes"), self.pestanas], spacing=16, expand=True
         )
+
+    def indice_de(self, pestana) -> int:
+        """Posición de una pestaña (para elegirla sin escribir el número a mano)."""
+        return self._pestanas.index(pestana)
 
     def _lista_visible(self):
         return self._pestanas[self.pestanas.selected_index or 0]

@@ -686,3 +686,52 @@ Ninguno.
 - O43 (informativa): "Archivada" en la tarjeta es un texto chico, no un chip.
 
 **Estado del paso 5: pruebas automáticas completas.** La prueba manual queda pendiente (ventana bloqueada por Windows).
+
+---
+
+## Ronda 24 – Pasos 6 y 7 (previsión y gráficos)
+
+- Fecha: 2026-10-06 · Probado por: Lucía (QA)
+- Alcance: lógica (`prevision.py`, `graficos.py`, tema en `configuracion.py`) e interfaz (pantallas Previsión y Gráficos, pestaña Apariencia, menú con 7 destinos). RF-38 a RF-42, RN-41 a RN-48. CA-38.1 a 38.11, CA-39.1, 39.2, CA-40.1, CA-41.1 a 41.3, CA-42.1. (La ronda se cortó una vez por el límite de uso y se retomó ampliada.)
+
+### Resultado
+| Archivo | Pruebas | Pasan | Fallan |
+|---|---|---|---|
+| test_prevision.py (nuevo) | 37 | 37 | 0 |
+| test_tema.py (nuevo) | 18 | 18 | 0 |
+| test_interfaz_prevision_graficos.py (nuevo) | 63 | 62 | 1 |
+| **Total de la suite** | **1.684** | **1.683** | **1** |
+
+Cobertura 97 %; prevision.py, graficos.py, configuracion.py, pantalla_prevision.py, pantalla_graficos.py, estilos.py y aplicacion.py al 100 %. Ruff sin errores. El inventario de acciones incluye Previsión (8) y Gráficos (7).
+
+### Bugs nuevos
+- **BUG-23** – Al elegir un tema, la app vuelve a la pestaña "Categorías" de Ajustes en vez de quedarse en "Apariencia". Hipótesis: `mostrar_principal` crea una `PantallaAjustes` nueva que arranca en la primera pestaña.
+
+### Observaciones
+- O44: el encabezado "Dólares a cambiar" difiere del boceto de §3.7 ("USD a cambiar").
+- O45: textos de requisitos (CA-39.1 "+41.117 libres", CA-38.7 "Creá el mes 2026-10") difieren del diseño y la pantalla ("Avant +$ 41.117", "Octubre 2026").
+- O46: "Cargar cotización" y "Mes nuevo" de Previsión no entran en el inventario (están cubiertos por pruebas propias).
+- O47: en casos límite, una barra negativa podría salirse 1 px de su zona por redondeos separados.
+
+---
+
+## Ronda 25 – Verificación final de los pasos 6 y 7
+
+- Fecha: 2026-10-06 · Probado por: Lucía (QA)
+- Motivo: verificar BUG-23 (al elegir un tema se perdía la pestaña Apariencia) y O47 (barras que podían salirse de su zona). O44 y O45 resueltos en los documentos; O46 queda como está.
+
+### Resultado
+1.704 pruebas, pasan las 1.704 (20 nuevas). Cobertura 97 %. Ruff sin errores.
+
+| Ítem | Estado |
+|---|---|
+| BUG-23 | Corregido (la opción queda marcada, en la pestaña Apariencia; también con el mes borrado por detrás) |
+| O47 | Corregido (11 combinaciones fijas y un barrido de 169 pares: ninguna barra supera su zona) |
+
+### Bugs nuevos
+Ninguno.
+
+### Observaciones
+- O48: un valor muy chico frente a otro muy grande (ej. déficit de US$ 0,01 frente a un ahorro de US$ 1.200) queda con barra de 0 px; el dato sigue en el tooltip y en "Ver como tabla". Se deja como está.
+
+**Estado de los pasos 6 y 7: pruebas automáticas completas. La app queda completa según los requisitos de la v1.** La prueba manual queda pendiente (ventana bloqueada por Windows).

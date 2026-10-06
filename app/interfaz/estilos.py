@@ -46,11 +46,19 @@ _SEMANTICOS = {
 }
 
 
-def aplicar_tema(page: ft.Page) -> None:
+# Cómo se guarda cada tema en configuracion y qué modo de Flet le corresponde.
+_MODOS = {
+    "claro": ft.ThemeMode.LIGHT,
+    "oscuro": ft.ThemeMode.DARK,
+    "sistema": ft.ThemeMode.SYSTEM,  # Claro u oscuro según Windows/macOS.
+}
+
+
+def aplicar_tema(page: ft.Page, tema: str = "sistema") -> None:
+    """tema: "claro", "oscuro" o "sistema" (pestaña Apariencia de Ajustes)."""
     page.theme = ft.Theme(color_scheme_seed=PRIMARIO)
     page.dark_theme = ft.Theme(color_scheme_seed=PRIMARIO)
-    # "Como el sistema": claro u oscuro según la configuración de Windows/macOS.
-    page.theme_mode = ft.ThemeMode.SYSTEM
+    page.theme_mode = _MODOS.get(tema, ft.ThemeMode.SYSTEM)
 
 
 def color(page: ft.Page, rol: str) -> str:
