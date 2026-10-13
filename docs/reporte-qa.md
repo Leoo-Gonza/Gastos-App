@@ -735,3 +735,84 @@ Ninguno.
 - O48: un valor muy chico frente a otro muy grande (ej. déficit de US$ 0,01 frente a un ahorro de US$ 1.200) queda con barra de 0 px; el dato sigue en el tooltip y en "Ver como tabla". Se deja como está.
 
 **Estado de los pasos 6 y 7: pruebas automáticas completas. La app queda completa según los requisitos de la v1.** La prueba manual queda pendiente (ventana bloqueada por Windows).
+
+## Ronda 26 – Abrir con doble clic (Gastos.exe + modo Edge)
+
+### Qué se probó
+56 pruebas nuevas, sin abrir Edge ni el .exe reales (todo simulado con monkeypatch).
+
+- **tests/test_modo_edge.py (39):** comando_edge, puerto_libre, esperar_servidor (escuchando, sin nadie, servidor que arranca tarde), carpeta_perfil (con, sin y con LOCALAPPDATA vacía), buscar_edge, puerto_en_uso (archivo inexistente, carpeta, texto inválido, "0", puerto muerto, puerto vivo con espacios), ejecutar (sin Edge, app ya abierta, caso normal, puerto.txt viejo), el hilo que abre Edge (cierre normal, servidor que no arranca, puerto.txt ya borrado) y main.py con y sin --edge.
+- **tests/test_lanzador.py (17):** buscar_proyecto (carpeta del exe, ruta guardada con espacios y ñ, carpeta sin main.py), carpeta_del_exe, avisos sin proyecto y sin pythonw.exe, comando de lanzamiento (cwd, PYTHONUTF8, DETACHED_PROCESS, log), construir_exe (la línea RUTA_PROYECTO coincide con la que se reemplaza; la copia en build/ tiene la ruta real; opciones de PyInstaller; --escritorio; si PyInstaller falla no copia nada), .gitignore, requirements.txt y el .command de macOS.
+
+### Resultado
+1.760 pruebas: pasan 1.756, fallan 4 (BUG-24). Cobertura de app/: 97 % (modo_edge.py: 100 %). La app sin --edge sigue igual.
+
+### Bugs nuevos
+- **BUG-24:** si `%LOCALAPPDATA%\gastos-app\puerto.txt` tiene un número fuera de rango (70000, -1, 99999999999), `esperar_servidor` lanza `OverflowError: connect_ex(): port must be 0-65535` y la app no abre (el error solo queda en `%TEMP%\gastos-app.log`) hasta borrar el archivo a mano. Esperado: tratarlo como "no hay app abierta". Gravedad baja. Pruebas: `test_puerto_en_uso_numero_fuera_de_rango` (3 casos) y `test_bug24_ejecutar_con_puerto_txt_fuera_de_rango`.
+
+### Revisión de docs/como-abrir.md
+- D1: busca primero la carpeta del exe y después la ruta guardada al armarlo (no siempre `C:\Proyectos\gastos-app`).
+- D2: "Desde una terminal" usa rutas de Windows; en macOS es `.venv/bin/python`, y `--edge` ahí abre el navegador predeterminado, no Edge.
+- D3: sin Edge, cerrar la pestaña no cierra la app (queda corriendo escondida con pythonw).
+
+### Observaciones
+- O49: `esperar_servidor` con puerto cerrado tarda ~2 s por intento en Windows (el socket no tiene timeout): pasa el límite y demora la apertura con un puerto.txt viejo.
+- O50: el lanzador abre el log con "w": un segundo doble clic borra el detalle del primer arranque.
+- O51: cada ventana de Edge es una sesión de Flet con su conexión; dos ventanas no se refrescan entre sí (las protecciones BUG-16/18 cubren el caso de datos cambiados por detrás).
+- O52: carreras con puerto.txt (dos dobles clics casi simultáneos; otro programa en el puerto de un puerto.txt viejo). Casos raros.
+- O53: si existen las variables FLET_SERVER_IP o FLET_SERVER_PORT, Flet las usa por encima de host/port.
+
+---
+
+## Ronda 27 – Verificación de las correcciones de la ronda 26 (Abrir con doble clic)
+
+- Fecha: 2026-10-12 · Probado por: Lucía (QA)
+- Motivo: verificar BUG-24 (puerto.txt con un número fuera de rango), O49 (límite de tiempo por intento en `esperar_servidor`), O50 (el log se agrega en vez de pisarse) y D1, D2, D3 en docs/como-abrir.md. También se verificó O53 (variables FLET_SERVER_IP / FLET_SERVER_PORT), que se corrigió en el mismo cambio.
+
+### Qué se probó
+20 pruebas nuevas, todo simulado con monkeypatch (sin abrir Edge ni el .exe).
+
+- **tests/test_modo_edge.py (+17):** bordes del rango de puertos (1, 65535, 65536, 0, "-0", "+5000", "1_000", " 65535\n"): solo se intenta conectar entre 1 y 65535; 65535 vivo se devuelve; 1, 65535 y 65536 con sockets reales sin error. O49: `settimeout(0.3)` va antes de cada `connect_ex`, en cada socket nuevo; con un puerto cerrado y 1 s de límite termina en ~1,0 s (medido: 0,49 s con límite 0,3; 1,0 s con 1; 2,04 s con 2); un puerto.txt viejo demora como mucho ~1 s; con límite 0 no crea sockets. O53: las dos variables se quitan antes de `ft.run`.
+- **tests/test_lanzador.py (+3):** O50: el log se abre con "a" y en UTF-8; lo que había (con tildes) se conserva; dos dobles clics dejan las dos líneas en orden; sin log previo lo crea vacío.
+- Sockets simulados: en toda la suite hay uno solo (`test_esperar_servidor_que_arranca_tarde`), ya actualizado. Las demás pruebas usan sockets reales y no necesitan cambios.
+
+### Resultado
+1.780 pruebas, pasan las 1.780 (20 nuevas). Cobertura de app/ 97 % (modo_edge.py: 100 %). Ruff no se pudo correr: Windows (Control de aplicaciones) bloquea ruff.exe (WinError 4551). Es una limitación del equipo, no un bug; las líneas nuevas se revisaron a mano.
+
+| Ítem | Estado |
+|---|---|
+| BUG-24 | Corregido (las 4 pruebas de la ronda 26 pasan; bordes 1 y 65535 se consultan, 0 y 65536 no) |
+| O49 | Corregido (límite de 0,3 s antes de cada intento; el tiempo total respeta el límite pedido) |
+| O50 | Corregido (log en modo "a", se conserva el contenido anterior) |
+| O53 | Corregido (FLET_SERVER_IP y FLET_SERVER_PORT se quitan antes de arrancar) |
+| D1 | Corregido (primero la carpeta del .exe, después la ruta guardada al armarlo) |
+| D2 | Corregido (sección de macOS con `.venv/bin/python` y aclaración de que `--edge` abre el navegador predeterminado) |
+| D3 | Corregido (sin Edge, cerrar la pestaña no cierra la app; cómo cerrarla desde el Administrador de tareas) |
+
+### Bugs nuevos
+Ninguno.
+
+### Observaciones
+- O54 (documentación, baja): como-abrir.md dice "Doble clic con la app ya abierta: se abre otra ventana de la misma app". Es cierto con Edge. Sin Edge, `ejecutar` no usa puerto.txt, así que cada doble clic arranca otra copia de la app (otro `pythonw.exe` escondido) sobre los mismos datos. Las protecciones BUG-16/18 cubren los datos cambiados por detrás. El caso es raro, porque Edge viene con Windows. Se sugiere aclararlo en esa línea o en la de "Si Edge no estuviera instalado".
+
+---
+
+## Ronda 28 (2026-10-12): verificación de O54 (documentación)
+
+### Qué se revisó
+El texto nuevo de docs/como-abrir.md ("Doble clic con la app ya abierta"), comparado con `ejecutar` en app/interfaz/modo_edge.py y con la observación O54 de la ronda 27.
+
+### Qué se probó
+- Lectura del código: sin Edge, `ejecutar` llama a `ft.run(..., view=WEB_BROWSER)` y vuelve, sin consultar puerto.txt ni reutilizar la app abierta. Con Edge, `puerto_en_uso` detecta la app y solo se abre otra ventana.
+- Ejecución (con `buscar_edge`, `ft.run` y `Popen` simulados): dos llamadas seguidas a `ejecutar` sin Edge hacen 2 llamadas a `ft.run`, 0 consultas a `puerto_en_uso` y 0 ventanas de Edge. Es decir, cada doble clic arranca otra copia de la app.
+- Suite completa con `pytest --cov=app`. No se escribieron pruebas nuevas (solo cambió documentación).
+
+### Resultado
+1.780 pruebas, pasan las 1.780. Cobertura de app/ 97 %.
+
+| Ítem | Estado |
+|---|---|
+| O54 | Corregida: el texto coincide con el comportamiento real (con Edge, otra ventana; sin Edge, otra copia con otro `pythonw.exe` escondido sobre los mismos datos) y con lo que describía O54 |
+
+### Bugs nuevos
+Ninguno.

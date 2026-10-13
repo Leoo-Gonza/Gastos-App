@@ -6,3 +6,8 @@ docs/referencia/
 *.db
 .claude/settings.local.json
 .coverage
+# Archivos que genera scripts/construir_exe.py (se rearman cuando hace falta).
+build/
+dist/
+*.spec
+Gastos.exe
