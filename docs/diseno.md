@@ -1,4 +1,4 @@
-# Diseño de pantallas – App de gastos personales (v1)
+# Diseño de pantallas – App de gastos personales (v1 y v2)
 
 > Documento de diseño UX/UI. Define **cómo se ve y cómo se usa** la app. No define cómo se
 > programa la lógica (eso está en `docs/requisitos.md`).
@@ -7,6 +7,8 @@
 > Las referencias RF-xx, RN-xx y CA-xx.y son las de `requisitos.md`.
 > **Gastos en dólares** (funcionalidad aprobada después de la v1 inicial): mientras sus
 > requisitos no tengan número en `requisitos.md`, se los cita por su descripción.
+> **Importar Excel** (v2) es el Módulo K de `requisitos.md` (RF-49 a RF-58): pantallas
+> §3.11 a §3.14, diálogos §4.9 a §4.11 y Paso 8.
 
 ---
 
@@ -149,6 +151,18 @@ se ignoran** (solo valen Enter y Esc).
 Se evitan a propósito `Cmd+Q`, `Cmd+W`, `Cmd+H` y `Cmd+M`, que en macOS cierran, ocultan o
 minimizan la app. Los tooltips de los botones muestran el atajo correcto según el sistema
 ("Ctrl+N" en Windows, "⌘N" en macOS).
+
+#### Atajos durante la importación (v2)
+
+Mientras la importación está abierta (pasos de §3.11 a §3.13) **se desactivan los atajos
+globales** (`Ctrl/Cmd+1..7`, `N`, `K`, `Alt+←/→`, `Ctrl/Cmd+,`): no hay rail ni barra
+superior y el mes seleccionado de la app no debe cambiar a mitad de la revisión. Valen estos:
+
+| Atajo | Acción (solo en la importación) |
+|---|---|
+| `Esc` | Igual que "Cancelar" (si hubo cambios, pregunta antes: §3.14). Dentro de un diálogo, cierra el diálogo. |
+| `Ctrl/Cmd + Enter` | "Confirmar importación" (abre el resumen), si no hay errores. |
+| `Enter` / `Esc` en diálogos | Aceptar / cancelar, como en toda la app. |
 
 ---
 
@@ -329,6 +343,25 @@ mes). Es una pantalla completa, **sin rail ni barra superior**.
 
 **Flujo:** completar → "Crear mes" → la app muestra la estructura completa con ese mes
 seleccionado y la pantalla Gastos (paso 1) o Resumen (paso 3 en adelante).
+
+#### Importar Excel desde el primer uso (v2: RF-49, CA-49.1)
+
+El formulario de "Crear mes" queda **igual** (es "empezar de cero": no agrega ningún clic a
+quien no tiene planilla). Debajo de la tarjeta del formulario se agrega una línea:
+
+```
+|                 [ ...formulario de primer mes de §3.1, sin cambios... ]                    |
+|                                                                                            |
+|                ¿Tenés una planilla?  [icono planilla] Importar Excel                       |
+```
+
+- `ft.Row` centrada con `ft.Text("¿Tenés una planilla?")` (texto secundario, 14) y
+  `ft.TextButton("Importar Excel", icon=ft.Icons.UPLOAD_FILE)`. Es un botón de texto para que
+  "Crear mes" siga siendo la acción principal de la pantalla.
+- Orden de Tab: los campos del formulario, "Crear mes" y después "Importar Excel".
+- Al **cancelar** una importación iniciada desde acá se vuelve a esta pantalla.
+
+Decidido por el usuario el 2026-10-13 (observación 21).
 
 ---
 
@@ -1046,6 +1079,637 @@ la misma meta para todos los meses."
 `configuracion` (clave `tema`) para recordarlo al reabrir. Además, un recordatorio de atajos
 (`Ctrl/Cmd + /`).
 
+#### Pestaña "Importar Excel" (v2: RF-49)
+
+Se agrega una **sexta pestaña, la última: "Importar Excel"**. Orden final: Categorías · Medios
+de pago · Personas · Meta de ahorro · Apariencia · Importar Excel.
+
+```
+| Ajustes                                                                                    |
+| [ Categorías ] [ Medios de pago ] [ Personas ] [ Meta ] [ Apariencia ] [ Importar Excel ]  |
+|--------------------------------------------------------------------------------------------|
+|  Importar desde Excel                                                                      |
+|  Traé gastos, cuotas, lo que te deben y el sueldo desde una planilla .xlsx.                |
+|                                                                                            |
+|   - Antes de guardar, revisás y corregís todo fila por fila.                               |
+|   - El archivo no se modifica ni se guarda en la app.                                      |
+|   - Lo importado se agrega al mes que elijas: no se borra nada de lo que ya cargaste.      |
+|   - Si importás dos veces la misma planilla, las filas repetidas vienen destildadas.       |
+|                                                                                            |
+|   [ Importar Excel ]                                                                       |
++--------------------------------------------------------------------------------------------+
+```
+
+- Contenido: `ft.Column` con título de sección (16, `W_600`), `texto_ayuda` para la lista y
+  `ft.FilledButton("Importar Excel", icon=ft.Icons.UPLOAD_FILE)`.
+- Es una pestaña (y no un botón suelto en la barra) para que se encuentre donde el usuario ya
+  busca "lo que se puede configurar o cargar en bloque" y para no ocupar lugar en las pestañas
+  de listas. `Ctrl/Cmd+N` no tiene acción en esta pestaña (igual que Apariencia).
+- Al **cancelar** se vuelve a **esta pestaña** (no a la primera). Al **terminar** la
+  importación se muestra Gastos (o Resumen) del mes destino, como en §3.13.
+
+### 3.11 Importar Excel: elegir archivo y hoja (RF-49, RF-50, RF-58, RN-60, RN-61)
+
+**Objetivo del usuario:** traer los datos de una planilla `.xlsx` sin tener que tipearlos.
+
+**Recorrido completo (visión general)**
+
+```
+ [Primer uso o Ajustes]
+          |
+          v
+ 1. Elegir archivo (y hoja)  --->  3.11   (error de archivo: se queda acá)
+          |
+          v
+ 2. Lista de revisión        --->  3.12   (acá se hace el trabajo)
+          |  [Confirmar importación]
+          v
+ 3. Resumen previo           --->  3.13   (diálogo)
+          |  [Importar]
+          v
+ 4. Resultado y mes destino  --->  3.13   (diálogo + la app muestra el mes)
+
+ En cualquier momento antes de "Importar": [Cancelar]  --->  3.14  (no se guarda nada)
+```
+
+**Es una pantalla completa, sin rail ni barra superior**, igual que Primer uso. Motivos:
+(1) se abre igual desde el primer uso (donde no hay rail) y desde Ajustes; (2) la lista de
+revisión necesita todo el ancho (hay 8 columnas); (3) evita que el usuario navegue a otra
+pantalla o cambie de mes con una revisión a medias. Siempre tiene "Cancelar" visible.
+
+**Distribución – paso 1, sin archivo todavía**
+
+```
++--------------------------------------------------------------------------------------------+
+|                                                                                            |
+|                                   Importar desde Excel                                     |
+|             Elegí un archivo .xlsx. Antes de guardar nada vas a poder revisar todo.        |
+|                                                                                            |
+|                 +---------------------------------------------------+                      |
+|                 |  [icono planilla]                                 |                      |
+|                 |                                                   |                      |
+|                 |  El archivo solo se lee: no se modifica, no se    |                      |
+|                 |  copia y no se guarda en la app.                  |                      |
+|                 |                                                   |                      |
+|                 |            [ Elegir archivo... ]                  |                      |
+|                 |                                                   |                      |
+|                 |                            [ Cancelar ]           |                      |
+|                 +---------------------------------------------------+                      |
++--------------------------------------------------------------------------------------------+
+```
+
+**Componentes de Flet**
+
+| Parte | Componente |
+|---|---|
+| Tarjeta | `ft.Card` centrada, ancho 520, mismo estilo que §3.1. |
+| Elegir archivo | `ft.FilledButton("Elegir archivo...", icon=ft.Icons.UPLOAD_FILE)` que abre el selector del sistema con `ft.FilePicker` (`allowed_extensions=["xlsx"]`, título del diálogo del sistema "Elegir una planilla de Excel"). Foco inicial. |
+| Mientras lee | `ft.ProgressRing` chico + texto "Leyendo el archivo..." (puede tardar con planillas grandes). Los botones quedan deshabilitados. |
+| Cancelar | `ft.TextButton("Cancelar")`. Sin confirmación (todavía no hay nada que perder). |
+
+El selector solo ofrece `.xlsx`, pero igual se valida al leer (RN-60: un `.txt` renombrado
+pasa el filtro y debe rechazarse).
+
+**Después de elegir el archivo**
+
+| Caso | Qué pasa |
+|---|---|
+| Archivo con **una sola hoja** con datos | No se pregunta nada: pasa directo a la lista de revisión (CA-50.1). |
+| Archivo con **varias hojas** con datos | La misma tarjeta muestra el paso de hoja (abajo). Las hojas sin celdas no se ofrecen (RN-60). |
+| Archivo inválido | Aviso de error en la misma tarjeta (abajo). |
+
+**Distribución – elegir hoja**
+
+```
+|                 +---------------------------------------------------+                      |
+|                 |  Archivo: planilla-prueba.xlsx   [Elegir otro]    |                      |
+|                 |                                                   |                      |
+|                 |  El archivo tiene 2 hojas. ¿Cuál querés importar? |                      |
+|                 |   (o) Octubre                                     |                      |
+|                 |   ( ) Septiembre                                  |                      |
+|                 |                                                   |                      |
+|                 |  Se importa una hoja por vez. Si querés otra,     |                      |
+|                 |  repetís la importación.                          |                      |
+|                 |                                                   |                      |
+|                 |               [ Cancelar ] [ Revisar filas ]      |                      |
+|                 +---------------------------------------------------+                      |
+```
+
+- `ft.RadioGroup` con una `ft.Radio` por hoja (nombre tal cual está en el Excel). La primera
+  viene elegida. Si hay más de 8 hojas, la lista tiene alto máximo 240 y scroll propio.
+- "Revisar filas" = `ft.FilledButton`. Enter lo activa.
+- "Elegir otro" = `ft.TextButton` chico junto al nombre del archivo: vuelve al estado inicial.
+
+**Estados de error y aviso del archivo (RF-58)**
+
+Todos usan el patrón "Aviso en pantalla" de §2.5 (fondo suave + ícono + texto) dentro de la
+tarjeta, arriba de los botones.
+
+| Situación | Dónde se ve | Texto exacto | Qué puede hacer el usuario |
+|---|---|---|---|
+| Archivo dañado, protegido con contraseña, con otra extensión o que no es `.xlsx` real | Aviso *negativo*, ícono `ERROR_OUTLINE`, en la tarjeta de elegir archivo | "No se pudo leer el archivo. Solo se aceptan archivos .xlsx de Excel." | Botón "Elegir otro archivo" o "Cancelar". No cambia nada. |
+| Hoja sin ninguna celda con texto o número (archivo de una sola hoja) | Aviso *pendiente*, ícono `WARNING_AMBER` | "No se encontraron datos en la hoja Hoja1." | "Elegir otro archivo" o "Cancelar". |
+| Hoja sin datos elegida entre varias | Mismo aviso, debajo de las hojas | "No se encontraron datos en la hoja Hoja1." | Elegir otra hoja y "Revisar filas", "Elegir otro archivo" o "Cancelar". |
+| Hoja solo con textos (ninguna fila con texto y monto) | **No es un error de esta pantalla:** se muestra la lista de revisión con un aviso arriba (§3.12) | "No se encontraron filas con un texto y un monto." | Completar a mano. |
+| Fórmulas sin valor guardado | Aviso arriba de la lista de revisión (§3.12), no acá | "Hay N fórmulas sin valor calculado (ej. D9). Abrí el archivo en Excel, guardalo y volvé a importarlo para ver esos montos." | Seguir igual, o cancelar y repetir. |
+
+El mensaje de error del archivo se reemplaza (no se acumula) cada vez que se elige otro
+archivo. Cuando el archivo tiene error, "Revisar filas" no aparece.
+
+---
+
+### 3.12 Importar Excel: lista de revisión (RF-51 a RF-56, RN-61 a RN-75)
+
+**Objetivo del usuario:** revisar lo que la app entendió de su planilla, corregir lo que
+esté mal y decidir qué se importa, sin que se guarde nada hasta confirmar.
+
+Es la pantalla central: en la planilla de referencia hay alrededor de 30 filas detectadas
+más las incompletas. El diseño se apoya en **tres ideas** para que no abrume:
+
+1. **Las decisiones masivas son en la fila; las ediciones son en un diálogo.** En cada fila
+   solo hay dos controles que no piden escribir: el **tilde** y el **tipo**. Todo lo demás
+   (nombre, monto, pagado, categoría, persona, cuotas) se edita en un diálogo (§4.9),
+   igual que en el resto de la app (principio 3 de §0). Así no hay 30 filas con 6 campos de
+   texto cada una, y los atajos no chocan con la escritura.
+2. **Se agrupa por bloque del Excel.** Cada título de la planilla ("Gasto del Mes", "Deudas",
+   "Deudas sofia", "Marsu") arma un grupo plegable con sus filas, en el orden del Excel.
+3. **Lo que no se importa se apaga.** Las filas ignoradas o destildadas se ven en color de
+   texto secundario (no con transparencia, para mantener el contraste) y el grupo "Filas
+   incompletas" viene plegado.
+
+**Flujo paso a paso**
+
+1. Llega desde §3.11. Lo primero que ve: los controles generales (mes destino y categoría
+   por defecto), ya con valores propuestos, y la lista con tildes y tipos propuestos.
+2. Mira de arriba abajo cada bloque. Lo que está bien, no lo toca.
+3. Para cada fila que no quiere o que está mal clasificada: destilda, o cambia el tipo.
+4. Para corregir un dato (nombre, monto, categoría, persona, cuota): clic en la fila o en el
+   lápiz, se abre el diálogo §4.9, "Aceptar".
+5. Mira las filas con aviso (ícono ámbar) y decide. Las filas con error (fondo rojo suave)
+   tiene que arreglarlas, ignorarlas o destildarlas.
+6. Abre "Filas incompletas" por si hay algo que quiere traer (ej. el sueldo) y lo completa.
+7. Cuando el pie dice "Se importan N filas…" sin errores, "Confirmar importación" (§3.13).
+
+**Distribución general**
+
+```
++--------------------------------------------------------------------------------------------+
+| Importar desde Excel                                       [Cambiar archivo u hoja]        |
+| planilla-prueba.xlsx  ·  Hoja "Octubre"                                                    |
+|                                                                                            |
+| [!] Hay 1 fórmulas sin valor calculado (ej. D3). Abrí el archivo en Excel, guardalo y     |  <- solo si
+|     volvé a importarlo para ver esos montos.                                               |     hay avisos
+|                                                                                            |     del archivo
+| +----------------------------------------------------------------------------------------+ |
+| | Mes destino                        Categoría por defecto                               | |
+| | [ Octubre 2026 · mes actual   v ]  [ Varios                v ] [+]                     | |
+| | Octubre 2026 ya existe: se        Se usa en los gastos y cuotas que no cambies a       | |
+| | agregan los datos, sin borrar     mano. Los gastos quedan sin medio de pago: lo        | |
+| | nada de lo que ya tiene.          completás después en Gastos.                         | |
+| +----------------------------------------------------------------------------------------+ |
+|                                                                                            |
+| [ Todas (29) | Se importan (9) | Con avisos (3) | Con errores (0) ]                        |
+|                                                                                            |
+|  Imp. | Fila | Tipo         | Nombre                | Monto | Pagado/Cobrado | Categ./Persona | Cuota |
+|--------------------------------------------------------------------------------------------|
+| v GASTO DEL MES · filas 3 a 7 · se importan 4 de 5                           [:]           |
+|  [ ]  |   3  | Gasto fijo v | Alquiler              | $ 260.000 |            | Varios     |  -  | [lapiz]
+|       |      |              | (!) Ya existe en Octubre 2026. Viene destildada.                       |
+|  [x]  |   4  | Gasto fijo v | Servicios             |  $ 82.000 |            | Varios     |  -  | [lapiz]
+|  [x]  |   5  | Gasto fijo v | Internet              |  $ 38.700 | $ 38.700   | Varios     |  -  | [lapiz]
+|       |      |              |                       |           | Completo   |            |     |
+|  [ ]  |   6  | Ignorar    v | Tarjetas de Credito   | $ 582.917 |            |            |  -  | [lapiz]
+|  [x]  |   7  | Gasto fijo v | psicologo             | $ 140.000 | $ 60.000   | Varios     |  -  | [lapiz]
+|       |      |              |                       |           | Parcial · falta $ 80.000 |     |
+|                                                                                            |
+| v DEUDAS · filas 12 a 15 · se importan 3 de 3                                [:]           |
+|  [x]  |  12  | Gasto fijo v | Monotributo 66.020,12 |  $ 66.020 |            | Varios     |  -  | [lapiz]
+|  [x]  |  13  | Cuota      v | Avant Service cuota 3/ 3 $41.116,66 | $ 41.117 |    | Varios     | 3/3 | [lapiz]
+|       |      |              | (i) Plan de 3 cuotas: primera Agosto 2026, última Octubre 2026.        |
+|  [x]  |  15  | Gasto fijo v | Gym                   |  $ 50.000 |            | Varios     |  -  | [lapiz]
+|                                                                                            |
+| v DEUDAS SOFIA · filas 22 a 24 · se importan 2 de 3                          [:]           |
+|  [x]  |  22  | Me deben   v | Prestamo MP           |  $ 20.000 | [ ] Cobrado| Sofía      |  -  | [lapiz]
+|  [x]  |  23  | Me deben   v | Internet              |  $ 12.900 | [ ] Cobrado| Sofía      |  -  | [lapiz]
+|       |      |              | (i) ¿Es parte de un gasto compartido? Si es así, ignorala y marcá      |
+|       |      |              |     el gasto como compartido después.                                  |
+|  [ ]  |  24  | Ignorar    v | Total                 |  $ 32.900 |            |            |  -  | [lapiz]
+|                                                                                            |
+| v MARSU · filas 27 a 28 · se importan 1 de 2                                 [:]           |
+|  ...                                                                                       |
+|                                                                                            |
+| > FILAS INCOMPLETAS · 16 filas · todas se ignoran, salvo que las completes   (plegado)     |
++--------------------------------------------------------------------------------------------+
+| Se importan 9 filas: 5 gastos, 1 plan de cuotas, 3 ítems "me deben".   [Cancelar] [Confirmar importación] |
++--------------------------------------------------------------------------------------------+
+```
+
+La **barra de arriba** (título, archivo, controles generales, filtros, encabezado de columnas)
+y el **pie** (estado + botones) quedan **fijos**; solo la lista con los bloques hace scroll.
+Así "Cancelar" y "Confirmar importación" nunca se pierden de vista.
+
+#### Controles generales (RF-54, RF-55, RN-73, RN-75)
+
+`ft.Card` con dos columnas (`ft.ResponsiveRow`, cada una `col={"sm": 12, "md": 6}`).
+
+**Mes destino**
+
+| Caso | Control | Textos |
+|---|---|---|
+| Hay meses (viene de Ajustes) | `ft.Dropdown(label="Mes destino")`. Opciones: todos los meses existentes (del más nuevo al más viejo, con "· mes actual" donde corresponda) y, si se puede crear, un último ítem "Noviembre 2026 · se crea al confirmar" (el siguiente al último, RN-08). Por defecto: el mes actual si existe o se puede crear; si no, el último (RN-73). | Ayuda debajo, según el caso (tabla siguiente). |
+| Base sin meses (viene de primer uso) | `ft.Dropdown(label="Mes")` con los 12 meses + `ft.TextField(label="Año", max_length=4)`, valores iniciales los del calendario; igual que §3.1. | Mismos errores de §3.1: "El año tiene que tener 4 dígitos. Ej.: 2026". |
+
+Ayuda debajo del control (`texto_ayuda`, y en *pendiente* con ícono si es una advertencia):
+
+| Situación del mes elegido | Texto |
+|---|---|
+| Existe y es el último | "Octubre 2026 ya existe: se agregan los datos, sin borrar nada de lo que ya tiene." |
+| Existe y hay una fila de sueldo | Se suma una segunda línea: "El sueldo de este mes se reemplaza por el de la fila marcada como sueldo." |
+| Existe pero **no** es el último | Aviso *pendiente* con `WARNING_AMBER`: "Los gastos fijos que importes no se agregan a los meses siguientes que ya existen." |
+| No existe, es el siguiente al último | "Noviembre 2026 todavía no existe: se crea al confirmar, con los gastos fijos y las cuotas de Octubre 2026, y con su sueldo y su cotización." |
+| No existe, base sin meses | "Se crea al confirmar, sin cotización: la cargás después en el Resumen. Si no marcás una fila como sueldo, el sueldo del mes queda en US$ 0,00." |
+
+Cambiar el mes **recalcula** las marcas "ya existe" y los avisos de gasto compartido (RN-73,
+RN-74). Como eso cambia tildes sin que el usuario las toque, **siempre** se avisa con un
+`SnackBar` de 6 segundos: "Cambiaste el mes: 1 fila pasó a "ya existe" y se destildó. 1 fila
+se volvió a tildar." (solo se nombra lo que pasó; si nada cambió, no hay aviso).
+
+**Categoría por defecto (RF-54, RN-75)**
+
+- `ft.Dropdown(label="Categoría por defecto")` con las categorías activas (más las
+  categorías nuevas ya agregadas en esta importación, que se ven con el sufijo " (nueva)") y
+  `ft.IconButton(ft.Icons.ADD, tooltip="Nueva categoría")` al lado. Viene "Varios" si existe.
+- El botón "+" abre debajo, **en la misma pantalla**, la fila `[Nombre de la categoría]
+  [Agregar]` (mismo patrón que §4.1; ver §4.11).
+- Si no hay "Varios" ni otra elegida: el dropdown queda vacío con `error_text` "Elegí una
+  categoría para los gastos y cuotas." y las filas de gasto y cuota sin categoría propia
+  muestran el error de la fila (tabla de errores, más abajo).
+- Ayuda: "Se usa en los gastos y cuotas que no cambies a mano. Los gastos quedan sin medio de
+  pago: lo completás después en Gastos."
+- Cambiar la categoría por defecto cambia las filas que no se tocaron; las cambiadas a mano
+  conservan la suya (RN-75). Se nota en la fila: la categoría elegida a mano se muestra con
+  un punto "•" delante ("• Servicios"), con tooltip "Elegida a mano".
+
+#### Filtro y resumen de la lista
+
+- `ft.SegmentedButton` de un solo valor (mismo componente que el filtro de Cuotas §3.4):
+  "Todas (29)" · "Se importan (9)" · "Con avisos (3)" · "Con errores (0)". Por defecto "Todas".
+  Cada etiqueta lleva su cantidad.
+- "Con errores" aparece con fondo *negativo* suave en cuanto hay alguno, para que no se
+  pierda. Los bloques sin filas que cumplan el filtro se ocultan; el grupo "Filas
+  incompletas" también.
+- No hay buscador: con 30 filas no hace falta.
+
+#### Encabezado de columnas (fijo)
+
+Una sola fila de encabezados arriba de la lista (no se repite en cada bloque), en fondo
+superficie variante, texto 13 `W_600`:
+
+| Columna | Ancho | Contenido | Alineación |
+|---|---|---|---|
+| Imp. | 48 | Tilde "importar" | centro |
+| Fila | 48 | Número de fila del Excel (RF-51): "12" (texto 13, secundario). Tooltip "Fila 12 del Excel". | derecha |
+| Tipo | 150 | Selector del tipo | izquierda |
+| Nombre | flexible (mín. 220) | Nombre + debajo las notas y avisos de la fila | izquierda |
+| Monto | 110 | `$ 260.000`; `US$ 1.300,00` si es sueldo | derecha |
+| Pagado / Cobrado | 130 | Pagado (gastos y cuotas) o tilde "Cobrado" (me deben) | derecha |
+| Categoría / Persona | 150 | Según el tipo | izquierda |
+| Cuota | 64 | "3/3" (solo cuotas) | centro |
+| (acción) | 48 | Lápiz | – |
+
+Suma mínima fija: 48 + 48 + 150 + 110 + 130 + 150 + 64 + 48 = 748 px + Nombre 220 + márgenes
+= **unos 1.000 px**, que entra en la ventana mínima de 1100 (la importación no tiene rail).
+
+#### La fila
+
+Cada fila es un `ft.Container` con un `ft.Row` y, debajo, una columna de notas. **No se usa
+`ft.DataTable`** porque las filas llevan controles (tilde, selector) y una segunda línea de
+notas de largo variable; un `Row` con anchos fijos da el mismo resultado visual y es más
+simple de controlar. Altura mínima 48, crece con las notas.
+
+| Parte | Componente | Detalle |
+|---|---|---|
+| Imp. | `ft.Checkbox(tooltip="Importar esta fila")` | En filas "ignorar" está **deshabilitado** y sin tilde, con tooltip "Esta fila se ignora. Cambiá el tipo para importarla." Al elegir un tipo distinto de "Ignorar" en una fila ignorada, **se tilda sola**. |
+| Tipo | `ft.Dropdown(dense=True, width=150, text_size=14)` | Opciones, en este orden y con estos textos: "Gasto fijo", "Gasto único", "Cuota", "Me deben", "Sueldo (USD)", "Ignorar". |
+| Nombre | `ft.Text` 15 | Clic en la fila abre §4.9. Si falta: "(sin nombre)" en texto secundario cursiva. |
+| Monto | `ft.Text` 15, derecha | Formato de §2.3. Si falta: "(sin monto)" en secundario. |
+| Pagado | `ft.Column` derecha | Línea 1 monto pagado; línea 2 (13): "Completo" con ícono `CHECK` en *positivo*, o "Parcial · falta $ 80.000" en *pendiente*. Vacío si no hay pagado. |
+| Cobrado | `ft.Checkbox(label="Cobrado")` | Solo en filas "me deben". Es editable en la fila (no pide escribir). |
+| Categoría / Persona | `ft.Text` | Gastos y cuotas: nombre de la categoría. Me deben: nombre de la persona, o "Elegí persona" en *negativo* si falta. Sueldo e ignorar: vacío. |
+| Cuota | `ft.Text` | "n/N" solo si el tipo es cuota; si falta, "Falta" en *negativo*. En las demás, "-". |
+| Lápiz | `ft.IconButton(ft.Icons.EDIT, tooltip="Editar fila 12")` | Abre §4.9. |
+
+**Qué muestra cada tipo**
+
+| Tipo | Monto | Pagado / Cobrado | Categoría / Persona | Cuota |
+|---|---|---|---|---|
+| Gasto fijo | ARS | Pagado | Categoría | - |
+| Gasto único | ARS | Pagado | Categoría | - |
+| Cuota | ARS (monto de la cuota) | Pagado (solo de la cuota del mes destino, RN-71) | Categoría | n/N |
+| Me deben | ARS | Tilde Cobrado | Persona | - |
+| Sueldo (USD) | **US$ 1.300,00** (cambia de moneda al elegir este tipo) | - | - | - |
+| Ignorar | ARS, atenuado | - | - | - |
+
+**Estados visuales de una fila**
+
+| Estado | Cómo se ve |
+|---|---|
+| Se importa (tildada, tipo ≠ ignorar) | Texto normal. |
+| No se importa (destildada o "Ignorar") | Todo el texto en color secundario. **No** se baja la opacidad: se mantiene el contraste 4,5:1 de §2.1. |
+| Con aviso | Ícono `WARNING_AMBER` o `INFO_OUTLINE` + texto en la línea de notas. Sin fondo. |
+| Con error (bloquea) | Fondo *negativo* suave, borde izquierdo de 4 px en *negativo*, ícono `ERROR_OUTLINE` + texto en *negativo* en la línea de notas. |
+| Recién editada | Sin marca especial (no hace falta). |
+
+#### Notas y avisos (segunda línea bajo el nombre)
+
+Texto 13. Una fila puede tener varias, una por línea, en este orden: errores, avisos, info.
+Cada una lleva ícono, y el color nunca es la única señal (principio 4).
+
+| Nota | Ícono y color | Texto exacto | ¿Bloquea? |
+|---|---|---|---|
+| Ya existe (gasto, RN-74) | `WARNING_AMBER`, *pendiente* | "Ya existe en Octubre 2026. Viene destildada." (si el usuario la tildó: "Ya existe en Octubre 2026. Si la importás, queda repetida.") | No |
+| Ya existe (plan) | `WARNING_AMBER`, *pendiente* | "Ya existe un plan de cuotas con este nombre. Viene destildada." | No |
+| Ya existe (me deben) | `WARNING_AMBER`, *pendiente* | "Sofía ya tiene un ítem sin cobrar con esta descripción. Viene destildada." | No |
+| Repetida en el archivo | `CONTENT_COPY`, *pendiente* | "Repetida en el archivo. Si no es un error del Excel, podés importarla igual." | No |
+| Posible gasto compartido (RN-72) | `PEOPLE_OUTLINE`, *info* | "¿Es parte de un gasto compartido? Si es así, ignorala y marcá el gasto como compartido después." | No |
+| Cobrado no reconocido (RN-64) | `WARNING_AMBER`, *pendiente* | "En la columna Cobrado dice "3.000"; los ítems 'me deben' no tienen cobro parcial, quedó como no cobrado." | No |
+| Monto no válido (RN-68) | `WARNING_AMBER`, *pendiente* | "Monto no válido. Si querés importarla, corregí el monto." | No (la fila viene ignorada) |
+| Cuota (RN-71) | `INFO_OUTLINE`, *info* | "Plan de 3 cuotas: primera Agosto 2026, última Octubre 2026. Se agrega la cuota 3/3 en Octubre 2026." | No |
+| Sueldo (RN-70) | `INFO_OUTLINE`, *info* | "Sueldo del mes: US$ 1.200,00 -> US$ 1.300,00." (si no cambia: "Sueldo del mes: US$ 1.300,00.") | No |
+| Fila incompleta ignorada | `INFO_OUTLINE`, secundario | "Falta el monto. Se ignora." / "Falta el nombre. Se ignora." | No |
+| **Error:** falta nombre | `ERROR_OUTLINE`, *negativo* | "Falta el nombre." | Sí |
+| **Error:** falta monto | idem | "Falta el monto." / "El monto tiene que ser mayor a 0." | Sí |
+| **Error:** sin categoría | idem | "Elegí una categoría." | Sí |
+| **Error:** sin persona | idem | "Elegí una persona." | Sí |
+| **Error:** cuota incompleta | idem | "Indicá la cuota actual y la cantidad de cuotas." | Sí |
+| **Error:** cuota fuera de rango | idem | "La cuota actual tiene que estar entre 1 y la cantidad de cuotas." / "La cantidad de cuotas tiene que ser un número entero de 1 o más." | Sí |
+| **Error:** pagado mayor | idem | "El pagado ($ 12.000) es mayor que el monto ($ 10.000)." | Sí |
+| **Error:** pagado negativo | idem | "El pagado no puede ser negativo." | Sí |
+| **Error:** varios sueldos (RN-70) | idem, en **todas** las filas de sueldo | "Marcaste 2 filas como sueldo; dejá una sola." | Sí |
+
+Los textos de errores son los de `docs/requisitos.md` donde existen y siguen el estilo de §4
+("qué está mal y cómo arreglarlo"). El error "varios sueldos" se repite además en el pie.
+
+**Posible gasto compartido: cómo se ve sin molestar.** El aviso largo ocupa dos líneas.
+Como es de tipo informativo, lleva `INFO_OUTLINE` y color *info* (no ámbar) para no
+competir con los avisos de "ya existe". No se agrega ningún botón: el usuario decide
+cambiando el tipo a "Ignorar", y el aviso de las otras filas se recalcula solo.
+
+#### Bloques (RN-65)
+
+Cada bloque es un `ft.ExpansionTile` (plegable) que contiene las filas.
+
+```
+v GASTO DEL MES  ·  filas 3 a 7  ·  se importan 4 de 5                     [:]
+```
+
+- Título: el texto del título de bloque tal como está en el Excel, en mayúsculas visuales,
+  texto 14 `W_600`. Subtítulo 13: "filas 3 a 7 · se importan 4 de 5".
+- Todos los bloques de la lista principal vienen **abiertos**. Si el usuario los pliega, el
+  subtítulo sigue mostrando "se importan N de M" y, si hay errores, "· 1 con error" en
+  *negativo* con ícono (un bloque plegado nunca esconde un error). Un bloque con errores no
+  se puede plegar sin que quede esa marca visible.
+- Las filas que no cuelgan de ningún título (si las hay) van en un bloque "Otras filas".
+- Si el Excel no tiene ningún título, hay un solo bloque, "Filas detectadas", sin plegar.
+- El orden de los bloques y de las filas es el del Excel (RF-51).
+- Menú `ft.PopupMenuButton` (`MORE_VERT`, tooltip "Acciones del bloque") con:
+  - "Tildar todas las filas"
+  - "Destildar todas las filas"
+  - "Cambiar tipo o categoría de todas..." (abre §4.10)
+
+  Existe porque un título como "Sofía y Marsu" o un bloque sin persona deja 5 o 6 filas
+  "me deben" sin persona (RN-65), y arreglarlas una por una sería tedioso.
+
+#### Grupo "Filas incompletas" (RF-51, RN-63)
+
+```
+> FILAS INCOMPLETAS  ·  16 filas  ·  todas se ignoran, salvo que las completes
+```
+
+- Mismo `ft.ExpansionTile`, **plegado** por defecto, siempre al final de la lista, con fondo
+  superficie variante para distinguirlo.
+- Dentro, un texto de ayuda: "Son textos sin monto (títulos, encabezados) o montos sin texto
+  (totales). Si alguna es un dato que querés traer, por ejemplo el sueldo, completala y
+  cambiale el tipo."
+- Las filas son iguales a las demás (mismo `Row`, mismos controles), con tipo "Ignorar" y
+  notas "Falta el monto. Se ignora." / "Falta el nombre. Se ignora.".
+- Se completan con el diálogo §4.9 (campos Nombre y Monto), y se les cambia el tipo con el
+  selector. Una fila completada **no se mueve** de este grupo (que las filas salten de lugar
+  desorienta); el subtítulo del grupo pasa a "16 filas · se importan 2".
+- Se abre sola, sin que el usuario la abra, en dos casos: (1) la hoja no tiene ninguna fila
+  con texto y monto (aviso "No se encontraron filas con un texto y un monto."); (2) tiene una
+  fila con error.
+- Excepción RN-70: una fila "Sueldo (USD)" se puede importar sin nombre. Así, el "1.300" suelto
+  de la planilla solo necesita cambiarle el tipo a "Sueldo (USD)".
+
+**Avisos del archivo arriba de la lista** (aviso en pantalla de §2.5, uno por línea, sobre
+los controles generales)
+
+| Aviso | Color / ícono | Texto |
+|---|---|---|
+| Fórmulas sin valor (RN-61) | *pendiente*, `WARNING_AMBER` | "Hay N fórmulas sin valor calculado (ej. D9). Abrí el archivo en Excel, guardalo y volvé a importarlo para ver esos montos." |
+| Sin filas completas (RN-60) | *pendiente*, `WARNING_AMBER` | "No se encontraron filas con un texto y un monto." |
+| Varios sueldos (RN-70) | *negativo*, `ERROR_OUTLINE` | "Marcaste 2 filas como sueldo; dejá una sola." |
+
+#### Pie fijo: estado y botones
+
+```
++--------------------------------------------------------------------------------------------+
+| Se importan 10 filas: 5 gastos, 1 plan de cuotas, 3 ítems "me deben" y el sueldo.           |
+|                                                      [ Cancelar ]  [ Confirmar importación ]|
++--------------------------------------------------------------------------------------------+
+```
+
+El pie siempre dice **por qué** el botón está habilitado o no (un botón gris sin explicación
+es inaccesible):
+
+| Estado | Texto del pie (izquierda) | Botón "Confirmar importación" |
+|---|---|---|
+| Todo bien | "Se importan 10 filas: 5 gastos, 1 plan de cuotas, 3 ítems "me deben" y el sueldo." (solo lo que hay) | Habilitado (`FilledButton`). Tooltip "Ctrl+Enter". |
+| Hay errores | `ERROR_OUTLINE` *negativo*: "Hay 2 filas con errores. Corregilas, ignoralas o destildalas para continuar." (con una sola: "Hay 1 fila con errores. Corregila, ignorala o destildala para continuar.") + `ft.TextButton("Ir al primer error")` | Deshabilitado. Tooltip: "Primero corregí las filas con errores." |
+| Dos o más sueldos | "Marcaste 2 filas como sueldo; dejá una sola." | Deshabilitado. |
+| Nada para importar | "No hay filas para importar." | Deshabilitado. Tooltip "Tildá al menos una fila." |
+| Sin categoría por defecto y hay gastos | Cae en "Hay errores" (cada fila de gasto sin categoría tiene su error). | Deshabilitado. |
+
+"Ir al primer error": desplaza la lista hasta la primera fila con error (`ListView.scroll_to`
+con la clave de esa fila), despliega su bloque si estaba plegado y le pone el foco al lápiz.
+
+El texto de conteo se actualiza en cada cambio (tilde, tipo, edición, mes).
+
+#### Cómo se edita en Flet (resumen para quien programa)
+
+- La pantalla guarda en memoria **una lista de objetos "fila de revisión"** (nombre, monto,
+  pagado, tipo, tilde, categoría, persona, cuota actual y total, cobrado, notas). Los
+  controles solo muestran esa lista; **nada se escribe en la base hasta confirmar** (RF-57).
+- Cada fila arma su propio `Row` una vez. Cuando algo cambia, se **actualiza solo esa fila**
+  (`fila.control.update()`), más el subtítulo de su bloque, el contador del filtro y el pie.
+  No se reconstruye toda la lista: con 60 selectores a la vez se sentiría lenta.
+- Cambios que recalculan otras filas (nombre, tipo, tilde o mes destino): se recalculan
+  "ya existe", "repetida" y "posible gasto compartido" de todas las filas afectadas
+  (RN-72, RN-74) y se redibujan solo las notas de las que cambiaron.
+- La lista es un `ft.ListView` con los `ExpansionTile` adentro; el encabezado de columnas y
+  el pie quedan fuera del `ListView`, en la `ft.Column` principal.
+- Un campo de texto **nunca** está en la lista: solo checkboxes, selectores e íconos. Así,
+  Enter/Esc y los atajos no chocan con la escritura (§0, principio 3).
+
+**Teclado en la lista:** Tab recorre, por fila: tilde, tipo, (tilde "Cobrado" si es "me
+deben"), lápiz. Espacio marca tildes; flechas abren/cambian el selector. Para no tener que
+dar 90 Tab: los filtros, el pliegue de bloques ("Todas / Se importan / Con avisos") y "Ir al
+primer error" reducen el recorrido; y `Enter` sobre una fila enfocada (lápiz) abre §4.9.
+
+**Estados de pantalla**
+
+| Situación | Cómo se ve |
+|---|---|
+| Normal | Como el boceto. |
+| Solo filas incompletas | Aviso "No se encontraron filas con un texto y un monto."; no hay bloques; "Filas incompletas" abierto. |
+| Filtro sin resultados | Texto centrado: "Ninguna fila coincide con este filtro." con `TextButton("Ver todas")`. |
+| Pie con "No hay filas para importar." | Como la tabla del pie. |
+| Mes destino con base vacía y año inválido | `error_text` en el campo año y "Confirmar importación" deshabilitado con tooltip "Corregí el mes destino." |
+
+---
+
+### 3.13 Importar Excel: confirmar y resultado (RF-57, RN-76, RN-70, RN-73)
+
+**Objetivo del usuario:** estar seguro de qué se va a guardar antes de guardarlo, y saber qué
+pasó después.
+
+**Flujo**
+
+1. En la lista de revisión, "Confirmar importación" (o `Ctrl/Cmd+Enter`).
+2. Se abre el diálogo de **resumen previo** (modal, `ft.AlertDialog`).
+3. "Importar" → se guarda todo en un solo paso (todo o nada, RN-76).
+4. Se abre el diálogo de **resultado**; "Ver Octubre 2026" cierra y muestra el mes.
+
+**Diálogo 1 – Resumen previo**
+
+```
++-----------------------------------------------------------------+
+| Revisá antes de importar                                        |
+|                                                                 |
+| Se va a cargar en Octubre 2026 (ya existe).                     |
+|                                                                 |
+|  • 5 gastos: $ 376.720 (pagado $ 98.700)                        |
+|  • 1 plan de cuotas: Avant Service cuota 3/ 3 $41.116,66        |
+|    (cuota 3/3, $ 41.117 por mes)                                |
+|  • 3 ítems "me deben": Sofía 2, Marsu 1 ($ 39.685 en total)     |
+|  • Sueldo: US$ 1.200,00 -> US$ 1.300,00                         |
+|                                                                 |
+| Se crean también: la categoría "Importado" y la persona "Juan". |
+|                                                                 |
+| No se importan 19 filas (ignoradas o destildadas).              |
+|                                                                 |
+| [i] Esta importación no se puede deshacer. Si algo sale mal,    |
+|     lo corregís a mano en la app.                               |
+|                                                                 |
+|                        [Volver a la revisión] [Importar]        |
++-----------------------------------------------------------------+
+```
+
+- Ancho 520. Foco en **"Volver a la revisión"** (confirmación: el foco va a la opción
+  segura, §5 de `diseno.md`). Esc = volver.
+- `ft.Text` por línea con viñeta; solo se muestran las líneas que tienen algo (sin "0 planes
+  de cuotas"). Singular y plural correctos ("1 gasto", "5 gastos").
+- Montos con formato de §2.3. Los "$ 376.720" son la suma de los gastos que se importan
+  (sin las cuotas, que se muestran aparte); "pagado" aparece solo si hay pagos.
+- Primera línea según el mes: "Se va a cargar en Octubre 2026 (ya existe)." / "Se va a crear
+  Noviembre 2026 y cargar ahí los datos." / (primer uso) "Se va a crear Octubre 2026, sin
+  cotización, y cargar ahí los datos."
+- Línea de sueldo solo si hay una fila de sueldo. Con mes nuevo de primer uso y sin fila de
+  sueldo: línea *pendiente* "Sin sueldo: el sueldo de Octubre 2026 queda en US$ 0,00."
+- "Se crean también": solo categorías y personas nuevas que **se usan** en alguna fila que
+  se importa (ver observación 26).
+- Aviso *info* final con el texto de "sin deshacer".
+- Botones: `ft.TextButton("Volver a la revisión")` y `ft.FilledButton("Importar")`. El texto
+  del segundo es "Importar" (y no "Confirmar") para repetir la acción que está pasando.
+
+**Mientras guarda:** el diálogo muestra un `ft.ProgressRing` y los botones se deshabilitan
+(es un instante, pero evita un doble clic).
+
+**Diálogo 2 – Resultado exitoso**
+
+```
++-----------------------------------------------------------------+
+| [check verde] Importación terminada                             |
+|                                                                 |
+| Se importaron: 5 gastos, 1 plan de cuotas, 3 ítems "me deben"   |
+| y el sueldo (US$ 1.300,00) en Octubre 2026.                     |
+|                                                                 |
+| Para completar:                                                 |
+|  • Los gastos quedaron sin medio de pago. Podés ponérselo en    |
+|    Gastos.                                                      |
+|  • Si alguno es compartido, marcalo desde el gasto.             |
+|  • Cargá la cotización de Octubre 2026 en el Resumen.           |
+|                                                                 |
+|                                     [ Ver Octubre 2026 ]        |
++-----------------------------------------------------------------+
+```
+
+- El primer párrafo es el texto de RN-76: "Se importaron: N gastos, N planes de cuotas, N ítems
+  'me deben' y el sueldo (X USD) en Octubre 2026.", **mencionando solo lo que hubo**. Aquí
+  el sueldo se muestra "US$ 1.300,00" (moneda visible, §2.3).
+- Se usa un **diálogo** y no un `SnackBar` porque el mensaje es largo, importante y
+  convendría poder releerlo; el SnackBar se va a los 4 segundos.
+- "Para completar": cada línea aparece solo si corresponde (la primera si hubo gastos o
+  cuotas; la segunda si hubo gastos "me deben" o gastos; la tercera solo si el mes se creó
+  sin cotización). Texto 13, secundario.
+- **No hay botón "Deshacer"** (CA-57.2).
+- Un solo botón, `ft.FilledButton("Ver Octubre 2026")`, con foco y Enter. Al cerrarlo, la app
+  selecciona el mes destino, **muestra la pantalla Gastos** (lo importado es mayormente
+  gastos) y refresca todo (RN-19). Si solo se importaron "me deben" y/o sueldo, muestra
+  Resumen.
+- Desde el primer uso, "Ver Octubre 2026" arma la ventana principal (rail y barra) con ese
+  mes seleccionado, como "Crear mes" en §3.1.
+
+**Diálogo 3 – Error al guardar (RN-76, CA-57.4)**
+
+Es el "Error inesperado" de §2.5, con el texto de la requisito:
+
+> **No se pudo importar**
+> No se pudo importar. No se guardó ningún dato.
+> (detalle técnico en texto chico, para copiarlo)
+> [Volver a la revisión]
+
+La revisión **se conserva** tal cual estaba, para poder reintentar o cancelar. El título del
+diálogo es "No se pudo importar" y el cuerpo repite la frase del requisito; así se lee igual
+en el lector de pantalla y en el diálogo.
+
+---
+
+### 3.14 Importar Excel: cancelar y salir (RF-57, RN-76, CA-57.3)
+
+**Cancelar** significa descartar todo: no se guarda ningún gasto, pago, plan, ítem, mes
+nuevo, persona ni categoría nueva.
+
+| Dónde | Qué hace |
+|---|---|
+| Botón "Cancelar" (pie de la revisión, y tarjeta de §3.11) | Si **no hubo cambios** del usuario: vuelve directo. Si **hubo**: confirmación (abajo). |
+| `Esc` con la pantalla de importación en foco | Igual que "Cancelar". |
+| "Cambiar archivo u hoja" (encabezado de la revisión) | Si hubo cambios: misma confirmación, con otro título (abajo). Si no: vuelve al paso de §3.11. |
+| Cerrar la ventana de la app durante la revisión | Cierra sin preguntar (decidido por el usuario, observación 31): no se intercepta el cierre de la ventana. No se pierde nada guardado, solo la revisión en curso. |
+
+**Qué cuenta como "cambios del usuario"** (RN-76): cambiar un tipo, un tilde, un dato de una
+fila, la categoría por defecto, el mes destino o agregar una categoría o persona nueva.
+Las marcas automáticas (tipos propuestos, "ya existe") no cuentan.
+
+**Confirmación – cancelar**
+
+> **¿Descartar la importación?**
+> Se pierden los cambios que hiciste en la revisión. No se guarda nada.
+> [Seguir revisando] [Descartar]
+
+- Foco en "Seguir revisando". "Descartar" es `boton_peligroso` (fondo *negativo*).
+- Si hay categorías o personas nuevas sin usar o usadas, el texto agrega: "También se
+  descartan las categorías y personas nuevas: Importado, Juan."
+
+**Confirmación – cambiar archivo u hoja**
+
+> **¿Volver a elegir el archivo?**
+> Se pierden los cambios que hiciste en la revisión.
+> [Seguir revisando] [Volver a elegir]
+
+**Destino al cancelar:** desde el primer uso, vuelve al formulario de §3.1; desde Ajustes, a la pestaña "Importar Excel". En ambos casos sin mensaje extra.
+
 ---
 
 ## 4. Diálogos y formularios
@@ -1272,6 +1936,106 @@ Un solo campo "Nombre". Mensajes de §3.10.
 | Monto | Campo de monto ARS | Mensajes comunes. |
 | Fecha | Como en §4.3, por defecto hoy | – |
 
+### 4.9 Editar fila de la importación – RF-53
+
+Se abre con clic en la fila o en el lápiz. Modal, ancho 480, con `dialogo_formulario`
+(el mismo que usan los demás diálogos), título "Editar fila 12 del Excel". Los botones son
+**"Cancelar"** y **"Aceptar"** (no "Guardar", porque no se guarda nada todavía). A la
+izquierda, `ft.TextButton("Volver a lo detectado")`: restaura nombre, monto, pagado, tipo y
+tilde a lo que leyó la app.
+
+Foco inicial: el primer campo que tenga error; si no hay, "Nombre".
+
+| Campo | Componente | Cuándo se ve | Validación y mensajes |
+|---|---|---|---|
+| Tipo | `ft.Dropdown` con los 6 tipos de §3.12 | Siempre | – |
+| Nombre | `ft.TextField` (autofocus) | Siempre; opcional si el tipo es "Sueldo (USD)" o "Ignorar" | "Ingresá un nombre." |
+| Monto | `campo_monto("Monto", "ARS")`; para sueldo `campo_monto("Sueldo", "USD")` | Siempre | Mensajes comunes de §4. "El monto tiene que ser mayor a 0." |
+| Pagado | `campo_monto("Pagado (opcional)", "ARS")` + ayuda "Lo que ya pagaste. Si es igual al monto, queda pagado completo." | Gasto fijo, gasto único y cuota | "El pagado ($ 12.000) es mayor que el monto ($ 10.000)." / "El pagado no puede ser negativo." Vacío o 0: sin pagos. |
+| Categoría | `ft.Dropdown` + `IconButton(ADD, tooltip="Nueva categoría")` + fila en línea (§4.11). Primera opción: "Categoría por defecto (Varios)". | Gasto fijo, gasto único y cuota | "Elegí una categoría." |
+| Cuota actual y Cantidad de cuotas | Dos `ft.TextField` de números enteros (`input_filter` solo dígitos), en una fila, con la ayuda "Ej.: cuota 3 de 12" | Solo cuota | "Indicá la cuota actual y la cantidad de cuotas." / "La cuota actual tiene que estar entre 1 y la cantidad de cuotas." / "La cantidad de cuotas tiene que ser un número entero de 1 o más." |
+| Vista previa del plan | `texto_ayuda` en recuadro *info* | Solo cuota con datos válidos | "Plan de 3 cuotas: primera Agosto 2026, última Octubre 2026. Se agrega la cuota 3/3 en Octubre 2026." (se actualiza en cada tecla; usa el mes destino) |
+| Persona | `ft.Dropdown` (personas activas y las nuevas ya agregadas) + `IconButton(ADD, tooltip="Nueva persona")` + fila en línea (§4.11) | Solo me deben | "Elegí una persona." |
+| Cobrado | `ft.Switch(label="Ya me lo pagaron (cobrado)")` | Solo me deben | – |
+
+- Mostrar y ocultar los bloques según el tipo con `visible`, **conservando lo escrito** en
+  cada uno (igual que el selector de moneda de §4.1).
+- Al cambiar de tipo dentro del diálogo, si el tipo anterior era "Ignorar", la fila se tilda
+  sola al aceptar (misma regla que en la lista).
+- Cuando "Aceptar" valida, los errores van debajo de cada campo (como en §2.5) y el diálogo
+  no se cierra. Si el usuario deja la fila con errores y acepta, **se permite solo si el
+  tipo es "Ignorar"**; con otro tipo, el diálogo no se cierra hasta que esté todo válido
+  (así la lista no queda con errores creados por el diálogo; los errores de la lista son
+  los que vienen del Excel).
+- En una fila de **sueldo**, debajo del monto: "Hoy el sueldo de Octubre 2026 es US$ 1.200,00."
+  (si el mes no existe: "Octubre 2026 todavía no existe.").
+
+### 4.10 Cambiar tipo o categoría de todas las filas de un bloque – RF-52, RF-53
+
+Desde el menú del bloque, "Cambiar tipo o categoría de todas...". Diálogo chico (ancho 420),
+título "Cambiar las filas de Deudas sofia".
+
+Con "No cambiar el tipo" se muestran los dos campos de abajo: la categoría se aplica a las
+filas de gasto o cuota del bloque y la persona a las filas "me deben"; un campo que se deja
+sin elegir no cambia nada.
+
+| Campo | Componente | Detalle |
+|---|---|---|
+| Tipo | `ft.Dropdown` con "No cambiar el tipo" (primera opción, elegida al abrir) y los 6 tipos | Con "No cambiar el tipo" se aplica solo la categoría o la persona: es la forma de **cambiar la categoría de todas las filas** de un bloque en un solo paso (observación 29). |
+| Persona | `ft.Dropdown` + `+` (§4.11) | Con tipo "Me deben": obligatoria ("Elegí una persona."). Con "No cambiar el tipo": opcional, se aplica a las filas "me deben" del bloque. |
+| Categoría | `ft.Dropdown` + `+` | Solo si el tipo es gasto fijo, gasto único o cuota. Primera opción "Categoría por defecto (Varios)". |
+
+Texto de ayuda fijo: "Se cambian las 5 filas de este bloque. Después podés ajustar cada
+una." Botones **"Cancelar"** y **"Aplicar a las 5 filas"**. Excepciones:
+
+- Las filas que ya están **ignoradas por una regla** (por ejemplo "Total") también cambian;
+  el usuario eligió "todas". Para no hacerlo sin querer, el texto de ayuda lo dice así:
+  "Se cambian las 5 filas de este bloque, incluidas las que están ignoradas."
+- "Cuota" no está disponible acá (cada cuota necesita su n/N): la opción se muestra
+  deshabilitada con el tooltip "La cuota se elige fila por fila."
+- "Sueldo (USD)" tampoco (solo puede haber una): deshabilitada con "Solo una fila puede ser
+  el sueldo."
+
+### 4.11 Crear categoría o persona nueva desde la revisión – RF-53, RF-54, RN-72, RN-75
+
+**Dónde aparece el "+":** al lado de (1) el dropdown de categoría por defecto de la lista,
+(2) el dropdown de categoría de §4.9 y §4.10 y (3) el dropdown de persona de §4.9 y §4.10.
+
+**Patrón:** el mismo de §4.1 ("dentro del mismo diálogo, no se abre otro encima"). Al tocar
+`IconButton(ft.Icons.ADD, tooltip="Nueva categoría")` o `tooltip="Nueva persona"`, aparece
+debajo del dropdown una fila:
+
+```
+[ Nombre de la categoría________________ ] [ Agregar ]
+[ Cancelar ]
+```
+
+`ft.Row` con `ft.TextField(label="Nombre de la categoría" / "Nombre de la persona",
+autofocus=True, on_submit=agregar)`, `ft.TextButton("Agregar")` y `ft.TextButton("Cancelar")`.
+Enter agrega, Esc cierra solo esa fila (no el diálogo).
+
+**Qué hace "Agregar" (diferencia clave con §4.1):** **no escribe en la base.** Agrega el
+nombre a una lista temporal de la importación, lo muestra en los dropdowns con el sufijo
+**" (nueva)"** y lo deja elegido. Debajo de la fila, texto de ayuda: "Se crea al confirmar la
+importación. Si cancelás, no se crea." Se puede elegir en las demás filas mientras dure la
+revisión (RN-72).
+
+**Validaciones** (RN-50, mensajes de §3.10, comparando según RN-67: sin mayúsculas ni
+acentos):
+
+| Caso | Mensaje (`error` del campo) |
+|---|---|
+| Vacío | "Ingresá un nombre." |
+| Ya existe (activa) | "Ya existe una categoría llamada "Salud"." / "Ya existe una persona llamada "Sofía"." |
+| Ya existe archivada | "Ya existe una categoría llamada "Salud" (está archivada). Podés desarchivarla en Ajustes." |
+| Ya agregada en esta importación | "Ya agregaste una persona llamada "Juan" en esta importación." |
+
+El caso de CA-53.4 ("sofía" se rechaza) se cubre con la comparación sin acentos.
+
+**Lista de nuevos visible.** Debajo del pie de la lista, no se muestra nada aparte, para no
+ocupar lugar. Se ven en: los dropdowns (con "(nueva)"), el resumen previo (§3.13, "Se crean
+también…") y la confirmación de cancelar (§3.14).
+
 ---
 
 ## 5. Accesibilidad (resumen)
@@ -1295,6 +2059,25 @@ Un solo campo "Nombre". Mensajes de §3.10.
   "Pesos (ARS)" y "Dólares (USD)", no solo un símbolo.
 - **Errores claros:** cada mensaje dice qué está mal y cómo arreglarlo, en español y sin
   términos técnicos.
+
+### Importar Excel (v2)
+
+- **Contraste:** las filas apagadas usan el texto secundario de §2.1 (≥ 4,5:1 en ambos
+  temas), **no** `opacity`. El fondo de error es el *negativo suave* de §2.1.
+- **No solo color:** errores = ícono `ERROR_OUTLINE` + texto; avisos = `WARNING_AMBER` o
+  `INFO_OUTLINE` + texto; "se importa" = tilde; "no se importa" = tilde vacío + texto
+  secundario + tipo "Ignorar" o tilde deshabilitado con tooltip.
+- **Tamaños:** texto de filas 15; notas 13 (no menos); íconos y checkboxes de 40 x 40 como
+  mínimo para clic; el lápiz tiene tooltip "Editar fila 12".
+- **Teclado:** todo se puede hacer sin mouse. Orden de Tab por fila: tilde, tipo, (cobrado),
+  lápiz. Atajos de §1.3: `Esc` cancelar, `Ctrl/Cmd+Enter` confirmar. El pie lleva "Ir al
+  primer error" para no recorrer toda la lista. En los diálogos de confirmación el foco
+  arranca en la opción segura ("Seguir revisando", "Volver a la revisión").
+- **Lectores de pantalla:** el checkbox "Importar esta fila" lleva el nombre y número de fila
+  en el tooltip ("Importar fila 12: Monotributo"); cada fila con error expone el texto del
+  error; el contador del pie se actualiza como texto normal (no solo con color).
+- **Lenguaje:** los mensajes dicen qué está mal y cómo arreglarlo, sin términos técnicos
+  ("fórmulas sin valor calculado" lleva su instrucción para resolverlo).
 
 ---
 
@@ -1418,6 +2201,30 @@ gasto en dólares (paso 2), el aviso de gastos en dólares en el diálogo de cot
 - **Previsión:** enlace "Ver el gráfico de previsión".
 - **Ajustes:** pestaña **Apariencia** (puede adelantarse a cualquier paso; es independiente).
 
+### Paso 8 – Importar Excel (v2)
+
+Se construye cuando la v1 está completa. Cada sub-paso es probable por separado y por Lucía:
+
+- **8a – Lógica (sin pantallas).** Leer el .xlsx, detectar filas y bloques, proponer tipos,
+  la lista de revisión en memoria y el guardado todo o nada (`requisitos.md` §9). Se prueba
+  solo con pytest.
+- **8b – Entradas y elegir archivo.** Botón "Importar Excel" debajo del formulario de primer uso (§3.1 modificado), pestaña
+  "Importar Excel" de Ajustes, pantalla de §3.11 con `FilePicker`, elegir hoja y los avisos
+  de error de archivo. Termina mostrando, por ahora, la cantidad de filas detectadas
+  (sin editar nada).
+- **8c – Lista de revisión de solo lectura.** §3.12 sin edición: bloques, filas, tipos
+  propuestos, notas y avisos, filtros, "Filas incompletas", controles generales (mes y
+  categoría), pie con conteo. Tilde y tipo ya editables.
+- **8d – Edición.** Diálogos §4.9 y §4.10, creación en línea de categorías y personas (§4.11),
+  errores por fila y bloqueo de "Confirmar importación".
+- **8e – Confirmar y cancelar.** Resumen previo, guardado todo o nada, resultado, errores,
+  cancelar con confirmación (§3.13 y §3.14; cerrar la ventana no pregunta).
+
+Qué puede probar el usuario al final: importar `planilla-prueba.xlsx` y ver las 13 filas de la
+lista esperada con sus tipos y avisos; cambiar tipos, corregir un monto, crear a "Juan",
+cambiar el mes destino y ver cómo se destildan las repetidas; cancelar y verificar que no
+quedó nada; confirmar y ver el resultado y el mes.
+
 ### Sugerencia de organización de archivos de la interfaz
 
 Solo como orientación para el agente que programa:
@@ -1435,7 +2242,8 @@ app/interfaz/
   pantalla_prevision.py
   pantalla_graficos.py
   pantalla_ajustes.py
-  dialogos/          # un archivo por diálogo de §4
+  pantalla_importar.py   # v2: §3.11 a §3.14
+  dialogos/          # un archivo por diálogo de §4 (v2: dialogo_fila_importacion.py)
 app/logica/
   formato.py         # formatear ARS/USD/fechas/detalle en USD y leer montos escritos (sin Flet)
 ```
@@ -1534,3 +2342,56 @@ Puntos de los requisitos que no se pueden diseñar del todo bien o que necesitan
 20. **Total en dólares de la tabla.** No se muestra un total en dólares de los gastos en USD
     (mezclaría cotizaciones distintas). Si el usuario lo quisiera (ej. "este mes pago US$ 45
     de suscripciones"), se podría agregar como texto debajo de la tabla.
+
+Continúan la numeración de §7 de `docs/diseno.md`. Las observaciones 21, 22, 26, 29, 30 y 31
+las decidió el usuario el 2026-10-13; 23 a 25, 27 y 28 son para Ana.
+
+**Importar Excel**
+
+21. **Primer uso – decidido:** el formulario queda como está, con "¿Tenés una planilla?
+    [Importar Excel]" debajo (no agrega un clic a quien empieza de cero). Se descartó una
+    pantalla de elección con dos tarjetas.
+22. **Pantalla completa sin rail – decidido: sí.** La importación es una pantalla propia (sin
+    rail ni barra superior, también cuando viene de Ajustes), para no salir a otra pantalla
+    a mitad de la revisión.
+23. **Agrupar por bloques depende de la lógica.** RN-65 define "título de bloque" para
+    cualquier texto sin monto, y el diseño agrupa la lista por esos títulos. La lógica tiene
+    que entregar, por cada fila detectada, el título del bloque al que pertenece (o ninguno).
+    Si no se quiere, el diseño funciona con un único bloque "Filas detectadas".
+24. **Acciones de bloque nuevas.** "Tildar todas", "Destildar todas" y "Cambiar el tipo de
+    todas..." (§4.10) no figuran en RF-52/RF-53. Las agregué como comodidad (sobre todo para
+    "Sofía y Marsu" sin persona). No cambian ninguna regla; si Ana no las quiere, se
+    quitan sin afectar el resto.
+25. **Tilde automático al cambiar de tipo.** Al pasar una fila de "Ignorar" a otro tipo, la
+    fila se tilda sola, y mientras es "Ignorar" el tilde está deshabilitado. RN-68 solo dice
+    que una fila se importa si está tildada y no es "ignorar"; esto lo hace más fácil y
+    evita una fila "con tipo pero sin tilde" que parece importarse y no.
+26. **Personas y categorías nuevas que no se usan – decidido:** al confirmar se crean
+    **solo** las nuevas que quedaron en uso en alguna fila que se importa (si el usuario creó
+    "Juan" y después pasó la fila a "Ignorar", no se crea). Ana debe reflejarlo en RN-72 y
+    RN-75.
+27. **Mensaje del pagado con signo de moneda.** El texto de CA-57.5 es "El pagado (12.000) es
+    mayor que el monto (10.000)." sin `$`. Lo usé tal cual por el requisito, pero la regla
+    de §0 pide moneda visible; sugiero "El pagado ($ 12.000) es mayor que el monto
+    ($ 10.000)." Si se cambia, hay que actualizar CA-57.5.
+28. **Textos nuevos no definidos en los requisitos.** Los mensajes "Ya existe en Octubre 2026.
+    Viene destildada.", "Repetida en el archivo...", "Falta el nombre/monto. Se ignora.", el
+    texto de cuota/sueldo en la fila y los del diálogo de resultado son míos. Los exactos
+    de los requisitos (aviso de gasto compartido, nota de cobrado, "Monto no válido",
+    "Marcaste N filas...", "No hay filas para importar.", "No se pudo importar...",
+    "¿Descartar la importación?", archivo dañado, hoja vacía y fórmulas) se usaron tal cual.
+    Si los criterios de aceptación necesitan textos exactos para los míos, Ana debe fijarlos.
+29. **Edición solo con diálogo, no en la fila – decidido:** categoría y persona se cambian
+    en el diálogo de §4.9 (la fila queda liviana). Para no abrir 10 diálogos, la acción de
+    bloque de §4.10 pasa a ser "Cambiar tipo o categoría de todas...", con la opción "No
+    cambiar el tipo" para cambiar solo la categoría (o la persona) de todo el bloque.
+30. **Pantalla después de importar – decidido: Gastos** (ahí se completan medios de pago y
+    compartidos). Si solo se importaron "me deben" o sueldo, Resumen, porque en Gastos no se
+    vería nada nuevo.
+31. **Cerrar la ventana con cambios – decidido: no se pregunta.** Solo "Cancelar" y `Esc`
+    piden confirmación; cerrar la ventana cierra sin preguntar (no se intercepta el cierre).
+    Ana debe ajustar RN-76 y CA-57.3, que hoy piden preguntar también al cerrar.
+32. **Componentes de Flet a verificar.** Como en la observación 13, los nombres son
+    orientativos para Flet 1.0.x: en particular `ft.FilePicker` (en 1.0 es un servicio y el
+    selector es asincrónico), `ft.Dropdown(dense=...)`, `ft.ExpansionTile` y
+    `ListView.scroll_to`. Verificarlos contra la versión instalada en `.venv`.

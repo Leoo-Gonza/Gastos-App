@@ -816,3 +816,323 @@ El texto nuevo de docs/como-abrir.md ("Doble clic con la app ya abierta"), compa
 
 ### Bugs nuevos
 Ninguno.
+
+---
+
+## Ronda 29 (2026-10-13): paso 8a-1, bloques `with con:` anidados (RN-76, todo o nada)
+
+### Qué se revisó
+La clase nueva `Conexion` de app/logica/base_datos.py (subclase de sqlite3.Connection, usada por `conectar()` con `factory=Conexion`): BEGIN explícito en el nivel 0, SAVEPOINT `nivel_N` en los internos, commit/rollback solo en el más externo.
+
+### Qué se probó (29 pruebas nuevas en tests/test_transacciones.py)
+- Bloque externo que falla después de usar funciones reales (catalogos.crear, agregar_gasto con partes, registrar_pago, crear_plan con sus cuotas generadas, agregar_item, crear_mes): no queda nada en ninguna tabla. Variante con ErrorDeValidacion real (monto negativo en el segundo gasto).
+- Bloque externo exitoso: queda todo (gastos, pagos, plan, cuotas generadas, partes, me deben, 2 meses, catálogos).
+- Error en bloque interno DESPUÉS de un INSERT (monkeypatch de `compartidos.guardar_partes`, que se llama tras el INSERT del gasto; y una violación de clave foránea real), atrapado afuera: se deshace solo el interno y el resto se guarda. Si el error no se atrapa, se deshace todo. Un interno ya liberado también se deshace si falla el externo después.
+- Tres niveles: todo bien; falla el 3.º atrapado en el 2.º; falla el 2.º con el 3.º ya liberado; falla todo hasta afuera.
+- `_nivel` vuelve a 0 e `in_transaction` a False tras éxito y tras error; la conexión sigue usable; 50 repeticiones sin savepoints colgados.
+- Sin anidar: guarda al terminar, deshace y propaga el error, `with con as c` devuelve la misma conexión, transacción ya abierta a mano antes del with.
+- Base en archivo (tmp_path): lo deshecho no queda al reabrir; lo interno deshecho no queda y lo externo sí; otra conexión no ve nada hasta el commit externo; importación simulada completa que falla no deja rastro tras reabrir.
+- crear_tablas / actualizar_estructura: base nueva en archivo y reapertura, base v0 migrada (nivel 0, sin transacción abierta, versión actual), y bloques anidados sobre la base migrada. Además pasan sin cambios las pruebas de tests/test_migracion.py.
+
+### Resultado
+1.809 pruebas, pasan las 1.809 (29 nuevas; las 1.780 anteriores siguen verdes). Cobertura de app/ 97 %. Ruff no se pudo correr: Windows (Control de aplicaciones) bloquea ruff.exe (WinError 4551). Es una limitación del equipo, no un bug; las líneas nuevas se revisaron a mano.
+
+### Bugs nuevos
+Ninguno.
+
+### Observaciones
+- O55 (baja, a tener en cuenta en 8a-2): un `con.commit()` o `con.rollback()` manual dentro de un bloque interno cierra la transacción y el RELEASE posterior falla con `sqlite3.OperationalError: no such savepoint: nivel_1`. El nivel igual vuelve a 0 y la conexión queda usable. Reproducir: `with c: with c: c.execute("INSERT ..."); c.commit()`. Hoy ninguna función de app/ hace commit/rollback dentro de un `with` (solo `actualizar_estructura`, que no usa `with`), así que no afecta al código actual.
+- O56 (baja): `crear_tablas` usa `executescript`, que hace commit implícito, dentro de su `with con:`. Funciona porque se llama desde `conectar()` en nivel 0. Si algún día se llamara dentro de un bloque externo, ese commit rompería el todo o nada. No hay llamadas así hoy; conviene no hacerlo en la importación.
+- O57 (baja): `_nivel` es un contador de la conexión, no por hilo. La app usa un solo usuario y `check_same_thread=False`; si dos hilos entraran a un `with` a la vez los niveles se mezclarían. No se probó con hilos por no ser un caso de uso actual.
+- La importación debe hacerse con `with con:` externo y llamar a las funciones de la lógica adentro; los respaldos (`hacer_respaldo`/`backup`) no se deben hacer dentro del bloque.
+
+---
+
+## Ronda 30 (2026-10-14): paso 8a-2, leer el Excel (app/logica/importar_excel.py)
+
+### Qué se revisó
+El módulo nuevo `app/logica/importar_excel.py`, que solo LEE el .xlsx: `es_nombre_xlsx`, `abrir_libro`, `LibroExcel.hojas()` / `leer_hoja()`, `FilaDetectada`, `HojaLeida`, `clasificar`, `leer_numero_texto` y `normalizar`. Contra docs/requisitos.md §4.12 (RN-60 a RN-65 y RN-67) y los CA de lectura del Módulo K: CA-50.1 (hojas), CA-51.1 a CA-51.8, CA-58.1 a CA-58.3 (y CA-58.4 simulado). Quedan fuera, por ser de 8a-3 y 8a-4: tipos propuestos, notas, mensaje de pagado mayor que monto, interpretación de cobrado, lista de revisión y guardado.
+
+### Qué se probó (244 pruebas nuevas en tests/test_importar_excel.py; ayudantes en tests/ayudantes_excel.py)
+Los archivos se generan con openpyxl (`planilla-prueba.xlsx` celda por celda, y variantes); nunca se usa datos-privados/.
+- Nombre de archivo (RN-60): .xlsx en cualquier mayúscula; rechazo de .xls, .xlsm, .xlsb, .csv, .ods, .txt, ".xlsx.txt", vacío.
+- Archivo ilegible (CA-58.1): bytes vacíos, .txt y .csv renombrados, OLE (.xls viejo o con contraseña), cabecera zip sola, .xlsx cortado (100 bytes, mitad, sin el final), zip válido sin contenido de Excel. Archivo dañado por dentro: XML roto en hoja / workbook / content types / estilos, hoja interna de 0 bytes, bytes comprimidos rotos y 300 alteraciones al azar (semilla fija).
+- Solo lectura (RN-60, CA-50.2): los bytes no cambian y no se crea nada en disco.
+- Hojas (CA-50.1, CA-58.2): una hoja, varias en orden, solo trae las filas de la hoja elegida, hojas vacías no se ofrecen, hoja oculta, hoja de gráfico (chartsheet), hoja con solo un gráfico, hoja con datos y gráfico, hoja vacía, hoja con solo fechas / horas / espacios, hoja con solo textos, hoja inexistente.
+- Números (RN-61, RN-62, CA-51.3): 20 textos válidos y 33 inválidos para `leer_numero_texto` ("82.000", "1.050.000", "66.020,12", "$ 41.116,66", "41116,66", "-5.000", "82.5", "1.5000", "3/3", "US$ 20", etc.); números de Excel (41116,66; 22093,666 -> 2209367; 0,1+0,2; 1,005; enteros grandes); booleanos, fechas, horas y los 7 errores de Excel como vacíos; "Nafta | 82.5" en dos filas incompletas; fecha en la columna del monto.
+- planilla-prueba.xlsx completa (CA-51.1, CA-51.2): las 13 filas de la lista principal con fila, monto y pagado; las 16 incompletas exactas (nombre, fila, columna); el 66021 no aparece; orden de lectura; 29 filas en total.
+- Filas ocultas (CA-51.4), columna oculta, filas vacías, datos lejos de A1 (Z100).
+- Pagado (CA-51.5): 9 encabezados reconocidos (Pago, Pagos, Abonado, ABONADO, con espacios y acentos), 6 no reconocidos (Pagué, Pagado?...), la "x" junto a Servicios, "Falta por pagar" cierra la columna, E11 = "Pagado" trae pagado 66.021 a Monotributo.
+- Cobrado (CA-51.6, solo valor crudo): 20000 / "x" / 3000 en la fila correcta, "no" en F22, "Cobrado" en F21 y F26 como encabezados, número en fila de gasto, variantes del encabezado.
+- Bloques (CA-51.7, CA-51.8): bloques de la planilla, títulos, filas pegadas, conteo 5/3/3/2, Excel sin títulos, fila nueva "Concepto/Importe", fila vacía entre título y filas, título "Préstamos", título combinado B1:C1 que cubre dos columnas, "Deudas sofia" combinada D21:E21 (CA-52.4, lectura), celdas combinadas con las otras celdas vacías.
+- Fórmulas (CA-58.3, CA-58.4): sin valor guardado (cuenta, ejemplo "D3", primera en orden de lectura, columna "AA7"); con valor guardado (número, 0, texto, texto numérico, error, booleano), mezcla de con y sin valor.
+- `normalizar` (RN-67): mayúsculas, acentos, espacios repetidos, tabulaciones y espacios duros.
+- Otros: nombres con ñ y emoji, texto de 5.000 caracteres, saltos de línea, 3.000 filas, celda con formato en la fila 30.000.
+
+### Resultado
+2.053 pruebas en total: pasan 2.042, fallan 10, 1 omitida (pendiente). Cobertura de app/ 98 %; `importar_excel.py` 100 %. Del archivo nuevo: 244 pruebas, 233 pasan, 10 fallan, 1 omitida. Las 1.809 anteriores siguen verdes.
+
+Todos los CA de lectura pasan (CA-50.1, CA-51.1 a CA-51.8, CA-58.1 con archivos cortados, CA-58.2, CA-58.3), salvo lo que explican los bugs de abajo.
+
+### Bugs
+- **BUG-25 (media): `abrir_libro` deja escapar excepciones con un .xlsx dañado por dentro.** Atrapa `BadZipFile, KeyError, ValueError, OSError, TypeError`, pero un .xlsx con un XML interno roto lanza `xml.etree.ElementTree.ParseError` (es un `SyntaxError`), con datos comprimidos rotos lanza `zlib.error`, con una cabecera zip alterada `NotImplementedError`, y con un estilo fuera de rango `IndexError`. En vez del mensaje de RN-60 se vería un error sin controlar. En 300 alteraciones al azar de un .xlsx válido escaparon 114 (109 `zlib.error` y 5 `NotImplementedError`). Reproducir: `abrir_libro(reemplazar_en_zip(xlsx({"C3": "Luz"}), "xl/worksheets/sheet1.xml", b"<<< no es xml"))`. Esperado: `ErrorDeValidacion` con `MENSAJE_ARCHIVO_INVALIDO`. Causa: la lista de excepciones del `except` en `abrir_libro` es corta; openpyxl no define una excepción propia para estos casos. Pruebas: `test_abrir_libro_xlsx_danado_por_dentro_con_xml_roto` (4 casos), `test_abrir_libro_xlsx_con_hoja_en_blanco_interna`, `test_abrir_libro_xlsx_con_datos_comprimidos_rotos`, `test_abrir_libro_bytes_alterados_al_azar_nunca_escapa_otra_excepcion`. CA-58.1 pide el mensaje para un .xlsx "cortado", y eso sí pasa; falla el dañado por dentro (RN-60: "dañado").
+- **BUG-26 (media-baja): una fórmula que devuelve texto vacío se cuenta como "sin valor calculado".** Excel guarda `=SI(A1>0;A1;"")` con `<v></v>`. openpyxl lo lee como `None`, y `leer_hoja` lo confunde con una fórmula nunca calculada. Resultado: aviso falso "Hay N fórmulas sin valor calculado... Abrí el archivo en Excel, guardalo y volvé a importarlo" en un archivo que ya estaba guardado por Excel (y el usuario no puede arreglarlo). Reproducir: `con_valores_guardados(xlsx({"C3": "Luz", "D3": '=IF(1>2,5,"")'}), {"D3": ("str", "")})` y leer la hoja: `formulas_sin_valor == 1`, esperado 0. Causa: `leer_hoja` trata como "sin valor" toda celda con fórmula cuyo valor es `None`, sin distinguir si el XML trae un `<v>` vacío de tipo `str`. Prueba: `test_formula_con_resultado_texto_vacio_guardado_no_es_sin_valor`. Nota: el archivo se simula tocando el XML de openpyxl; conviene confirmarlo con un archivo real de Excel (ver pendientes).
+- **BUG-27 (baja): una hoja que solo tiene fórmulas sin valor guardado no se ofrece.** `hojas()` mira los valores con `data_only=True`, así que esas celdas son `None` y la hoja queda fuera: el usuario nunca ve el aviso de fórmulas sin valor calculado (RN-61); si es la única hoja, la app no tiene hojas para ofrecer. Reproducir: `abrir_libro(xlsx({"D3": "=100+200", "D4": "=1+1"})).hojas()` devuelve `[]`, esperado `["Octubre"]`. Prueba: `test_hojas_solo_con_formulas_sin_valor_se_ofrece`. Caso raro (un archivo hecho por otro programa y con solo fórmulas).
+- **BUG-28 (baja, hoy no se alcanza desde un archivo): `clasificar` con `inf` o `nan` lanza `decimal.InvalidOperation`.** `_a_centavos` no los contempla. Desde un .xlsx no llega: openpyxl ya rechaza `<v>inf</v>` / `<v>nan</v>` (da `ValueError`, que `abrir_libro` atrapa). Se reporta porque la función es pública. Prueba: `test_clasificar_infinito_y_nan_no_rompen`.
+
+### Observaciones
+- O58 (rendimiento, baja): `leer_hoja` recorre todas las filas hasta la última celda con algo, aunque esté vacía y solo tenga formato. Medido: una celda con relleno en la fila 20.000 (columna T) tarda 1,2 s en leerse; en la fila 100.000, 6,4 s. En la fila 1.048.576 (el máximo de Excel) sería del orden de un minuto o más, con mucha memoria (extrapolado, no medido). Pasa con planillas a las que se les dio formato hasta abajo. `hojas()` recorre lo mismo. Mejora posible: leer con `read_only=True` o ignorar las celdas vacías al armar la grilla.
+- O59: `leer_hoja("NoExiste")` lanza `KeyError` (hoy solo se la llamaría con nombres de `hojas()`). Probado para dejarlo documentado.
+- O60: una hoja oculta con datos se ofrece como cualquier otra. RN-60 no dice nada; se documenta con una prueba.
+- O61 (para 8a-3): `clasificar` no pone tope: un entero de 10^17 pesos da 10^19 centavos, mayor que `MONTO_MAXIMO_CENT` (999.999.999.999,00) y que el entero de 64 bits de SQLite. La validación de RN-68/RN-05 debe rechazarlo en la revisión y no al guardar.
+- O62 (para 8a-3): un número en la columna de pagado junto a una fila sin monto ("Luz" sin monto y un 3 en "Pagado") queda como `pagado_cent=300` de una fila incompleta. RN-63/RN-64 no lo definen; hay que decidir si se descarta.
+- O63: con E11 = "Pagado" (CA-51.5), la columna E vuelve a ser de pagado desde la fila 12 y también traen pagado Prestamo MP (20.000), Internet (12.900), Total (32.900), tacones (6.785) y el segundo Total. Es coherente con RN-64 al pie de la letra (el encabezado de E22 es el "Pagado" de E11) y CA-51.5 solo afirma lo de Monotributo; conviene que Ana confirme que es lo esperado.
+- O64: los .xlsx de las pruebas los escribe openpyxl, que guarda los textos "en línea" (`inlineStr`); Excel usa cadenas compartidas. La lectura es de openpyxl en los dos casos, pero solo un archivo real lo confirma.
+
+### Pendiente
+- CA-52.5 / CA-58.4 con un archivo guardado por Excel o LibreOffice (fórmulas con valor guardado, cadenas compartidas, celdas combinadas reales, `SUM` con valor calculado): no se puede generar desde acá. Hay una prueba omitida (`test_pendiente_archivo_real_guardado_por_excel`). El usuario va a armar `tests/formulas-guardadas-excel.xlsx` con "Luz" en C3 y `=100+200` en D3 (más una fórmula que devuelva "" para confirmar BUG-26). Mientras tanto, `con_valores_guardados` simula el valor guardado editando el XML.
+- No se probó 8a-3 ni 8a-4 (tipos propuestos, notas, lista de revisión, guardado).
+
+### Limitaciones
+- Ruff no se pudo correr: Windows (Control de aplicaciones) bloquea ruff.exe. Las líneas nuevas se revisaron a mano.
+
+---
+
+## Ronda 31 (2026-10-14): verificación de BUG-25 a BUG-28 y O58 (importar_excel.py)
+
+### Qué se revisó
+Las correcciones en `app/logica/importar_excel.py`: `abrir_libro` atrapa cualquier `Exception` (BUG-25); una fórmula sin valor se cuenta solo si el valor es `None` y el `data_type` del libro de valores es "n" (BUG-26); `hojas()` mira el libro de fórmulas (BUG-27); `clasificar` devuelve vacío con inf, -inf y nan (BUG-28); `leer_hoja` recorre las dos hojas a la par con `zip(strict=True)` (O58).
+
+### Qué se probó (13 pruebas nuevas en tests/test_importar_excel.py, sección "Ronda 31")
+- Las 10 pruebas que fallaban en la ronda 30 ahora pasan, sin cambiarlas: XML roto en hoja / workbook / content types / estilos, hoja de 0 bytes, datos comprimidos rotos, 300 alteraciones al azar (0 escapes), hojas con solo fórmulas, inf / nan, fórmula con resultado "".
+- BUG-25: la causa original queda en `__cause__`; pasar `None`, un `str` o un `int` en vez de bytes también da el mensaje.
+- BUG-26: error ("e"), booleano ("b"), texto vacío ("str"), número y 0 guardados no cuentan; solo cuenta la fórmula sin valor, y el ejemplo es esa celda. Una celda vacía común nunca cuenta como fórmula.
+- BUG-27: una hoja de solo fórmulas se ofrece, una vacía sigue sin ofrecerse, y la hoja de fórmulas se lee como sin datos con 1 fórmula sin valor.
+- BUG-28: inf, -inf y nan dan vacío.
+- O58, `zip(strict=True)`: hoja con solo formato lejos, combinadas más filas y columnas ocultas más formato lejos más fórmula sin valor, y la planilla completa con relleno en celdas vacías. Ninguna dio error por dimensiones distintas, y la planilla da el mismo resultado que sin relleno.
+
+### Resultado
+2.066 pruebas: pasan 2.065, 1 omitida (pendiente de archivo real de Excel). Fallan 0. Cobertura de app/ 98 %; `importar_excel.py` 100 %. Ruff sigue bloqueado por Windows (limitación del equipo).
+
+| Ítem | Estado |
+|---|---|
+| BUG-25 | Corregido (0 escapes en 300 alteraciones al azar; también bytes vacíos, None y tipos que no son bytes) |
+| BUG-26 | Corregido en las pruebas con valores guardados simulados; falta confirmarlo con un archivo real de Excel (pendiente) |
+| BUG-27 | Corregido |
+| BUG-28 | Corregido |
+| O58 | Parcial: mejora solo con pocas columnas (ver abajo) |
+
+### Bugs nuevos
+Ninguno.
+
+### Observaciones
+- O58 (rendimiento): la medición del coordinador se confirma solo en parte. Midiendo solo `leer_hoja` con una celda con relleno en la fila 100.000: en la columna A o D tarda 1,9 s, pero en la columna T (20 columnas) tarda 6,1 a 6,5 s, igual que antes de la corrección (6,4 s). El tiempo depende de filas por columnas (2 millones de celdas que crea `iter_rows` en cada libro), no de la búsqueda de fórmulas. Una celda con formato en la fila 1.048.576 y varias columnas sigue siendo un riesgo. La prueba nueva usa la columna D (menos de 4 s). Mejora posible: `read_only=True` o recortar por la última celda con valor.
+- O65: `hojas()` ahora no se ve afectado por el formato lejano (corta con el primer valor), pero `leer_hoja` sí.
+- Pendientes de la ronda 30 (CA-52.5 / CA-58.4 con archivo real de Excel) siguen igual. O61, O62 (8a-3) y O63 (Ana) no se probaron, como se pidió.
+
+
+---
+
+## Ronda 32 (2026-10-14): paso 8a-3, lista de revisión de la importación (revision_importacion.py)
+
+### Qué se revisó
+- `app/logica/revision_importacion.py` (nuevo): `ListaRevision` y su API completa.
+- `app/logica/importar_excel.py`: `FilaDetectada.monto_es_suma`, `Celda.es_suma` y la lectura recortada de `leer_hoja` (O58).
+- Contra docs/requisitos.md: RN-66 a RN-75 y RN-78 (§4.12) y, del Módulo K, CA-51.6, CA-52.x, CA-53.x, CA-54.x, CA-55.x, CA-56.x, el estado del pie, y los errores de CA-57.5 a CA-57.8. Quedan fuera (como se pidió) resumen previo, guardado, resultado y cancelar (CA-57.1 a 57.4, 57.9 salvo el texto del pie, 57.10 a 57.13).
+- Base: la del principio del Módulo K (hoy 2026-10-14; 2026-10 con sueldo 1.200, cotización 1.600, Alquiler 260.000 en Vivienda; Sofía y Marsu; Varios). Todos los .xlsx se arman con `tests/ayudantes_excel.py` (datos inventados; no se leyó datos-privados/).
+
+### Qué se probó (385 pruebas nuevas en tests/test_revision_importacion.py)
+- Estado inicial: las 13 filas de la lista principal con fila de Excel, monto, pagado, tipo y bloque (CA-51.1, CA-52.1); 29 filas en total y 16 incompletas con su nota "Falta el monto/nombre. Se ignora." (CA-51.2); bloques en orden y con sus conteos, "Otras filas" y "Filas detectadas" (CA-51.7, CA-51.8); tildes iniciales.
+- Tipo propuesto (RN-66): cuota n/N (9 casos de borde: 15/10, 0/5, 12/12, 13/12, con espacios y ceros), 12 nombres que se ignoran y 5 parecidos que no ("Subtotal", "Totales"...), monto 0 o negativo con su nota, SUM (con valor guardado simulado, en minúsculas, dentro de otra cuenta, sin valor guardado, y fórmula que no es SUM), persona del título (Juan inexistente, Marsu archivada, "Sofía y Marsu", "Marsupiales", combinada D21:E21).
+- Cobrado (CA-51.6, RN-64): número igual, "x", "no", 3000 (nota exacta), 12 textos que significan cobrado y 6 que no, 0, números distintos con formato, destildar cobrado, editar con y sin `cobrado`, la nota solo en filas "me deben".
+- Tildes (RN-68, RN-74, CA-52.6, CA-52.7): Tarjetas no se puede tildar; desde y hacia "ignorar" (también con "ya existe": nota "Si la importás, queda repetida."); los 36 pares de cambio de tipo; cambiar nombre, tipo o persona recalcula la marca sin tocar el tilde; restaurar fila.
+- Acciones de bloque (RN-78, CA-52.8, CA-53.5, CA-53.6): tildar y destildar (también las "ya existe" con la base de CA-56.4), cambiar tipo/categoría/persona, rechazo de cuota y sueldo, "Elegí una persona.", categoría None, persona nueva, filas incompletas intactas, bloque inexistente.
+- Edición (CA-53.1 a CA-53.4): errores por campo, no aplica nada con errores salvo "ignorar", completar "Obra social", cuota 2/6 (nota exacta), 7/6, 0, negativa, 2,5, solo un dato; persona nueva "Juan"; "sofía" rechazada.
+- Categorías y personas nuevas (RN-75, CA-54.x, CA-57.11): textos exactos de vacío, ya existe (con y sin acento/mayúsculas), archivada (categoría y persona), "Ya agregaste...", campo "nombre"; `nuevas_en_uso` con filas destildadas, ignoradas, de otro tipo, defecto nuevo, cuota, varias; sin "Varios"; no se escribe en la base.
+- Mes destino (RN-73, CA-55.x, CA-56.5): opciones, rechazos con su mensaje, defecto con distintos "hoy", huecos entre meses, primer uso (sin meses: opciones libres, mes 13, año 26, sueldo sin flecha, sin "ya existe" de gastos pero sí de "me deben"), aviso del mes que no es el último, nota del sueldo, mensajes temporales exactos (singular, plural, ambos, ninguno), nota de la cuota al cambiar el mes y cruzando de año.
+- Ya existe y repetida (RN-74, CA-56.x): " telefono " vs "Teléfono", cualquier tipo de gasto, plan en cualquier estado, mes a crear con fijos copiados (no con pagos únicos) y cuotas de planes activos o terminados, ítems cobrados o de otra persona, segunda importación completa (textos exactos), repetida entre tipos, entre personas, y que desaparece al pasar a ignorar.
+- Aviso de gasto compartido (RN-72, CA-56.6): Internet de Sofía, desaparece si la fila 5 se ignora o destilda, vuelve con un gasto Internet del mes, "Servicios Luz Gas", "Pesos Check" contra "Pesos checks" (en el archivo y en el mes), mes a crear (fijos y cuotas), primer uso, cambio de nombre, y 15 pares para `coinciden`.
+- Pagado y sueldo (RN-69, RN-70, CA-57.5, CA-57.6): los textos exactos del error de pagado, subir el monto, bajar el pagado, negativo, cero, igual; dos y tres sueldos en todas las filas y en el pie; sueldo sin nombre pero con monto.
+- Pie (RN-68, CA-57.8, CA-57.9): el texto exacto de "Se importan 10 filas: 5 gastos, 1 plan de cuotas, 3 ítems "me deben" y el sueldo.", singular, solo sueldo, "No hay filas para importar." (todo destildado, todo ignorado, hoja sin filas completas), "Hay 2 filas con errores...", prioridad del error de dos sueldos.
+- `hubo_cambios`: falso al armar y con las consultas; verdadero con cada una de las 12 acciones; falso con acciones rechazadas.
+- O61 y O62 (ver abajo), `monto_es_suma`, y la lectura recortada de O58 (unas 20 pruebas).
+
+### Resultado
+2.451 pruebas en total: pasan 2.442, fallan 8, 1 omitida (pendiente de archivo real de Excel, igual que antes). Del archivo nuevo: 385 pruebas, 377 pasan, 8 fallan. Las 2.066 anteriores siguen verdes. Cobertura de app/: 98 %; `revision_importacion.py` 100 % e `importar_excel.py` 100 % (medido con las pruebas nuevas). Ruff sigue bloqueado por Windows: las líneas nuevas se revisaron a mano.
+
+Los CA de este paso pasan salvo lo que explican los bugs de abajo: CA-51.6 (salvo el formato de un cobrado negativo, BUG-35), CA-52.1 a CA-52.8, CA-53.1 a CA-53.6 (CA-53.3 falla solo con la cantidad 2,5, BUG-30), CA-54.1 a CA-54.3, CA-55.1 a CA-55.5, CA-56.1 a CA-56.6 (cada caso pasa; el aviso queda viejo en dos combinaciones, BUG-31 y BUG-32), CA-57.5 a CA-57.8 y el texto del pie de CA-57.9.
+
+### Bugs
+
+| Id | Gravedad | Resumen |
+|---|---|---|
+| BUG-29 | Media-baja | `leer_hoja` sigue tardando 6 a 8 s en una hoja sin valores pero con formato lejos (O58 queda abierto en ese caso) |
+| BUG-30 | Media-baja | Cantidad de cuotas con decimales (2,5) no da error |
+| BUG-31 | Media | `restaurar_fila` deja viejo el aviso de gasto compartido de las demás filas |
+| BUG-32 | Media | `cambiar_mes_destino` deja viejo el aviso de gasto compartido |
+| BUG-33 | Media-baja | Más de 600 cuotas (o años imposibles) pasan la revisión y fallarían al guardar |
+| BUG-34 | Media-baja | La nota de una cuota con números enormes tarda mucho y dice años imposibles |
+| BUG-35 | Baja | Nota de cobrado con número negativo muestra "-$ 500" |
+
+- **BUG-29: O58 solo se resuelve cuando la hoja tiene algún valor.** Verifiqué tu medición: con "Luz" en C3 y una celda con relleno en T100000, `leer_hoja` tarda 0,005 s (antes 6,4 s); en A100000 también. Y no cambia ningún resultado (ver "O58" abajo). Pero si la hoja no tiene ningún valor (solo formato), `con_valor` queda vacío, `ultima_fila = ultima_col = 0` y `iter_rows(max_row=0, max_col=0)` de openpyxl trata el 0 como "no indicado" (usa `max_row or self.max_row`) y recorre toda la hoja: 6,3 a 7,7 s medidos con relleno en T100000. Reproducir: `armar_libro({"Octubre": {}})`, poner `["T100000"].fill = PatternFill("solid", fgColor="FFFF00")`, `abrir_libro(a_bytes(libro)).leer_hoja("Octubre")`. Esperado: menos de 3 s y `sin_datos`. Causa: el `or` interno de `iter_rows`; hay que no llamar a `iter_rows` (devolver la `HojaLeida` sin filas) cuando `ultima_fila == 0`. Alcance: `hojas()` ya no ofrece esa hoja, pero CA-58.2 ("No se encontraron datos en la hoja Hoja1") hace que la pantalla pueda llamar a `leer_hoja` justo con una hoja vacía. Prueba: `test_o58_hoja_vacia_con_formato_lejos_es_rapida`.
+- **BUG-30: cantidad de cuotas con decimales.** CA-53.3 pide el error "La cantidad de cuotas tiene que ser un número entero de 1 o más." con 0 o 2,5. Con 0 anda; con `cuota_total=2.5` y `cuota_actual=1` no devuelve ningún error (`_errores_por_campo` solo mira `total < 1` y `1 <= n <= total`). Reproducir: `lista.editar_fila(i, "cuota", "Gym", 5000000, cuota_actual=1, cuota_total=2.5)` devuelve `{}`. Causa: falta comprobar que `total` (y `n`) sean enteros. Si la pantalla convierte el texto antes de llamar y descarta los decimales no se ve, pero la lógica no se defiende. Prueba: `test_cantidad_de_cuotas_con_decimales_es_un_error`.
+- **BUG-31: restaurar una fila deja viejo el aviso de los "me deben".** `restaurar_fila` arma la fila nueva (sin tilde), recalcula las marcas y recién después le pone el tilde. Como el aviso de gasto compartido (RN-72) mira qué gastos están tildados, la fila 23 "Internet" (me deben) queda sin aviso aunque la fila 5 "Internet" (gasto) vuelva tildada. Reproducir: base de CA-56.6; pasar la fila 5 a "ignorar" (el aviso de la 23 desaparece, correcto); `restaurar_fila(fila 5)`: la fila 5 queda tildada pero `fila 23.aviso_compartido` sigue en False. Esperado: True. Causa: falta volver a llamar `_recalcular_marcas()` después de asignar `nueva.tildada` (el constructor ya lo hace dos veces por esto mismo). Prueba: `test_restaurar_fila_recalcula_el_aviso_de_gasto_compartido_de_las_demas`.
+- **BUG-32: cambiar el mes deja viejo el aviso de gasto compartido.** `cambiar_mes_destino` recalcula las marcas y después cambia los tildes (destilda y vuelve a tildar), sin recalcular el aviso. Reproducir: 2026-09 y 2026-10 existen; 2026-10 tiene un gasto "Internet" y 2026-09 no. Con destino 2026-10, la fila 5 "Internet" viene "ya existe" y destildada, y la 23 muestra el aviso (por el gasto del mes). Se cambia a 2026-09: la fila 5 se vuelve a tildar (se importa), pero la 23 pierde el aviso. Esperado: sigue con el aviso, ahora por la fila 5 (RN-73: "Cambiar el mes destino recalcula ... los avisos de posible gasto compartido"). Causa: mismo orden que BUG-31; hay que recalcular después de tocar los tildes. Prueba: `test_al_cambiar_de_mes_el_aviso_de_gasto_compartido_se_recalcula`.
+- **BUG-33: la revisión acepta cuotas que `crear_plan` rechaza.** `crear_plan` rechaza más de 600 cuotas ("La cantidad de cuotas es demasiado grande.") y una primera cuota con año fuera de 1000 a 9999, pero la revisión no pone tope: `editar_fila` con `cuota_total=601` devuelve `{}`, y una fila del Excel "Algo 100000/100000" viene como cuota 100000 de 100000, sin errores y con la nota "primera Julio -6307". Al confirmar, el guardado fallaría y se perdería toda la importación (todo o nada, RN-76) con un mensaje genérico, sin decir qué fila lo causó. El tope de 600 no está en los requisitos (RN-29 dice solo "entero >= 1"): conviene que Ana lo escriba en RN-68 y que se valide en la revisión. Prueba: `test_cuota_con_mas_de_600_cuotas_da_error_en_la_revision`.
+- **BUG-34: la nota de la cuota recorre n meses de a uno.** `_nota_cuota` hace un bucle de n-1 pasos: con n = N = 10.000.000 cada llamada a `notas()` tarda 2,3 s, y con "Algo 1000000000/1000000000" en el Excel quedaría colgada varios minutos en cada redibujado de la lista. Además dice años imposibles ("primera Julio -6307"). Se resuelve con la cuenta directa de meses y con el tope de BUG-33. Pruebas: `test_cuota_con_numeros_enormes_en_el_nombre_no_cuelga_la_nota` y `test_cuota_con_numeros_enormes_no_da_una_nota_con_anio_imposible`.
+- **BUG-35: cobrado negativo.** `_numero_sin_signo` hace `removeprefix("$ ")`, pero `formatear_ars` de un negativo da "-$ 500", así que la nota dice `En la columna Cobrado dice "-$ 500"`. Esperado "-500" (el formato sin el "$"). Reproducir: F21 "Cobrado" y -500 en F22 de la planilla de prueba. Prueba: `test_cobrado_numero_distinto_se_muestra_con_el_formato_de_montos[-500--500]`.
+
+### Respuestas a lo que se pidió mirar
+- **Tildes:** estado inicial, paso desde y hacia "ignorar" (también "ya existe"), cambio de nombre/tipo/persona sin tocar el tilde y el mensaje exacto del mes ("Cambiaste el mes: 1 fila pasó a "ya existe" y se destildó. 1 fila se volvió a tildar.") pasan. El plural no está escrito en los requisitos; las pruebas esperan "2 filas pasaron a "ya existe" y se destildaron" y "2 filas se volvieron a tildar", y el código lo hace así.
+- **"Ya existe" con mes a crear y primer uso:** pasan (fijos copiados sí, pagos únicos no; cuotas de planes activos sí, terminados no; un plan terminado marca solo a las filas de tipo cuota). En el primer uso ningún gasto es "ya existe", pero los ítems "me deben" sí (RN-74 no depende del mes).
+- **Aviso compartido:** "Servicios Luz Gas" sí, "Pesos Check" vs "Pesos checks" no, desaparece al destildar o ignorar la fila de gasto. Pasa, salvo los dos casos de BUG-31 y BUG-32 (aviso viejo tras restaurar y tras cambiar el mes).
+- **Categorías y personas nuevas:** todos los textos de RN-75 pasan, incluidas archivada y "Ya agregaste...". `nuevas_en_uso` solo devuelve las usadas por filas que se importan (destildadas, ignoradas, de otro tipo o con otra persona no cuentan).
+- **O61 (monto enorme):** el error es el de `validar_centavos`: "El monto es demasiado grande." (10^17 pesos da 10^19 centavos; 1.000.000.000.000 pesos ya es demasiado; 999.999.999.999 pasa). También en el diálogo, en cuota, "me deben", sueldo y gasto único, y no aparece en filas destildadas. Con un pagado enorme y monto normal se ve el error de "pagado mayor que el monto". Resuelto.
+- **O62 (número en la columna de pagado en una fila sin monto):** hoy el número queda como `pagado_cent` de la fila incompleta ("Luz" sin monto y un 3 bajo "Pagado": `pagado_cent = 300`, `monto_cent = None`). No se ve en la lista (la fila dice "Falta el monto. Se ignora."). Al pasarla a gasto fijo el error es solo "Falta el monto."; pero al completar el monto con un valor menor aparece "El pagado ($ 3) es mayor que el monto ($ 1)." por un dato que el usuario nunca vio. Decisión pendiente de Ana: o se descarta el pagado de una fila sin monto, o se muestra. Prueba que lo documenta: `test_o62_numero_en_pagado_de_una_fila_sin_monto_hoy`.
+- **hubo_cambios:** falso al armar la lista (también con marcas "ya existe" y tildes calculados) y con cualquier consulta; verdadero con las 12 acciones del usuario (cambiar tipo, tilde, cobrado, editar, restaurar, agregar categoría o persona, categoría por defecto, tres acciones de bloque, mes destino). No cambia con acciones rechazadas ni con elegir el mismo mes. Se mantiene verdadero aunque el usuario deshaga el cambio (coherente con RN-76).
+- **O58:** tu medición de la columna T se confirma (0,005 s con datos; 6,4 s antes) y no cambia ningún resultado: la planilla completa, celdas combinadas que se pasan de los datos (D21:K21, H30:K40, G1:G40), filas y columnas ocultas con datos lejos, fórmulas sin valor más allá de los datos (Z50, C400, AA3, hoja de solo fórmulas), fechas, espacios y errores de Excel lejos, y la lista de revisión de punta a punta dan lo mismo con y sin formato lejano. Queda abierto el caso de BUG-29.
+
+### Observaciones
+- O66: `editar_fila` pisa lo que no se le pasa: `pagado_cent`, `categoria`, `persona` y `cuota_*` tienen valor por defecto `None` y se guardan tal cual. Editar solo el nombre sin repetir el pagado lo borra, y sin repetir la categoría la vuelve a "categoría por defecto" (RN-75). La pantalla tiene que pasar siempre todos los campos actuales.
+- O67: `editar_fila` acepta `categoria` y `persona` que no existen o están archivadas (probado con la categoría 999999). La pantalla solo ofrece activas, pero el guardado de 8a-4 debería validar y fallar con un mensaje claro.
+- O68: RN-67 dice que el nombre se guarda "sin los espacios del principio y del final", pero `editar_fila` también junta los espacios repetidos del medio ("Luz   y gas" queda "Luz y gas"), mientras que el nombre que viene del Excel conserva los del medio. No afecta las comparaciones (se normalizan igual).
+- O69: las notas "ya existe" de las filas "me deben" y de plan siguen diciendo "Viene destildada." aunque el usuario ya las haya tildado (los requisitos solo definen el texto destildado para estos dos casos; para el gasto sí hay versión tildada). Conviene que Ana defina el texto tildado.
+- O70: el mensaje de pagado mayor puede decir dos montos iguales: pagado 1.234,51 y monto 1.234,50 se muestran como "El pagado ($ 1.235) es mayor que el monto ($ 1.235)." porque los montos se muestran sin decimales (RN-04). Es lo que dice el ejemplo de los requisitos (66.021 y 66.020), pero cuando la diferencia es de centavos queda confuso.
+- O71: un gasto con un valor en la columna de cobrado (por ejemplo una "x" al lado de "Servicios") queda con `cobrado = True`, aunque RN-64 dice que en las demás filas se descarta. No se ve (la nota y el tilde solo salen en filas "me deben"), pero si el usuario pasa esa fila a "me deben" ya viene cobrada. Si es lo deseado, habría que escribirlo en RN-64.
+- O72: el singular del pie con errores ("Hay 1 fila con errores. Corregila, ignorala o destildala para continuar.") y la nota "Plan de 1 cuotas: ..." (cuando N = 1) no están en los requisitos; el primero es razonable, el segundo tiene un error de concordancia.
+- O73: un nombre con fecha, como "Seguro 5/10/2026", se propone como cuota 5 de 10 (la regla n/N de RN-66 se cumple con "5/10"). Es lo que dicen los requisitos al pie de la letra, pero es una propuesta fácil de errar; el usuario la cambia en la revisión.
+- O74: `leer_hoja` usa `hoja_formulas._cells` (atributo privado de openpyxl). Con `openpyxl==3.1.5` fijado anda; si se actualiza la librería hay que volver a correr las pruebas `test_o58_*`.
+- O75: si el usuario destilda a mano una fila y después un cambio de mes la marca "ya existe" y otro cambio de mes la desmarca, la fila se vuelve a tildar sola (RN-74: "las que dejan de serlo se vuelven a tildar"); se pierde el destilde manual. Es lo pedido; se anota por si molesta en el uso.
+
+### Pendiente
+- Sin cambios: CA-52.5 / CA-58.4 con un archivo real guardado por Excel o LibreOffice (aquí el valor guardado de SUM se simula con `con_valores_guardados`). Con un archivo real habría que confirmar también que Excel guarda las funciones en inglés (`SUM(`), como supone `es_suma`.
+- Pantallas, guardado, resultado y cancelar (8a-4 y siguientes).
+
+### Limitaciones
+- Ruff no se pudo correr: Windows (Control de aplicaciones) bloquea ruff.exe. Las líneas nuevas se revisaron a mano; las pruebas tienen algunas líneas largas y dos `lambda` con `noqa`.
+
+---
+
+## Ronda 33 (2026-10-14): verificación de BUG-29 a BUG-35 y O72
+
+### Qué se revisó
+Las correcciones en `importar_excel.py`, `revision_importacion.py` y `cuotas.py` (constante `MAXIMO_CUOTAS = 600`). Se corrieron, sin cambiarlas, las 8 pruebas que fallaban en la ronda 32, y se agregaron 23 pruebas de bordes (sección "Ronda 33" de tests/test_revision_importacion.py).
+
+### Estado de cada bug
+
+| Id | Estado | Cómo se verificó |
+|---|---|---|
+| BUG-29 | Corregido | Hoja sin valores y con relleno en T100000: de 6 a 8 s a menos de 3 s (la prueba pasa), sin filas |
+| BUG-30 | Corregido | 2,5 como cantidad y 1,5 o 2,0 como cuota actual dan error; un bool tampoco vale |
+| BUG-31 | Corregido | Restaurar la fila 5 devuelve el aviso a la fila 23 |
+| BUG-32 | Corregido | Cambiar a 2026-09 mantiene el aviso de la fila 23 |
+| BUG-33 | Corregido | Cantidad 599 y 600 sin error; 601 y 10^9 dan "La cantidad de cuotas es demasiado grande."; "n/N" con N > 600 queda gasto fijo |
+| BUG-34 | Corregido | Sin bucles: "Algo 1000000000/1000000000" queda gasto fijo y no tarda; cuota inválida o > 600 sin nota |
+| BUG-35 | Corregido | La nota dice "-500" |
+| O72 | Corregido | "Plan de 1 cuota: ..." |
+
+### Bordes probados
+- Cantidad 599, 600, 601 y 10^9 (por el diálogo); N = 600 y 601 en el nombre, con n = 1, 600 y 601.
+- Cuota actual 0, -1 o 700 con cantidad 601: hay error y no hay nota.
+- Notas que cruzan años: cuota 15 de 24 en 2026-02 (primera Diciembre 2024, última Noviembre 2026); 1 de 24 en 2026-10 (hasta Septiembre 2028); 2 de 3 en 2026-01; 1 de 2 en 2026-12 (hasta Enero 2027); 600 de 600 (primera Noviembre 1976); y recálculo al cambiar el mes destino en el primer uso.
+
+### Resultado
+2.474 pruebas: pasan 2.473, 1 omitida (archivo real de Excel), fallan 0. Del archivo de la revisión: 408 pruebas, todas pasan. Cobertura de app/ 98 %; `importar_excel.py` 100 %; `revision_importacion.py` 99 %. Bugs nuevos: ninguno.
+
+### Pendiente
+O62, O69, O70 y O63 quedan con Ana; O67 va al guardado (8a-4). Sigue pendiente el archivo real de Excel (CA-52.5 / CA-58.4). Ruff sigue bloqueado por Windows.
+
+---
+
+## Ronda 34 (2026-10-14): paso 8a-4, guardado de la importación y ajustes de reglas
+
+### Qué se revisó
+- `app/logica/confirmar_importacion.py` (nuevo): `resumen_previo`, `confirmar` (todo o nada), `Resultado` y `texto_resultado`.
+- `cuotas.cuota_en_mes` y `cuotas.MAXIMO_CUOTAS`; los renombres públicos `ListaRevision.con`, `.hoy`, `.mes_existente()` y `revision_importacion.sumar_meses`.
+- Las reglas nuevas O62, O63, O69 y O70 (el texto de Ana puede llegar después; se probó contra lo descrito en el pedido).
+- Pruebas nuevas en `tests/test_confirmar_importacion.py` (133 pruebas). Se actualizaron las 3 pruebas que documentaban el comportamiento viejo (ver abajo).
+
+### Pruebas viejas actualizadas a las reglas nuevas (no se aflojó ninguna)
+| Prueba | Antes | Ahora |
+|---|---|---|
+| `test_pagado_numero_sin_fila_con_nombre_no_es_pagado` (tests/test_importar_excel.py) | el 99 de E4 no formaba fila | con la fila 3 vacía cierra el "Pagado": el 99 es un número sin nombre (fila 4, monto 9.900, sin pagado). Se agregó una prueba hermana sin fila vacía (E3 con otro pagado), donde el 99 sigue sin formar fila |
+| `test_pagado_mayor_por_pocos_centavos_...` (tests/test_revision_importacion.py) | "El pagado ($ 1.235) es mayor que el monto ($ 1.235)." | "El pagado ($ 1.234,51) es mayor que el monto ($ 1.234,50)." y 1.234,56 vs 1.234,50 (renombrada `..._se_muestra_con_centavos`) |
+| `test_o62_numero_en_pagado_de_una_fila_sin_monto_hoy` | `pagado_cent == 300` en la fila sin monto | `pagado_cent is None`; al completar el monto no hay error de pagado (renombrada `..._se_descarta`) |
+
+### Resultado
+2.607 pruebas: pasan 2.606, 1 omitida (archivo real de Excel), falla 1 (BUG-36, a propósito: la prueba pide el comportamiento correcto). De las 133 nuevas pasan 132. Cobertura de app/ 98 %; `confirmar_importacion.py` 100 %; `cuotas.py` 100 %; `revision_importacion.py` 99 %.
+
+### Qué se probó y qué pasó
+| CA / regla | Qué se verificó | Resultado |
+|---|---|---|
+| CA-57.1 | Gastos de 2026-10 (nombre, monto, tipo, categoría Varios, sin medio, pagos); totales 677.837 / pagado 98.700 / pendiente 579.137; sueldo 1.300; USD a cambiar 423,65 (`42365`); ahorro 876,35 (`87635`); Sofía 32.900 y Marsu 6.785 no cobrados con fecha de hoy; sin categorías ni personas nuevas; plan de Avant (primera 2026-08, cuota 3/3, última 2026-10, sin medio) | Pasa |
+| CA-57.2 / 57.10 / 57.12 | Frase principal y "Para completar" (con y sin la línea de cotización); pantalla Gastos o Resumen (solo ítems, solo sueldo, solo cuota, solo gasto); primer uso | Pasa |
+| CA-57.9 | Las 7 líneas del resumen previo con los textos exactos; singulares; "pagado" solo si hay pagos; mes que se crea; primer uso con y sin sueldo; "Sueldo: US$ 1.200,00" sin flecha si no cambia; el resumen no escribe en la base ni toca la lista | Pasa |
+| CA-55.2 | Destino 2026-11: se crea con Alquiler copiado (uno solo), sueldo 1.300, cotización 1.600; cuota 3/3 en noviembre y 2/3 en octubre; octubre no recibe otro dato ni cambia su sueldo; sin fila de sueldo toma el del último mes | Pasa |
+| CA-55.3 | Destino 2026-09 con 2026-10 existente: cuota 3/3 en septiembre, octubre sin cuota; sueldo al mes destino; septiembre recibe también "Alquiler" (no existía ahí, CA-56.5) | Pasa |
+| CA-55.4 / 55.5 | Primer uso con y sin sueldo (sueldo 0, sin cotización, `falta_cotizacion`); destino propuesto = último mes | Pasa |
+| RN-71 | Cuota en mes pasado (los meses del medio no se tocan, el actual recibe la suya), n = N (plan terminado, mes siguiente sin cuota), n = 1 en mes nuevo, pagado completo y parcial solo en la cuota del destino, 600 cuotas, 600/600 (primera 1976-11), primer uso en 2025-03 | Pasa |
+| CA-56.4 / O69 | Segunda importación: todo "ya existe" y destildado; notas con y sin tilde; Avant: gana la nota de gasto sobre la de plan; sin tildar nada no se puede confirmar; tildando todo queda duplicado | Pasa |
+| CA-57.11 | Persona nueva que deja de usarse no se crea; categoría nueva como defecto, solo en una cuota, solo en "Gym" destildada; 2 categorías y 2 personas nuevas | Pasa |
+| CA-57.4 | 12 puntos de fallo con monkeypatch (después de crear el mes, la categoría, la persona, el primer y el último gasto, pagos, plan, cuota del destino, primer y último ítem, marcar cobrado): no queda nada en ninguna tabla, la lista queda igual (filas, nuevas, mes, categoría por defecto), `__cause__` es el error, la conexión queda sin transacción abierta, y el reintento funciona y deja lo mismo que una importación sin fallo. También fallo real de la base, fallo en el primer uso (sigue sin meses) y fallo en el sueldo | Pasa |
+| CA-50.2 | La lógica no crea archivos, no guarda la ruta ni ".xlsx" en la base, y borrar el .xlsx no cambia nada | Pasa |
+| RN-69 | Pagado completo (un pago por el monto), parcial, 0, centavos, en gasto único y en cuota; en "me deben" se ignora | Pasa |
+| Cobrado | Ítems cobrados no suman al total; destildar "cobrado" lo deja pendiente | Pasa |
+| O62, O63, O70 | Pagado de fila sin monto se descarta; fila vacía cierra el "Pagado"; error con centavos si los montos se ven iguales | Pasa |
+| Renombres | `.con`, `.hoy`, `mes_existente()`, `sumar_meses` existen y los viejos ya no | Pasa |
+| No se puede confirmar | Sin filas, 2 sueldos, 1 y 2 filas con errores: lanza el texto del pie y no guarda | Pasa |
+
+### Bugs
+
+#### BUG-36 (baja): una cuota con primera cuota antes del año 1000 pasa la revisión y falla al guardar
+- **Causa:** `_errores_por_campo` valida que n esté entre 1 y N y que N <= 600, pero no que el año de la primera cuota (destino − (n − 1) meses) sea de 4 dígitos. `crear_plan` sí lo valida ("El año tiene que tener 4 dígitos.") y el guardado falla.
+- **Cómo reproducir:** base sin meses, hoja con "Casa 600/600 | 1000", `lista.cambiar_mes_destino(1000, 6)`. `lista.puede_confirmar()` es True, la nota dice "primera Julio 950" y `confirmar(lista)` lanza "No se pudo importar. No se guardó ningún dato." (la causa es "El año tiene que tener 4 dígitos."). No queda nada guardado.
+- **Prueba:** `test_cuota_cuya_primera_cuota_queda_antes_del_ano_1000_no_pasa_la_validacion` (falla hoy). `test_cuota_con_primera_cuota_antes_del_ano_1000_falla_sin_guardar_nada` pasa: confirma que no queda nada a medias.
+- **Impacto:** casi nulo en el uso real (hace falta un primer uso con año 1000 a 1049 y cuota 600 de 600). Se corrige con un error de fila en la revisión, como BUG-33.
+
+### Observaciones
+- **O67 (qué pasa):** categoría o persona archivada o inexistente elegida con `editar_fila` (y categoría por defecto archivada) NO da error en la lista: `puede_confirmar()` es True y el pie dice "Se importan N filas". Al confirmar, el guardado falla y se ve solo "No se pudo importar. No se guardó ningún dato."; no queda nada guardado (probado con categoría archivada, inexistente, en cuota, por defecto, y persona archivada e inexistente). Lo seguro anda; falta claridad: la causa real ("La categoría elegida está archivada.", "La persona Marsu está archivada.") queda solo en `__cause__`. Una categoría mala en una fila que no se importa no molesta. Conviene que Ana decida si la revisión valida esto con un error de fila (como "Elegí una categoría.") o si basta con el mensaje genérico. La pantalla solo ofrece activas, así que solo pasa si algo se archiva mientras dura la revisión.
+- **O76:** `confirmar` no "gasta" la lista. Confirmar dos veces la misma lista (doble clic en "Importar") duplica todo; con una persona o categoría nueva, la segunda vez falla con el mensaje genérico y no guarda nada más. La pantalla tiene que desactivar el botón mientras guarda y no volver a la revisión después de un éxito.
+- **O77:** cuota con destino 9999-12: la nota y el plan llegan al año 10000 ("última Noviembre 10000") y se guarda sin error. Inofensivo; se anota por si la pantalla lo muestra con 5 dígitos.
+- **O78:** en el primer uso la fila "Alquiler" del Excel no es "ya existe" (no hay ningún mes), por eso importa 6 gastos y no 5. Es coherente con RN-74; CA-57.12 no dice la cantidad.
+- **O79:** el nombre con espacios de más ("  Luz   y gas  ") se guarda como "Luz y gas" (lo limpia `agregar_gasto`), pero la lista antes de guardar conserva los espacios del medio (ver O68).
+- O63 y O69 todavía no tenían texto en requisitos.md al momento de la ronda para todos los casos; las pruebas siguen el comportamiento descrito en el pedido (CA-51.8 y CA-56.4 ya recogen O69).
+
+### Respuestas a lo que se pidió mirar
+- **CA-57.4 en los tres puntos pedidos** (después de crear el mes, después de crear una categoría nueva, en el último ítem): pasan, y otros 9 puntos más. En todos, la base queda idéntica a la de antes (foto de todas las tablas), incluido el sueldo y el mes nuevo.
+- **Totales de la base del Módulo K:** gastos `67783678`, pagado `9870000`, pendiente `57913678`, USD a cambiar `42365`, ahorro `87635`, Sofía `3290000`, Marsu `678500`. Coinciden con CA-57.1.
+
+### Pendiente
+- Pantallas del guardado (8e): botón "Importar", diálogo de resultado, error al guardar y cancelar.
+- Archivo real de Excel (CA-52.5 / CA-58.4).
+
+### Limitaciones
+- Ruff no se pudo correr (Windows bloquea ruff.exe). Las líneas nuevas se revisaron a mano; hay líneas largas en las pruebas y una `lambda` con `noqa`.
+- El fallo a mitad del guardado se simula con monkeypatch (y una vez con un fallo real de la base); no se probó un corte de luz o un disco lleno.
+
+---
+
+## Ronda 35 (2026-10-14): verificación de BUG-36, O67, O76 y O77
+
+### Qué se revisó
+Las correcciones en `revision_importacion.py` (`_errores_por_campo`, `_elegible`, atributo `confirmada`) y `confirmar_importacion.py` (`confirmar`). Se actualizaron las 11 pruebas de la ronda 34 que documentaban el comportamiento viejo y se agregaron pruebas nuevas, todas en `tests/test_confirmar_importacion.py` (ahora 157 pruebas).
+
+### Estado de cada ítem
+| Id | Estado | Cómo se verificó |
+|---|---|---|
+| BUG-36 | Corregido | Destino 1000-06 y cuota 600/600: la fila muestra "Con esta cuota, el plan quedaría en un año no válido. Revisá la cuota actual y la cantidad.", sin nota de plan; no se puede confirmar; `confirmar` lanza el texto del pie y no guarda nada (ni el primer mes). Límites: 600/600 en 1049-12 es válida (primera Enero 1000) y en 1049-11 no. El error se recalcula al cambiar el mes destino (aparece y desaparece), el diálogo de edición lo rechaza y una fila destildada no lo muestra. Sin regresión: 600/600 en 2026-10 se guarda |
+| O77 | Corregido | Destino 9999-12 y cuota 1/12 (última cuota 10000-11): error de fila y no se guarda. 12/12 en 9999-12 y 1/12 en 9999-01 son válidas; 1/12 en 9999-12 no |
+| O67 | Corregido | `editar_fila` devuelve `{"categoria": "Elegí una categoría."}` o `{"persona": "Elegí una persona."}` (y no cambia la fila) con categoría archivada, inexistente, Nueva ajena a la revisión (también en cuota) y persona archivada o inexistente. Categoría o persona archivada mientras dura la revisión, y categoría por defecto archivada: error de fila, pie "Hay N filas con errores...", `confirmar` lanza el pie y no guarda nada; al desarchivar o elegir otra, se puede confirmar. Categorías activas y Nuevas de la revisión se siguen aceptando; una fila destildada con categoría mala no molesta |
+| O76 | Corregido | `confirmada` empieza en False; tras un guardado bien hecho pasa a True y una segunda llamada lanza "Esta importación ya se guardó." (sin `__cause__`, base idéntica), también con persona nueva, en el primer uso y aunque la lista ya no sea confirmable (gana sobre "No hay filas para importar."). Si el guardado falla, o si la lista tiene errores, `confirmada` sigue en False y se puede reintentar (probado con monkeypatch) |
+
+### CA-57.4 con fallo real de la base (sin monkeypatch)
+Como la revisión ya detecta el archivado y los años, el fallo real se provoca con un trigger de SQLite (`RAISE(ABORT)`), que la revisión no puede ver. 9 puntos con la lista completa de CA-57.4 (destino 2026-11, Juan y "Importado" nuevos, un ítem cobrado, un pago parcial): al insertar el mes, la categoría, la persona, un gasto a mitad (Gym), la cuota que se copia al mes actual, el pago parcial, el plan, el último ítem "me deben" y al marcar cobrado. Además, el UPDATE del sueldo de un mes existente y el primer uso con fallo en los ítems. En todos: mensaje "No se pudo importar. No se guardó ningún dato.", la causa real en `__cause__`, la base idéntica a la de antes (foto de todas las tablas), la lista intacta, `confirmada` en False, sin transacción abierta y, al sacar el trigger, el reintento funciona. Las 12 pruebas con monkeypatch de la ronda 34 siguen pasando.
+
+### Resultado
+2.632 pruebas: pasan 2.631, 1 omitida (archivo real de Excel), fallan 0. Cobertura de app/ 98 %; `confirmar_importacion.py` 100 %; `revision_importacion.py` 99 %. Bugs nuevos: ninguno.
+
+### Observaciones
+- **Texto para Ana:** el mensaje "Con esta cuota, el plan quedaría en un año no válido. Revisá la cuota actual y la cantidad." no está en requisitos.md (RN-68); habría que agregarlo a la tabla de errores y agregar "Esta importación ya se guardó." a RN-76. La nota de plan no aparece cuando hay este error.
+- **O80:** una categoría o persona que se archiva durante la revisión ahora se ve como "Elegí una categoría." / "Elegí una persona." aunque el usuario la había elegido; el texto no explica que está archivada. Es razonable (pasa solo si se archiva en otro lugar mientras dura la revisión).
+- **O81:** `confirmada` no se incluye en "lo que cuenta como cambio" (`hubo_cambios`) ni se reinicia: una lista confirmada queda inutilizable y la pantalla tiene que armar una nueva para otra importación. Es lo pedido.
+- Pendientes sin cambios: pantallas del guardado (8e) y archivo real de Excel (CA-52.5 / CA-58.4). Ruff sigue bloqueado por Windows.

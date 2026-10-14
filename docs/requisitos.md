@@ -1,8 +1,11 @@
-# Requisitos – App de gastos personales (v1)
+# Requisitos – App de gastos personales (v1 y v2)
 
 > Documento de requisitos. Sale de la entrevista (/grill-me) confirmada por el usuario,
 > de sus respuestas a dos rondas de preguntas abiertas, de la entrevista sobre gastos en
-> dólares (y sus preguntas abiertas) y de la planilla de referencia
+> dólares (y sus preguntas abiertas), de la entrevista sobre importar la planilla de Excel
+> (2026-10-13, primera funcionalidad de la v2, y sus preguntas abiertas), de las decisiones
+> del usuario sobre el diseño de la importación (2026-10-13, `docs/diseno.md` §7,
+> observaciones 21 a 32) y de la planilla de referencia
 > (`docs/referencia/Referencia planilla.png`).
 > Define QUÉ hace la app, no CÓMO se programa.
 
@@ -36,6 +39,12 @@ Objetivos de la v1:
 3. Seguir las deudas en cuotas (cuota actual, cuándo terminan, cuánto se libera).
 4. Repartir gastos compartidos y saber cuánto le debe cada persona.
 5. Ver la capacidad de endeudamiento, una previsión de los próximos 12 meses y tres gráficos.
+
+Objetivos de la v2 (en curso):
+
+6. Importar una planilla de Excel para arrancar sin cargar todo a mano (Módulo K). Más
+   adelante la usarán familiares, cada uno con su propio Excel de formato distinto: la
+   importación no depende del formato de la planilla del usuario.
 
 ---
 
@@ -78,13 +87,23 @@ Objetivos de la v1:
 | **Meta de ahorro** | Monto único en USD que el usuario quiere ahorrar por mes. |
 | **Previsión** | Estimación de los 12 meses siguientes al mes actual, con la cotización actual y sin inflación. |
 | **Versión de la base** | Número que indica qué estructura tiene el archivo de la base (0 = sin gastos en dólares; 1 = con gastos en dólares). Evita repetir actualizaciones (RN-59). |
+| **Importación** | Carga de datos desde un archivo `.xlsx` de Excel, con una revisión previa en la que el usuario decide fila por fila (Módulo K). El archivo no se guarda en la app. |
+| **Lista de revisión** | Pantalla de la importación con las filas detectadas, donde el usuario elige el tipo de cada fila, corrige y confirma. Nada se guarda hasta confirmar. |
+| **Fila detectada** | Línea de la lista de revisión armada a partir de una fila del Excel: un nombre (texto), un monto y, si hay, un pagado o un cobrado (RN-63, RN-64). |
+| **Fila incompleta** | Fila detectada a la que le falta el nombre o el monto (ej. "Obra social" sin número, un título, o un número suelto). Se muestra en un grupo aparte (RN-63). |
+| **Título de bloque** | Texto sin monto que encabeza un grupo de filas en la misma columna del Excel y que no está pegado a la fila de arriba (ej. "Deudas sofia", "Marsu") (RN-65). |
+| **Fila pegada** | Texto sin monto que tiene justo arriba, en la misma columna, el nombre de otra fila detectada (ej. "Deuda freezer" debajo de "Avant Service…"). No es un título: queda como fila incompleta del bloque en el que está (RN-65). |
+| **Bloque** | Grupo de filas de la lista de revisión que cuelgan del mismo título de bloque. Tiene acciones para cambiar todas sus filas juntas (RN-78). |
+| **Tipo de fila** | Qué se hace con una fila detectada: gasto fijo mensual, gasto pago único, cuota, me deben, sueldo (USD) o ignorar. |
+| **Mes destino** | Mes en el que se cargan los datos importados (RN-73). |
 
 ---
 
 ## 3. Requisitos funcionales
 
 Numeración: RF-xx. Los criterios de aceptación de cada RF están en la sección 7 con el
-número CA-xx.y, donde xx es el número del RF.
+número CA-xx.y, donde xx es el número del RF. Los módulos A a J son la v1; el módulo K es
+la v2.
 
 ### Módulo A – Meses e historial
 
@@ -237,6 +256,62 @@ número CA-xx.y, donde xx es el número del RF.
   los gastos existentes quedan como gastos en ARS con sus mismos montos, pagos y partes. La
   actualización se aplica una sola vez (RN-59).
 
+### Módulo K – Importar Excel (v2)
+
+- **RF-49** Puntos de entrada y pantalla. La importación se ofrece en dos lugares:
+  - en la pantalla de primer uso (RF-04): el formulario para crear el primer mes queda
+    **igual** y debajo aparece "¿Tenés una planilla?" con el botón "Importar Excel" (así no
+    agrega ningún paso a quien empieza de cero);
+  - en Ajustes, en una pestaña "Importar Excel" (la última), con el botón "Importar Excel".
+  Es opcional: la app se puede usar sin importar nada. La importación ocupa una **pantalla
+  completa, sin rail ni barra superior**, venga del primer uso o de Ajustes: mientras dura no
+  se puede ir a otra pantalla ni cambiar de mes, y siempre tiene "Cancelar" a la vista
+  (RN-76).
+- **RF-50** Elegir archivo y hoja. El usuario adjunta un archivo `.xlsx` de **cualquier
+  formato** (no tiene que parecerse a la planilla del usuario: cada familiar puede tener la
+  suya). Si el archivo tiene varias hojas, el usuario elige cuál importar; si tiene una sola,
+  se usa esa sin preguntar. El archivo solo se lee: no se modifica, no se copia y no se
+  guarda en la app (RN-60).
+- **RF-51** Lista de revisión. A partir de la hoja elegida, la app arma la lista de filas
+  detectadas (texto + monto, y el pagado o el cobrado si los hay), en el orden del Excel e
+  indicando el número de fila del Excel de cada una. Las filas se agrupan en **bloques**
+  según el título de bloque del Excel al que pertenecen (RN-65). Aparte, en un grupo "Filas
+  incompletas", muestra los textos sin monto y los montos sin texto (RN-61 a RN-64). Nada se
+  guarda hasta confirmar (RF-57).
+- **RF-52** Tipo de cada fila: gasto fijo mensual, gasto pago único, cuota, me deben, sueldo
+  (USD) o ignorar. La app propone un tipo cuando puede (RN-65, RN-66) y el usuario lo puede
+  cambiar. Cada fila tiene además un tilde "importar", que sigue al tipo "ignorar" (RN-68):
+  una fila "ignorar" no se puede tildar y, al pasarla a otro tipo, se tilda sola. En cada
+  bloque, el usuario puede tildar o destildar todas sus filas de una vez (RN-78).
+  "Compartido" **no** es un tipo de importación: se marca después en la pantalla de gastos
+  (RF-29).
+- **RF-53** Corrección por fila. Antes de confirmar, el usuario puede corregir en cada fila:
+  nombre, monto, monto pagado (gastos y cuotas), categoría (gastos y cuotas), cuota actual y
+  cantidad de cuotas (cuotas), persona y tilde "cobrado" (me deben), con la opción de crear
+  una persona nueva (RN-72). Las filas incompletas se pueden completar (escribir el nombre o
+  el monto que falta) y cambiar de tipo. Con la acción de bloque "Cambiar tipo o categoría de
+  todas..." puede cambiar en un solo paso el tipo, la categoría o la persona de todas las
+  filas de un bloque (RN-78).
+- **RF-54** Categoría por defecto: una categoría para toda la importación (propuesta:
+  "Varios", si existe), que se puede cambiar en general y fila por fila (RN-75). El medio de
+  pago **no** se pide: los gastos importados quedan sin medio de pago y se completa después
+  en la app (RF-07).
+- **RF-55** Mes destino: por defecto el mes actual; se puede elegir otro antes de confirmar.
+  Si el mes destino no existe, se crea al confirmar (RN-73).
+- **RF-56** Duplicados: las filas cuyo nombre coincide con un gasto que ya existe en el mes
+  destino se marcan "ya existe" y vienen destildadas; las filas con nombre repetido dentro del
+  mismo Excel se marcan "repetida en el archivo" (RN-74). Las filas "me deben" que podrían ser
+  la parte de un gasto compartido muestran un aviso, sin cambiar su tipo (RN-72).
+- **RF-57** Confirmar y cancelar. Al confirmar, la app muestra primero un **resumen previo**
+  de lo que se va a guardar; al aceptarlo guarda todas las filas que se importan de una sola
+  vez (todo o nada), muestra el resultado y después el mes destino en la pantalla **Gastos**
+  (o en **Resumen**, si solo se importaron ítems "me deben" y/o el sueldo) (RN-76). Cancelar
+  en cualquier momento antes de guardar descarta todo sin guardar nada: "Cancelar" y `Esc`
+  piden confirmación si el usuario ya cambió algo; cerrar la ventana de la app cierra sin
+  preguntar. Una importación confirmada no se puede deshacer (§8).
+- **RF-58** Avisos sobre el archivo: archivo dañado o que no es `.xlsx`, hoja sin datos y
+  fórmulas sin valor calculado (RN-60, RN-61).
+
 ---
 
 ## 4. Reglas de negocio
@@ -368,9 +443,11 @@ porque redondeaba a enteros).
 - **RN-28 – Monto restante.** Respecto del mes seleccionado: `(N − n) × monto_cuota` (cuotas
   posteriores a la del mes). Si el plan no empezó, `N × monto_cuota`; si terminó o está
   cancelado, 0.
-- **RN-29 – Validaciones del plan.** Cantidad de cuotas: entero ≥ 1. Monto de cuota > 0, en
-  ARS (las cuotas en dólares están fuera de la v1). La primera cuota puede ser un mes pasado
-  (deudas ya empezadas, ej. Avant en 3/3).
+- **RN-29 – Validaciones del plan.** Cantidad de cuotas: entero ≥ 1 y **como máximo 600**
+  (50 años; más que eso es un error de tipeo). Con más de 600 se rechaza con el mensaje "La
+  cantidad de cuotas es demasiado grande." Monto de cuota > 0, en ARS (las cuotas en dólares
+  están fuera de la v1). La primera cuota puede ser un mes pasado (deudas ya empezadas, ej.
+  Avant en 3/3).
 - **RN-30 – Alcance de alta y edición.** Crear o editar un plan crea, actualiza o elimina sus
   gastos **solo en el mes actual (calendario) y en los meses futuros que ya existan**. Los
   meses anteriores al mes actual nunca se modifican, aunque la primera cuota sea anterior y
@@ -559,6 +636,555 @@ porque redondeaba a enteros).
   - **Resultado:** todos los gastos existentes quedan con moneda ARS, sin monto en USD ni
     cotización del gasto, y con exactamente los mismos montos, pagos y partes que antes.
 
+### 4.12 Importar Excel (v2)
+
+La importación no puede depender del formato de la planilla del usuario: las reglas de
+detección (RN-61 a RN-66) valen para cualquier `.xlsx`. Los ejemplos usan la planilla de
+referencia, cuyas columnas son: C = nombres, D = montos ("Gastos" / "Monto") y E = "Pagado"
+o "Total deudas"; los bloques de personas tienen el nombre en D y el monto en E.
+
+Los textos entre comillas de esta sección son **exactos** (se verifican en las pruebas). En
+los ejemplos, "Octubre 2026" es el mes destino, "Sofía" la persona y los números, los de la
+fila; en la app se reemplazan por los valores reales, con el formato de RN-04 y "US$" delante
+de los montos en USD.
+
+- **RN-60 – Archivo aceptado.**
+  - Solo archivos `.xlsx`. Un archivo con otra extensión (`.xls`, `.xlsm`, `.csv`, `.ods`…),
+    dañado, protegido con contraseña o que no es realmente un `.xlsx` (ej. un `.txt`
+    renombrado) se rechaza con el mensaje "No se pudo leer el archivo. Solo se aceptan
+    archivos .xlsx de Excel." y no cambia nada.
+  - El archivo **solo se lee**: no se modifica, no se copia a la carpeta de la app y no se
+    guarda su ruta. Después de importar, en la app solo quedan los datos confirmados; borrar o
+    mover el Excel no afecta a la app.
+  - Se importa **una hoja por vez** (la elegida, RF-50). Para importar otra hoja se repite la
+    importación. Las hojas que no tienen celdas (ej. hojas que solo tienen un gráfico) no se
+    ofrecen.
+  - Se leen todas las filas y columnas de la hoja, incluidas las ocultas.
+  - Si la hoja elegida no tiene ninguna celda con texto o número: "No se encontraron datos en
+    la hoja X." El usuario puede elegir otra hoja u otro archivo, o cancelar.
+  - Si la hoja solo tiene filas incompletas (ninguna con texto y monto), la lista se muestra
+    igual, con el aviso "No se encontraron filas con un texto y un monto." (se pueden
+    completar a mano).
+- **RN-61 – Contenido de las celdas.** Cada celda cuenta como:
+  - **número:** celda numérica de Excel (el valor se toma tal cual), o texto que se puede leer
+    como número en formato argentino (RN-62);
+  - **texto:** cualquier otro texto, sin los espacios del principio y del final;
+  - **vacía:** celda vacía o solo con espacios, fechas, horas, valores verdadero/falso y
+    errores de Excel (`#DIV/0!`, `#REF!`, etc.).
+  - **Fórmulas:** se usa el valor calculado que Excel guardó en el archivo, y se clasifica
+    igual que arriba. Si una fórmula no tiene valor guardado (archivo creado por otro programa
+    y nunca abierto y guardado en Excel), la celda cuenta como vacía y arriba de la lista se ve
+    el aviso "Hay N fórmulas sin valor calculado (ej. D9). Abrí el archivo en Excel, guardalo
+    y volvé a importarlo para ver esos montos." Se puede seguir con la importación igual.
+  - **Celdas combinadas:** el valor está en la primera celda (arriba a la izquierda); las demás
+    cuentan como vacías.
+- **RN-62 – Números escritos como texto.** Se leen con formato argentino: punto = separador
+  de miles, coma = decimales.
+  - "82.000" → 82.000; "1.050.000" → 1.050.000; "66.020,12" → 66.020,12; "260000" →
+    260.000; "41116,66" → 41.116,66.
+  - Se aceptan un "$" y espacios antes del número ("$ 82.000", "$41.116,66") y un "-"
+    adelante (negativo, ver RN-68).
+  - El punto solo vale como separador de miles si separa grupos de exactamente 3 dígitos. Si
+    no ("82.5", "1.5000"), el texto **no** es un número: se trata como texto.
+  - Un texto con letras u otros símbolos no es número ("Monotributo 66.020,12", "3/3",
+    "US$ 20").
+  - Los números de Excel (no texto) se toman tal cual, sin interpretar puntos ni comas: el
+    número 41116,66 de Excel → 41.116,66.
+  - Todos los montos se pasan a centavos (RN-01). Si tienen más de 2 decimales se redondean al
+    centavo más cercano, mitad hacia arriba (RN-03): 22.093,666 → 22.093,67.
+  - Los montos se toman en **ARS**, salvo el de la fila de sueldo, que se toma en **USD**
+    (RN-70). La importación no convierte monedas.
+- **RN-63 – Armado de las filas detectadas.** Para cada fila del Excel se recorren sus celdas
+  de izquierda a derecha:
+  1. Cada celda de **texto** empieza una fila detectada nueva, con ese texto como nombre.
+     Excepción: un texto en una columna de pagado o de cobrado que es el **valor** de una fila
+     (RN-64) no empieza una fila nueva. Un texto en esas columnas que no es valor de ninguna
+     fila cierra la columna y sí empieza una fila nueva, como cualquier texto (RN-64).
+  2. El primer **número** después de ese texto (antes del texto siguiente) es su **monto**. Un
+     número en una columna de pagado es su **pagado** y uno en una columna de cobrado es su
+     **cobrado** (RN-64); esos números nunca empiezan una fila nueva. Los demás números se
+     descartan (ej. columnas "Total deudas" u "Objetivo" de la planilla).
+  3. Cada **número** que no tiene un texto antes en esa fila del Excel (y no está en una
+     columna de pagado o de cobrado) forma una fila detectada **sin nombre**.
+  Resultado:
+  - Filas con nombre y monto → **lista principal**.
+  - Filas con nombre y sin monto (títulos, encabezados, "Obra social" sin número) y filas sin
+    nombre (números sueltos, como los totales debajo de su título) → grupo **"Filas
+    incompletas"**, con tipo "ignorar". Se pueden completar y cambiar de tipo (RF-53); hasta
+    que se complete lo que falta no se pueden importar, salvo como sueldo, que no necesita
+    nombre (RN-70).
+  - Una fila detectada que termina **sin monto** en el Excel queda también **sin pagado**: el
+    número que tenga en una columna de pagado se descarta (RN-64), como el pagado de cualquier
+    fila sin monto. Si el usuario después completa el monto en la revisión, la fila sigue sin
+    pagado (si corresponde, lo escribe a mano, RF-53). Ej.: "Luz" sin monto y un 3 en la
+    columna "Pagado" → fila incompleta "Luz", sin pagado; completándola con monto 1 y tipo
+    gasto fijo, se importa sin pagos (no aparece "El pagado ($ 3) es mayor que el monto
+    ($ 1).").
+  - Cada fila incompleta muestra la nota "Falta el monto. Se ignora." o "Falta el nombre. Se
+    ignora.". Si el usuario le cambia el tipo sin completar lo que falta, la nota pasa a ser
+    el error de RN-68 ("Falta el monto." / "Falta el nombre."). Una fila incompleta que se
+    completa sigue en el grupo "Filas incompletas" (no se mueve de lugar).
+  - Ejemplos de la planilla: "Alquiler | 260000" → fila con monto 260.000; "Arca deuda |
+    84000 | 84000" → monto 84.000, y el segundo 84.000 (columna "Total deudas") se descarta;
+    "Edenor" y el "66.281" de la fila de abajo → dos filas incompletas (el usuario puede
+    escribir "Edenor" como nombre del 66.281); el "1200" debajo de "Sueldo" → fila sin
+    nombre, que el usuario puede marcar como sueldo.
+  - Las filas del Excel totalmente vacías no generan nada.
+- **RN-64 – Columnas de pagado y de cobrado.** El **encabezado** de una columna, para una
+  celda, es la primera celda de texto que hay **arriba, en la misma columna**, sin contar los
+  textos que se leyeron como **valor** de una fila (ver "Textos dentro de una columna de
+  pagado o de cobrado", abajo) y **sin pasar por una fila del Excel totalmente vacía**. Los
+  encabezados se comparan según RN-67.
+  - **Alcance de un encabezado.** Un "Pagado" o un "Cobrado" vale desde su celda hacia abajo
+    hasta la **primera fila del Excel totalmente vacía** o hasta el **texto siguiente** en esa
+    columna (que no sea valor de una fila), lo que llegue primero. Una fila totalmente vacía
+    **cierra todos los encabezados** de todas las columnas, igual que cierra los bloques
+    (RN-65): debajo de ella, una columna no es de pagado ni de cobrado hasta que aparezca un
+    encabezado nuevo. Así, un "Pagado" de una tabla no se aplica a otra tabla separada por una
+    fila vacía. Ej.: "Pagado" en E1, "Luz | 5 | 3" en la fila 2, la fila 3 vacía y un 99 en
+    E4 → Luz trae pagado 3; el 99 es un número sin nombre (RN-63), no un pagado.
+  - **Columna de pagado:** su encabezado es "Pagado", "Pago", "Pagos" o "Abonado". Un número
+    en esa columna es el pagado de la fila y se aplica según RN-69. Si la fila no tiene monto
+    en el Excel (fila incompleta), ese número se descarta y la fila queda sin pagado, también
+    si el usuario completa el monto después (RN-63). Ej.: en "Gasto del Mes"
+    la columna E tiene el encabezado "Pagado"; en la tabla "Deudas" la columna E dice "Total
+    deudas", y por eso su 84.000 no es un pago. Si el Excel no tiene columna de pagado,
+    ninguna fila trae pagado. Otros encabezados ("Pagué", "Pagado?") no se reconocen.
+  - **Columna de cobrado:** su encabezado es "Cobrado". Solo se usa en las filas de tipo "me
+    deben" (en las demás se descarta). Como los ítems "me deben" no tienen cobro parcial
+    (RF-34), el valor se lee así:
+    - vacío o 0 → no cobrado;
+    - un número igual al monto de la fila → **cobrado**;
+    - un texto "sí", "si", "x", "✓", "ok" o "cobrado" → **cobrado**;
+    - cualquier otro valor (un número distinto del monto, o textos como "no" o "falta") → no
+      cobrado, con la nota "En la columna Cobrado dice "V"; los ítems 'me deben' no tienen
+      cobro parcial, quedó como no cobrado." (V = el valor de la celda, con el formato de
+      RN-04 si es un número).
+    El usuario puede cambiar el tilde "cobrado" de cualquier fila "me deben" en la revisión
+    (RF-53).
+  - **Textos dentro de una columna de pagado o de cobrado.** Un texto en una de estas
+    columnas es una de dos cosas:
+    - **El valor de una fila**, si en la misma fila del Excel, a su izquierda, hay una fila
+      detectada con nombre y monto (ej. una "x" en la columna "Cobrado" al lado de "Internet |
+      12900"). En una columna de pagado, ese texto se descarta: el pagado tiene que ser un
+      número, así que la fila queda sin pagado. En una columna de cobrado, se lee con las
+      reglas de arriba. En los dos casos no empieza una fila nueva y la columna sigue igual.
+    - **Un encabezado nuevo**, en cualquier otro caso (la fila del Excel no tiene, a su
+      izquierda, una fila con nombre y monto). El texto **cierra** la columna y pasa a ser el
+      encabezado de las celdas de abajo: si es un nombre de pagado ("Pagado", "Pago",
+      "Pagos", "Abonado") o "Cobrado", la columna sigue siendo de ese tipo; si no, deja de
+      ser de pagado o de cobrado. Como cualquier otro texto, empieza una fila detectada
+      (incompleta si no tiene monto, RN-63) y puede ser un título (RN-65).
+    Ej. en la planilla de referencia: "Falta por pagar" (E8) está en la columna "Pagado" de
+    "Gasto del Mes", en una fila del Excel sin ninguna fila con monto ("total" en D8 no tiene
+    monto): cierra la columna. Por eso el 1.004.917 de E9 no es el pagado de nadie: es un
+    número sin nombre (RN-63), y "Falta por pagar" es una fila incompleta más, como "Pagado"
+    o "Gastos".
+- **RN-65 – Títulos de bloque y personas.**
+  - **Fila pegada.** Una fila detectada con nombre está **pegada** si la celda que está
+    **justo arriba de su nombre, en la misma columna**, es el nombre de otra fila detectada
+    (con o sin monto, incluido un título). Si esa celda está vacía, tiene un número o no
+    existe (primera fila de la hoja), la fila no está pegada.
+  - **Título.** Un título es el nombre de una fila incompleta sin monto (texto sin monto en
+    su fila, RN-63) que **no está pegada**. Un texto sin monto pegado **no** es título: es
+    una fila incompleta más del bloque en el que está.
+    Ej. en la planilla de referencia: "Gasto del Mes" (C1, primera fila), "Deudas" (C11,
+    arriba vacía), "Sueldo" (B18), "Deudas sofia" (D21) y "Marsu" (D26) son títulos;
+    "Deuda freezer" (C14, justo debajo de "Avant Service…") y "Obra social" (C16, justo
+    debajo de "Gym") están pegadas y no son títulos. Los encabezados de columna con la celda
+    de arriba vacía o con un número ("Gastos" y "Pagado" en la fila 2, "total" y "Falta por
+    pagar" en la fila 8, "Monto" y "Total deudas" en la fila 11) también son títulos, pero
+    sus bloques no tienen filas, porque debajo, en su columna, no hay nombres.
+  - **Bloque.** El bloque de un título está formado por las filas detectadas con nombre que
+    están debajo, con el nombre en la misma columna que el título (o en una de las columnas
+    que cubre, si el título es una celda combinada). Recorriendo hacia abajo, el bloque
+    **termina** solo en:
+    - la primera **fila del Excel totalmente vacía**, o
+    - el **título siguiente** en esa columna.
+    Una fila del Excel con contenido pero con la celda de esa columna vacía **no** corta el
+    bloque: se saltea (ej. la fila 2, con "Gastos" y "Pagado" en D y E, y las filas 8 y 9 no
+    cortan "Gasto del Mes"; la fila 10, vacía, sí). Un título de **otra** columna tampoco lo
+    corta. Las filas incompletas pegadas quedan **dentro** del bloque, como filas incompletas
+    (siguen en "ignorar", RN-66). Los títulos y las filas sin nombre (números sueltos) no
+    pertenecen a ningún bloque.
+  - Con la planilla de referencia: "Gasto del Mes" → filas 3 a 7; "Deudas" → filas 12, 13 y
+    15, más las incompletas "Deuda freezer" (14) y "Obra social" (16); "Deudas sofia" → filas
+    22 a 24; "Marsu" → filas 27 y 28.
+  - Si el título contiene, como palabra, el nombre de una **persona activa** (comparando según
+    RN-67), las filas del bloque se proponen como "me deben" con esa persona. Ej.: "Deudas
+    sofia" → Sofía; "Marsu" → Marsu.
+  - Si el título no contiene el nombre de ninguna persona activa (la persona no existe, está
+    archivada, o el título es algo como "Deudas"), el título no propone nada: sus filas siguen
+    las demás reglas de RN-66. El usuario puede marcarlas como "me deben" a mano y elegir o
+    crear la persona (RN-72).
+  - Si el título contiene el nombre de dos o más personas activas, se propone "me deben" sin
+    persona: el usuario tiene que elegirla.
+  - **Agrupación de la lista de revisión.** La lógica entrega, para **cada fila detectada con
+    nombre** (de la lista principal y también las incompletas pegadas), el título del bloque
+    al que pertenece (el texto del título tal como está en el Excel), o ninguno. La lista
+    principal se agrupa por ese título, con los bloques y las filas en el orden del Excel. Las
+    filas sin título van juntas en un bloque "Otras filas"; si ninguna fila tiene título, hay
+    un solo bloque, "Filas detectadas". Los bloques sin filas en la lista principal no se
+    muestran. Las filas incompletas (también las pegadas a un bloque) se muestran en su propio
+    grupo "Filas incompletas" (RN-63), no dentro del bloque: así cada bloque muestra solo lo
+    que se puede importar tal como viene y su conteo "se importan N de M" cuenta solo esas
+    filas.
+- **RN-66 – Tipo propuesto.** Se aplica la primera regla que se cumple:
+  1. **Ignorar** si:
+     - el nombre contiene la palabra "total" (ej. "Total", "total", "Total de servicios C/U",
+       "Total deudas");
+     - el nombre es igual a "Gastos fijos sin deuda", "Capacidad de Endeudamiento", "Gastos
+       en dolares", "Falta por pagar" o "Tarjetas de Credito" (comparando según RN-67).
+       "Tarjetas de Credito" se ignora porque sus gastos se cargan uno por uno (RF-22, §6);
+     - el monto sale de una fórmula de suma (`SUM`), es decir, es un valor calculado;
+     - el monto es 0 o negativo (RN-68).
+  2. **Me deben**, con la persona del título, si la fila está en el bloque de un título con
+     nombre de persona (RN-65).
+  3. **Cuota** si el nombre contiene "n/N" (dos números enteros separados por "/", con o sin
+     espacios) con 1 ≤ n ≤ N y N ≤ 600 (tope de RN-29). Se proponen cuota actual n y cantidad
+     de cuotas N. Ej.: "Avant Service cuota 3/ 3 $41.116,66" → cuota 3 de 3. Si n = 0, n > N
+     (ej. "Cumple 15/10", que parece una fecha) o N > 600 (ej. "Algo 601/601"), no se propone
+     cuota.
+  4. **Gasto fijo mensual** en cualquier otro caso.
+  - Las filas incompletas se proponen siempre como "ignorar" (RN-63).
+  - Es solo una propuesta: el usuario puede cambiar el tipo de cualquier fila.
+- **RN-67 – Comparación de nombres.** Para "ya existe", "repetida en el archivo", el aviso de
+  posible gasto compartido (RN-72), títulos con personas, los encabezados de pagado y de
+  cobrado, los textos de cobrado y la lista de RN-66, los textos se comparan **sin distinguir
+  mayúsculas ni acentos, e ignorando los espacios del principio, del final y los repetidos en
+  el medio**: "Telefono" = "Teléfono"; "Deudas sofia" contiene "Sofía"; "ABONADO" =
+  "Abonado". El nombre se guarda tal como quedó en la fila (sin los espacios del principio y
+  del final).
+- **RN-68 – Validaciones por fila.** Una fila **se importa** si está tildada y su tipo no es
+  "ignorar". Cada fila que se importa debe cumplir:
+  - nombre no vacío (salvo sueldo, RN-70);
+  - monto > 0 (RN-05). Las filas con monto 0 o negativo en el Excel (ej. un descuento
+    "-5.000") se proponen como "ignorar" con la nota "Monto no válido. Si querés importarla,
+    corregí el monto."; si el usuario les cambia el tipo, tiene que corregir el monto;
+  - los montos corregidos a mano siguen las reglas de entrada del resto de la app (RN-04,
+    RN-05);
+  - gastos y cuotas: con categoría (RN-75);
+  - cuota: cantidad de cuotas entera entre 1 y 600 y cuota actual entera entre 1 y la
+    cantidad (RN-29);
+  - me deben: con persona (RN-72);
+  - pagado según RN-69;
+  - como máximo una fila de sueldo (RN-70).
+  Si una fila que se importa no cumple, muestra el error y el botón Confirmar no se puede usar
+  hasta que el usuario la corrija, la pase a "ignorar" o la destilde. Tampoco se puede
+  confirmar si no hay ninguna fila para importar: "No hay filas para importar." Las notas y
+  avisos que no son errores (cobrado no reconocido, RN-64; posible gasto compartido, RN-72;
+  "ya existe" y "repetida en el archivo", RN-74; notas de cuota y de sueldo, RN-70 y RN-71)
+  no impiden confirmar.
+  - **Textos de los errores de una fila:**
+
+    | Error | Texto |
+    |---|---|
+    | Falta el nombre | "Falta el nombre." |
+    | Falta el monto | "Falta el monto." |
+    | Monto 0 o negativo | "El monto tiene que ser mayor a 0." |
+    | Gasto o cuota sin categoría | "Elegí una categoría." |
+    | "Me deben" sin persona | "Elegí una persona." |
+    | Cuota sin cuota actual o sin cantidad | "Indicá la cuota actual y la cantidad de cuotas." |
+    | Cuota actual fuera de rango | "La cuota actual tiene que estar entre 1 y la cantidad de cuotas." |
+    | Cantidad de cuotas no válida | "La cantidad de cuotas tiene que ser un número entero de 1 o más." |
+    | Cantidad de cuotas mayor que 600 | "La cantidad de cuotas es demasiado grande." (RN-29) |
+    | Pagado mayor que el monto | "El pagado ($ 12.000) es mayor que el monto ($ 10.000)." (RN-69; con centavos si los dos montos se ven iguales) |
+    | Pagado negativo | "El pagado no puede ser negativo." |
+    | Dos o más sueldos | "Marcaste 2 filas como sueldo; dejá una sola." (RN-70) |
+    | Cuota cuya primera o última cuota cae en un año no válido (RN-07) | "Con esta cuota, el plan quedaría en un año no válido. Revisá la cuota actual y la cantidad." (sin nota de plan) |
+    | Categoría o persona archivada o borrada mientras dura la revisión | "Elegí una categoría." / "Elegí una persona." |
+
+  - **Estado al pie de la lista.** Siempre dice por qué se puede o no confirmar:
+    - todo bien: "Se importan 10 filas: 5 gastos, 1 plan de cuotas, 3 ítems "me deben" y el
+      sueldo." (mencionando solo lo que hay, en singular o plural según corresponda; el
+      número de filas cuenta todas las que se importan, incluida la de sueldo);
+    - con errores: "Hay 2 filas con errores. Corregilas, ignoralas o destildalas para
+      continuar.";
+    - con dos o más sueldos: "Marcaste 2 filas como sueldo; dejá una sola.";
+    - sin filas para importar: "No hay filas para importar.".
+  - **Tilde y tipo "ignorar".** Una fila de tipo "ignorar" no tiene tilde y no se puede
+    tildar. Al cambiar el tipo de una fila de "ignorar" a cualquier otro, la fila **se tilda
+    sola**, **también si está marcada "ya existe"** (decisión del usuario, 2026-10-13); en ese
+    caso su nota pasa a la versión tildada de RN-74 (ej. "Ya existe en Octubre 2026. Si la
+    importás, queda repetida.").
+    Pasa lo mismo al aceptar el diálogo de edición de la fila o con la acción de bloque de
+    RN-78. Al pasar una fila a "ignorar", queda sin tilde. Fuera de esos casos, cambiar el
+    tipo no cambia el tilde (RN-74).
+  - **Edición de una fila.** Los datos de una fila (nombre, monto, pagado, categoría, cuota,
+    persona) se corrigen en un diálogo que no se puede aceptar con errores, salvo que el tipo
+    elegido sea "ignorar". Así, los errores que quedan en la lista son los que vienen del
+    Excel o de cambiar el tipo en la lista.
+- **RN-69 – Pagado al importar.** Solo para gastos fijos, pagos únicos y cuotas. Con `M` =
+  monto y `P` = pagado de la fila:
+  - `P` vacío o 0 → sin pagos;
+  - `P = M` → pagado completo: un pago por el monto (como el tilde, RN-22);
+  - `0 < P < M` → un pago parcial por `P`; pendiente `M − P`;
+  - `P > M` → error en la fila: "El pagado ($ P) es mayor que el monto ($ M)." (montos con el
+    formato de RN-04, ej. "El pagado ($ 12.000) es mayor que el monto ($ 10.000)."). No se
+    puede confirmar hasta que el usuario suba el monto, baje o borre el pagado, o no importe
+    la fila (RN-21, RN-23). La app no recorta el pagado por su cuenta, para no esconder un
+    error del Excel. Si los dos montos, redondeados a pesos (RN-04), se ven iguales (la
+    diferencia es de centavos), en este mensaje los dos se muestran **con sus centavos**
+    (siempre 2 decimales, con punto de miles): pagado 1.234,56 y monto 1.234,50 → "El pagado
+    ($ 1.234,56) es mayor que el monto ($ 1.234,50)." y no "El pagado ($ 1.235) es mayor que
+    el monto ($ 1.235)."; pagado 1.234,51 y monto 1.234,50 → "El pagado ($ 1.234,51) es mayor
+    que el monto ($ 1.234,50).". Si se ven distintos, van sin decimales como siempre (ej.
+    66.021 y 66.020,12 → "El pagado ($ 66.021) es mayor que el monto ($ 66.020).");
+  - `P` negativo → error en la fila: "El pagado no puede ser negativo."
+  - El pagado se puede corregir o borrar en la revisión (RF-53). La fecha del pago es el día de
+    la importación.
+  - En las filas "me deben" y "sueldo" el pagado no se usa (en "me deben" se usa el cobrado,
+    RN-64 y RN-72).
+- **RN-70 – Sueldo.** Una fila de tipo "sueldo (USD)" carga su monto como **sueldo en USD del
+  mes destino**, reemplazando el que tenía. La fila muestra el cambio con la nota "Sueldo del
+  mes: US$ 1.200,00 -> US$ 1.300,00." (si el sueldo no cambia: "Sueldo del mes:
+  US$ 1.300,00."). No necesita nombre (ej. el "1200" suelto de la planilla). El monto debe
+  ser > 0. Solo una fila puede ser sueldo: si hay dos o más, no se puede confirmar; el error
+  "Marcaste N filas como sueldo; dejá una sola." se ve en **todas** las filas de sueldo,
+  arriba de la lista y en el pie. Si ninguna fila es sueldo, el sueldo del mes no cambia (si
+  el mes se crea, ver RN-73). El sueldo en pesos no forma parte de la importación (§8).
+- **RN-71 – Cuotas importadas.** Una fila de tipo cuota crea un **plan de cuotas** (RF-16)
+  con: nombre de la fila, categoría de la fila, sin medio de pago, monto de cuota = monto de
+  la fila (ARS), cantidad de cuotas = N y **primera cuota = mes destino − (n − 1) meses**.
+  Ej.: cuota 3 de 3 importada en 2026-10 → primera 2026-08, última 2026-10 (RN-25); cuota 1
+  de 12 en 2026-10 → primera 2026-10.
+  - Las cuotas se generan según RN-30 (mes actual y meses futuros existentes) y **además en el
+    mes destino**, aunque sea anterior al mes actual. Es una excepción a RN-30: el usuario
+    está cargando justamente ese mes. Los meses existentes entre el mes destino y el mes actual
+    no se modifican.
+  - El pagado de la fila (RN-69) se aplica solo a la cuota del mes destino.
+  - Si n = N, la del mes destino es la última cuota: el plan termina ahí (RN-26) y se libera
+    desde el mes siguiente (RN-27).
+  - El nombre propuesto es el texto completo de la celda (ej. "Avant Service cuota 3/ 3
+    $41.116,66"); el usuario lo puede acortar en la revisión.
+  - Las cuotas importadas son siempre en ARS (RN-29).
+  - Con la cuota actual y la cantidad válidas, la fila muestra la nota "Plan de 3 cuotas:
+    primera Agosto 2026, última Octubre 2026. Se agrega la cuota 3/3 en Octubre 2026." (se
+    recalcula si cambian la cuota o el mes destino). Con N = 1 va en singular: "Plan de 1
+    cuota: primera Octubre 2026, última Octubre 2026. Se agrega la cuota 1/1 en Octubre
+    2026."
+- **RN-72 – "Me deben" importado.** Una fila de tipo "me deben" crea un **ítem manual**
+  (RF-32) de la persona elegida, con descripción = nombre de la fila, monto = monto (ARS),
+  fecha = día de la importación y **cobrado** según el tilde de la fila: viene marcado si la
+  columna de cobrado lo indica (RN-64) y, si no, desmarcado; el usuario lo puede cambiar. No
+  depende del mes destino (la lista es acumulada, RN-35).
+  - Persona: la propuesta por el título (RN-65) o la que elija el usuario entre las personas
+    activas. También puede crear una **persona nueva** escribiendo su nombre (RN-50, mensajes
+    en RN-75). Mientras dura la revisión, la persona nueva se puede elegir en las demás filas.
+    Se guarda recién al confirmar y **solo si quedó en uso**: es decir, si es la persona de
+    alguna fila "me deben" que se importa (tildada y con ese tipo al confirmar). Si el
+    usuario la creó y después esa fila pasó a otro tipo, se destildó o cambió de persona, no
+    se crea. Si se cancela, no se crea.
+  - **Aviso de posible gasto compartido.** En la planilla, los bloques de personas tienen
+    líneas que son su parte de un gasto compartido (ej. "Internet 12.900"). Si se importan
+    como "me deben" y después el gasto se marca como compartido (RF-29), la deuda queda
+    contada dos veces. Por eso, una fila "me deben" muestra el aviso "¿Es parte de un gasto
+    compartido? Si es así, ignorala y marcá el gasto como compartido después." cuando su
+    nombre **coincide** con el nombre de:
+    - otra fila del mismo Excel que se va a importar como gasto fijo, pago único o cuota
+      (tildada y con ese tipo en ese momento), o
+    - un gasto del mes destino (los que ya tiene o, si se va a crear, los que va a tener al
+      crearse, RN-09).
+    "Coincide" quiere decir: los dos nombres son iguales según RN-67, o todas las palabras del
+    nombre más corto aparecen como palabras enteras en el más largo. Ej.: "Internet" coincide
+    con "Internet"; "Servicios Luz Gas" coincide con "Servicios"; "Pesos Check" no coincide
+    con "Pesos checks" ("check" ≠ "checks"); "Prestamo MP" no coincide con nada de la
+    planilla.
+    El aviso no cambia el tipo propuesto ni el tilde y no impide confirmar: decide el
+    usuario. Se recalcula cuando cambian nombres, tipos, tildes o el mes destino.
+  - Las partes de gastos compartidos no se importan (RN-77).
+- **RN-73 – Mes destino.**
+  - Opciones: cualquier mes existente, o el mes que se puede crear según RN-08 (el siguiente
+    al último mes). Con la base sin meses (primer uso), cualquier año y mes válidos (RN-07).
+  - Por defecto: el mes actual, si existe o se puede crear; si no, el último mes. Ej.: último
+    mes 2026-08 y mes actual 2026-10 → 2026-10 no se puede crear (RN-08) y se propone 2026-08.
+  - Si el mes destino **existe**, lo importado se **agrega**: no se borra ni se modifica nada
+    de lo que ya tiene, salvo el sueldo si hay una fila de sueldo (RN-70).
+  - Si el mes destino **no existe**, se crea al confirmar, en el mismo paso que el resto
+    (RN-76):
+    - si es el siguiente al último mes: como RF-03 y RN-09 (copia los fijos y genera las
+      cuotas de los planes activos), con el sueldo y la cotización del último mes, sin
+      preguntar; la fila de sueldo, si hay, reemplaza el sueldo;
+    - si es el primer mes (primer uso): con el sueldo de la fila de sueldo, o 0 si no hay (con
+      el aviso de RN-05), y **sin cotización** (RN-18). La cotización no se importa: se carga
+      en el resumen como siempre (RF-25).
+  - Si el mes destino existe pero no es el último, la revisión avisa: "Los gastos fijos que
+    importes no se agregan a los meses siguientes que ya existen." (RN-11; solo se copian a los
+    meses nuevos desde el último mes, RN-09).
+  - Cambiar el mes destino recalcula las marcas "ya existe" (RN-74) y los avisos de posible
+    gasto compartido (RN-72).
+- **RN-74 – "Ya existe" y "repetida en el archivo".**
+  - Una fila de gasto fijo, pago único o cuota se marca **"ya existe"** si su nombre (RN-67)
+    coincide con el de un gasto del mes destino, de cualquier tipo. Si el mes destino se va a
+    crear, se compara con los gastos que va a tener al crearse (fijos copiados y cuotas
+    generadas, RN-09). Una fila de cuota también se marca "ya existe" si hay un plan de cuotas
+    con ese nombre (en cualquier estado).
+  - Si una fila de cuota coincide **a la vez** con un gasto del mes destino y con un plan de
+    cuotas, se muestra solo la nota de gasto ("Ya existe en Octubre 2026. …"), porque se mira
+    primero el mes destino. Ej.: "Avant Service cuota 3/ 3 $41.116,66" en la segunda
+    importación de la planilla en 2026-10 (CA-56.4).
+  - Una fila "me deben" se marca "ya existe" si la persona tiene un ítem manual **no cobrado**
+    con la misma descripción.
+  - Las filas "ya existe" vienen **destildadas**. Si el usuario las tilda, se importan igual
+    (quedan dos con el mismo nombre). La nota de la marca depende del tilde: destildada dice
+    "Viene destildada." y tildada dice "Si la importás, queda repetida." (tabla de abajo); se
+    actualiza cada vez que cambia el tilde.
+  - Al cambiar el mes destino, las marcas se recalculan: las filas que pasan a "ya existe" se
+    destildan y las que dejan de serlo se vuelven a tildar. Al cambiar el nombre, el tipo o la
+    persona de una fila, se recalcula su marca pero no se toca su tilde (salvo el paso desde
+    "ignorar", RN-68).
+  - Cuando al cambiar el mes destino cambia algún tilde, la app lo avisa con un mensaje
+    temporal que nombra solo lo que pasó. Ej.: "Cambiaste el mes: 1 fila pasó a "ya existe" y
+    se destildó. 1 fila se volvió a tildar." Si ningún tilde cambió, no hay mensaje.
+  - Las filas con el mismo nombre dentro del Excel se marcan **"repetida en el archivo"** si
+    son del mismo grupo: gastos (fijo, pago único y cuota) entre sí, o "me deben" de la misma
+    persona. Vienen tildadas y **no** impiden confirmar: puede ser un error del Excel o dos
+    gastos distintos con el mismo nombre. Ej.: "Internet" de "Gasto del Mes" (gasto) e
+    "Internet" de "Deudas sofia" (me deben) no son repetidas (pero la de Sofía tiene el aviso
+    de posible gasto compartido, RN-72); "Pesos Check" de Sofía y de Marsu tampoco (personas
+    distintas).
+  - **Textos de las notas:**
+
+    | Marca | Texto |
+    |---|---|
+    | Ya existe (gasto en el mes destino), destildada | "Ya existe en Octubre 2026. Viene destildada." |
+    | Ya existe (gasto en el mes destino), tildada | "Ya existe en Octubre 2026. Si la importás, queda repetida." |
+    | Ya existe (plan de cuotas), destildada | "Ya existe un plan de cuotas con este nombre. Viene destildada." |
+    | Ya existe (plan de cuotas), tildada | "Ya existe un plan de cuotas con este nombre. Si la importás, queda repetida." |
+    | Ya existe ("me deben"), destildada | "Sofía ya tiene un ítem sin cobrar con esta descripción. Viene destildada." |
+    | Ya existe ("me deben"), tildada | "Sofía ya tiene un ítem sin cobrar con esta descripción. Si la importás, queda repetida." |
+    | Repetida en el archivo | "Repetida en el archivo. Si no es un error del Excel, podés importarla igual." |
+
+- **RN-75 – Categoría por defecto y categorías nuevas.**
+  - Arriba de la lista se elige una categoría por defecto entre las categorías activas; se
+    propone "Varios" si existe. El usuario también puede crear una categoría nueva escribiendo
+    el nombre (RN-50).
+  - Las filas de gasto y cuota usan la categoría por defecto, salvo las que el usuario cambió
+    una por una (en la fila o con la acción de bloque, RN-78). Cambiar la categoría por
+    defecto cambia las filas que no se tocaron; las cambiadas a mano conservan la suya.
+    Elegir "Categoría por defecto" en una fila hace que vuelva a seguir la categoría por
+    defecto.
+  - Sin categoría por defecto elegida (ej. no existe "Varios"), las filas de gasto y cuota sin
+    categoría propia tienen error (RN-68).
+  - Una categoría nueva se puede elegir en todas las filas mientras dura la revisión. Se
+    guarda recién al confirmar y **solo si quedó en uso**: es decir, si es la categoría de
+    alguna fila de gasto fijo, pago único o cuota que se importa (elegida a mano o por ser la
+    categoría por defecto). Si nadie la usa, o si se cancela, no se crea.
+  - **Nombres nuevos (categorías y personas).** Se validan con RN-50, comparando según RN-67
+    (sin mayúsculas ni acentos), contra las existentes (activas y archivadas) y contra las ya
+    agregadas en esta importación:
+
+    | Caso | Texto |
+    |---|---|
+    | Vacío | "Ingresá un nombre." |
+    | Ya existe (activa) | "Ya existe una categoría llamada "Salud"." / "Ya existe una persona llamada "Sofía"." |
+    | Ya existe archivada | "Ya existe una categoría llamada "Salud" (está archivada). Podés desarchivarla en Ajustes." (para personas, el mismo texto con "una persona") |
+    | Ya agregada en esta importación | "Ya agregaste una persona llamada "Juan" en esta importación." (para categorías, el mismo texto con "una categoría") |
+
+- **RN-76 – Confirmar y cancelar.**
+  - **Resumen previo.** "Confirmar importación" (o `Ctrl/Cmd+Enter`) todavía no guarda nada:
+    muestra "Revisá antes de importar" con, en este orden y solo las líneas que corresponden:
+    - la primera línea según el mes destino: "Se va a cargar en Octubre 2026 (ya existe)." /
+      "Se va a crear Noviembre 2026 y cargar ahí los datos." / (primer uso) "Se va a crear
+      Octubre 2026, sin cotización, y cargar ahí los datos.";
+    - "5 gastos: $ 376.720 (pagado $ 98.700)" (suma de los gastos que se importan, sin las
+      cuotas; "(pagado …)" solo si hay pagos);
+    - "1 plan de cuotas: Avant Service cuota 3/ 3 $41.116,66 (cuota 3/3, $ 41.117 por mes)";
+    - "3 ítems "me deben": Sofía 2, Marsu 1 ($ 39.685 en total)";
+    - "Sueldo: US$ 1.200,00 -> US$ 1.300,00", solo si hay una fila de sueldo. Si el mes se
+      crea en el primer uso y no hay fila de sueldo: "Sin sueldo: el sueldo de Octubre 2026
+      queda en US$ 0,00.";
+    - "Se crean también: la categoría "Importado" y la persona "Juan"." solo con las nuevas
+      que quedaron en uso (RN-72, RN-75);
+    - "No se importan 19 filas (ignoradas o destildadas)." (todas las filas detectadas,
+      incluidas las incompletas, que no se importan);
+    - "Esta importación no se puede deshacer. Si algo sale mal, lo corregís a mano en la app."
+    Singular y plural según corresponda ("1 gasto", "5 gastos"). Botones "Volver a la
+    revisión" (vuelve a la lista sin cambiar nada) e "Importar" (guarda).
+  - **Todo o nada:** al tocar "Importar" se guardan en un solo paso el mes destino (si hay que
+    crearlo), las categorías y personas nuevas que quedaron en uso, los gastos con sus pagos,
+    los planes con sus cuotas, los ítems "me deben" y el sueldo. Si algo falla, no queda nada
+    guardado (ni siquiera el mes nuevo) y la app avisa con el título "No se pudo importar" y
+    el texto "No se pudo importar. No se guardó ningún dato." Con "Volver a la revisión", la
+    revisión sigue **tal cual estaba**, para reintentar o cancelar.
+  - **Una sola vez:** una revisión ya guardada no se puede volver a guardar (ej. un doble
+    clic en "Importar"): "Esta importación ya se guardó." y no cambia nada. Para importar de
+    nuevo se empieza otra importación. Mientras se guarda, el botón "Importar" está
+    deshabilitado.
+  - **Resultado:** al terminar, la app muestra "Importación terminada" con:
+    - "Se importaron: 5 gastos, 1 plan de cuotas, 3 ítems "me deben" y el sueldo
+      (US$ 1.300,00) en Octubre 2026." (mencionando solo lo que hubo);
+    - bajo "Para completar:", solo las líneas que corresponden: "Los gastos quedaron sin medio
+      de pago. Podés ponérselo en Gastos." (si se importaron gastos o cuotas); "Si alguno es
+      compartido, marcalo desde el gasto." (si se importaron gastos o ítems "me deben");
+      "Cargá la cotización de Octubre 2026 en el Resumen." (solo si el mes se creó sin
+      cotización);
+    - el botón "Ver Octubre 2026". No hay opción de deshacer.
+    Al tocar "Ver Octubre 2026", la app queda con el mes destino como mes seleccionado, todo
+    recalculado (RN-19), en la pantalla **Gastos**; si solo se importaron ítems "me deben"
+    y/o el sueldo, en la pantalla **Resumen**. Si la importación empezó en el primer uso, la
+    app pasa a la ventana normal (con rail y barra superior), como al crear el primer mes.
+  - **Cancelar:** en cualquier momento antes de "Importar" se puede cancelar, y entonces no se
+    guarda nada: ni gastos, ni pagos, ni planes, ni ítems, ni mes nuevo, ni personas o
+    categorías nuevas.
+    - Con el botón "Cancelar" o con `Esc`: si el usuario **no** cambió nada en la revisión,
+      sale directo. Si cambió algo, la app pregunta "¿Descartar la importación?" con el texto
+      "Se pierden los cambios que hiciste en la revisión. No se guarda nada." (y, si agregó
+      categorías o personas nuevas, "También se descartan las categorías y personas nuevas:
+      Importado, Juan.") y los botones "Seguir revisando" y "Descartar".
+    - Con "Cambiar archivo u hoja": si cambió algo, la app pregunta "¿Volver a elegir el
+      archivo?" con el texto "Se pierden los cambios que hiciste en la revisión." y los
+      botones "Seguir revisando" y "Volver a elegir"; si no, vuelve directo a elegir archivo.
+    - **Cerrar la ventana de la app** durante la importación cierra la app **sin preguntar**
+      (decisión del usuario, 2026-10-13). Se pierde solo la revisión en curso; no se guarda
+      nada de ella y no se pierde nada de lo que ya estaba guardado.
+    - **Qué cuenta como cambio del usuario:** cambiar un tipo, un tilde (también "cobrado"),
+      un dato de una fila, la categoría por defecto o el mes destino, usar una acción de
+      bloque, o agregar una categoría o persona nueva. Lo que la app hace sola (tipos
+      propuestos, marcas "ya existe", tildes recalculados) no cuenta.
+    - Al cancelar se vuelve al lugar desde donde se empezó: al formulario de primer uso o a la
+      pestaña "Importar Excel" de Ajustes, sin mensaje extra.
+  - **Sin deshacer:** una importación confirmada no se puede deshacer como un todo (decisión
+    del usuario, §8). Si salió mal, se corrige a mano en la app (editar o borrar gastos,
+    planes e ítems) o, si el mes destino es el último, se puede borrar el mes (RN-10).
+  - La importación se puede repetir; las marcas de RN-74 ayudan a no duplicar.
+- **RN-77 – Qué no se importa.** Cotización (del mes y de los gastos), medio de pago, gastos
+  compartidos y sus partes, gastos en dólares (todos los gastos se importan en ARS; para
+  expresarlos en USD se editan después, RN-56), sueldo en pesos (§8), ingresos extra, cambios
+  realizados, meta de ahorro y cuotas omitidas. Tampoco fórmulas ni formatos (colores, celdas
+  combinadas): solo valores.
+- **RN-78 – Acciones de bloque.** Cada bloque de la lista principal (RN-65, incluidos "Otras
+  filas" y "Filas detectadas"; no el grupo "Filas incompletas") tiene tres acciones que
+  cambian todas sus filas de una vez. Sirven, por ejemplo, para un título "Sofía y Marsu" o un
+  bloque sin persona que deja varias filas "me deben" sin persona. No cambian ninguna otra
+  regla: después de aplicarlas, cada fila se puede ajustar por separado. Se aplican solo a
+  las filas del bloque que están en la lista principal (no a sus filas incompletas, que se
+  muestran en su propio grupo).
+  - **"Tildar todas las filas":** tilda todas las filas del bloque que no son "ignorar",
+    incluidas las "ya existe". Las "ignorar" no cambian (RN-68).
+  - **"Destildar todas las filas":** destilda todas las filas del bloque.
+  - **"Cambiar tipo o categoría de todas...":** el usuario elige:
+    - **Tipo:** "No cambiar el tipo" (viene elegido) o uno de gasto fijo, gasto único, me
+      deben o ignorar. "Cuota" no se ofrece (cada cuota necesita su cuota actual y cantidad:
+      "La cuota se elige fila por fila.") ni "Sueldo (USD)" ("Solo una fila puede ser el
+      sueldo.").
+    - Con tipo gasto fijo o gasto único: una **categoría** (opcional; si no se elige, cada
+      fila conserva la suya). Con tipo "me deben": una **persona**, obligatoria ("Elegí una
+      persona."). Con tipo "ignorar": nada más.
+    - Con "No cambiar el tipo": una categoría y una persona, las dos opcionales. La categoría
+      se aplica a las filas de gasto fijo, pago único y cuota del bloque; la persona, a las
+      filas "me deben". Un campo que se deja sin elegir no cambia nada.
+    - En la categoría y la persona se puede crear una nueva (RN-72, RN-75). Elegir una
+      categoría así cuenta como cambiarla a mano (RN-75); elegir "Categoría por defecto" hace
+      que las filas vuelvan a seguir la categoría por defecto.
+    - Se aplica a **todas** las filas del bloque, incluidas las que están en "ignorar": las que
+      pasan de "ignorar" a otro tipo se tildan solas (RN-68); las demás conservan su tilde.
+      Texto del diálogo: "Se cambian las 5 filas de este bloque. Después podés ajustar cada
+      una." y, si el bloque tiene filas en "ignorar", "Se cambian las 5 filas de este bloque,
+      incluidas las que están ignoradas." Botones "Cancelar" y "Aplicar a las 5 filas".
+    - Después de aplicar se recalculan las marcas "ya existe" y "repetida" (RN-74) y los
+      avisos de posible gasto compartido (RN-72).
+
 ---
 
 ## 5. Modelo de datos propuesto (SQLite)
@@ -745,6 +1371,22 @@ información que podría quedar vieja al cambiar la cotización o un gasto. (Exc
 deliberada: el monto en ARS de un gasto en dólares **sí** se guarda, porque tiene que quedar
 fijo, RN-55.)
 
+### 5.13 Importar Excel: sin cambios en el modelo
+La importación (Módulo K) **no agrega tablas ni columnas** y no cambia la versión de la base
+(sigue en 1, RN-59; no hace falta migración ni respaldo):
+
+- El archivo no se guarda (RN-60), así que no hay tabla de archivos ni de importaciones.
+- Lo confirmado se guarda en las tablas que ya existen: `meses` (mes nuevo y sueldo),
+  `categorias` y `personas` (solo las creadas en la revisión que quedaron en uso, RN-72 y
+  RN-75), `gastos`, `pagos`, `planes_cuotas` (con `primer_anio`/`primer_mes` calculados
+  según RN-71) e `items_me_deben` (con `cobrado` según RN-72).
+- La lista de revisión (filas detectadas con su número de fila y su título de bloque, tipos,
+  tildes, correcciones, categorías y personas nuevas, notas y avisos) existe solo en memoria
+  mientras dura la revisión; por eso cancelar o cerrar la ventana no deja rastro (RN-76).
+- Los datos importados no quedan marcados como "importados": una vez confirmados son iguales
+  a los cargados a mano. Como no hay "deshacer la importación" (RN-76, §8), no hace falta esa
+  marca.
+
 ---
 
 ## 6. Correspondencia con la planilla
@@ -761,6 +1403,7 @@ fijo, RN-55.)
 | Edenor, Metrogas, "Total de servicios C/U" | Gastos compartidos (RF-29) |
 | "Deudas sofia", "Marsu" | Lista "me deben" por persona (RF-33) |
 | Columna "Objetivo" (134.000, 31.000) | Descartada: no tiene equivalente en la app |
+| La hoja entera (y la de cualquier familiar, con otro formato) | Importación con revisión (Módulo K, RF-49 a RF-58). Los totales y valores calculados se proponen como "ignorar" (RN-66); los bloques de personas, como "me deben" (RN-65), con aviso si la línea parece la parte de un gasto compartido (RN-72). |
 
 ---
 
@@ -853,6 +1496,8 @@ paréntesis en centavos son los internos; lo demás es lo que se ve en pantalla 
 - **CA-16.1** Alta "Avant Service", 41.116,66, 3 cuotas, primera 2026-08: en 2026-10 aparece un
   gasto de "41.117" (`4111666`) con cuota "3/3".
 - **CA-16.2** Cantidad de cuotas 0, negativa o con decimales, o monto ≤ 0: se rechaza.
+  Cantidad 601: se rechaza con "La cantidad de cuotas es demasiado grande."; con 600 se crea
+  el plan.
 - **CA-17.1** El plan de CA-16.1 muestra última cuota 2026-10 y restante 0.
 - **CA-17.2** Plan de 12 cuotas de 10.000 desde 2026-03: en 2026-10 muestra "8/12", última
   cuota 2027-02, restante 40.000. Seleccionando 2026-09 muestra "7/12" y restante 50.000.
@@ -1114,17 +1759,392 @@ Base: mes 2026-10 con cotización del mes 1.600 y los gastos de la base del mód
 - **CA-48.4** Si no se puede crear el respaldo (simulado en las pruebas), la base no se
   modifica (sigue en versión 0) y la app avisa.
 
+### Módulo K – Importar Excel (v2)
+Base: mes actual 2026-10 y fecha de hoy fijadas en las pruebas. Existe solo 2026-10 (es el
+último mes), con sueldo 1.200, cotización 1.600 y el gasto fijo "Alquiler" 260.000
+(Vivienda), sin pagos. Personas activas: Sofía y Marsu. Categorías activas, entre otras:
+Varios, Vivienda y Servicios. Sin ítems "me deben" ni planes.
+
+Archivo `planilla-prueba.xlsx`: lo generan las pruebas (nunca se usa un archivo de
+`datos-privados/`), con una sola hoja "Octubre". Las celdas no indicadas están vacías;
+"(texto)" quiere decir un número escrito como texto; el resto de los números son números de
+Excel.
+
+| Fila | B | C | D | E |
+|---|---|---|---|---|
+| 1 | | Gasto del Mes | | |
+| 2 | | | Gastos | Pagado |
+| 3 | | Alquiler | 260000 | |
+| 4 | | Servicios | "82.000" (texto) | |
+| 5 | | Internet | 38700 | 38700 |
+| 6 | | Tarjetas de Credito | 582917 | |
+| 7 | | psicologo | 140000 | 60000 |
+| 8 | | | total | Falta por pagar |
+| 9 | | | 1103617 | 1004917 |
+| 11 | | Deudas | Monto | Total deudas |
+| 12 | | Monotributo 66.020,12 | "66.020,12" (texto) | 66021 |
+| 13 | | Avant Service cuota 3/ 3 $41.116,66 | 41116,66 | |
+| 14 | | Deuda freezer | | |
+| 15 | | Gym | 50000 | |
+| 16 | | Obra social | | |
+| 18 | Sueldo | | | |
+| 19 | 1300 | | | |
+| 21 | | | Deudas sofia | |
+| 22 | | | Prestamo MP | 20000 |
+| 23 | | | Internet | 12900 |
+| 24 | | | Total | 32900 |
+| 26 | | | Marsu | |
+| 27 | | | tacones chiqui baby | 6785 |
+| 28 | | | Total | 6785 |
+
+Cómo se lee la columna E (RN-64): de la fila 3 a la 7 es columna de pagado (encabezado
+"Pagado" en E2), así que 38.700 (E5) y 60.000 (E7) son pagados. "Falta por pagar" (E8) cierra
+esa columna; desde ahí E deja de ser de pagado: 1.004.917 (E9) es un número sin nombre y
+66021 (E12, bajo "Total deudas") se descarta. Las filas 10, 17, 20 y 25, totalmente vacías,
+también cierran cualquier encabezado (RN-64).
+
+Lista principal esperada con esta base (la usan varios CA):
+
+| Fila | Nombre | Monto | Pagado | Tipo propuesto | Bloque | Marca / aviso / tilde |
+|---|---|---|---|---|---|---|
+| 3 | Alquiler | 260.000 | | Gasto fijo | Gasto del Mes | "ya existe", destildada |
+| 4 | Servicios | 82.000 | | Gasto fijo | Gasto del Mes | tildada |
+| 5 | Internet | 38.700 | 38.700 | Gasto fijo | Gasto del Mes | tildada |
+| 6 | Tarjetas de Credito | 582.917 | | Ignorar | Gasto del Mes | — |
+| 7 | psicologo | 140.000 | 60.000 | Gasto fijo | Gasto del Mes | tildada |
+| 12 | Monotributo 66.020,12 | 66.020,12 | | Gasto fijo | Deudas | tildada |
+| 13 | Avant Service cuota 3/ 3 $41.116,66 | 41.116,66 | | Cuota 3 de 3 | Deudas | tildada |
+| 15 | Gym | 50.000 | | Gasto fijo | Deudas | tildada |
+| 22 | Prestamo MP | 20.000 | | Me deben – Sofía | Deudas sofia | tildada, no cobrado |
+| 23 | Internet | 12.900 | | Me deben – Sofía | Deudas sofia | aviso de posible gasto compartido, tildada, no cobrado |
+| 24 | Total | 32.900 | | Ignorar | Deudas sofia | — |
+| 27 | tacones chiqui baby | 6.785 | | Me deben – Marsu | Marsu | tildada, no cobrado |
+| 28 | Total | 6.785 | | Ignorar | Marsu | — |
+
+- **CA-49.1** Con la base vacía (sin meses), la pantalla de primer uso muestra el formulario
+  para crear el primer mes igual que en la v1 (CA-04.1) y, debajo, "¿Tenés una planilla?" con
+  el botón "Importar Excel". Crear el mes con el formulario funciona igual que antes, sin
+  pasar por la importación. "Importar Excel" abre la importación en pantalla completa, sin
+  rail ni barra superior; "Cancelar" (sin haber cambiado nada) vuelve al formulario de primer
+  uso y la base sigue sin meses.
+- **CA-49.2** Con meses cargados, Ajustes tiene como última pestaña "Importar Excel", con el
+  botón "Importar Excel". La importación se abre en pantalla completa, sin rail ni barra
+  superior (no se puede cambiar de mes ni de pantalla mientras dura). "Cancelar" (sin haber
+  cambiado nada) vuelve a la pestaña "Importar Excel" de Ajustes.
+- **CA-50.1** Con `planilla-prueba.xlsx` (una sola hoja) la app no pregunta la hoja y muestra
+  la lista. Si el archivo tiene además una hoja "Septiembre", la app pregunta cuál usar y
+  muestra solo las filas de la hoja elegida.
+- **CA-50.2** Después de confirmar una importación, en la carpeta de datos de la app no hay
+  ninguna copia del `.xlsx`; borrar el `.xlsx` no cambia nada en la app; el `.xlsx` tiene
+  exactamente el mismo contenido que antes de importar.
+- **CA-51.1** La lista principal tiene exactamente las 13 filas de la tabla esperada, en ese
+  orden, con esos montos y pagados, y cada una indica su número de fila del Excel. El 66021 de
+  la fila 12 (columna "Total deudas") no aparece en ningún lado.
+- **CA-51.2** El grupo "Filas incompletas" contiene exactamente estas 16 filas, todas como
+  "ignorar": "Gasto del Mes", "Gastos", "Pagado", "total", "Falta por pagar", 1.103.617 (sin
+  nombre), 1.004.917 (sin nombre), "Deudas", "Monto", "Total deudas", "Deuda freezer", "Obra
+  social", "Sueldo", 1.300 (sin nombre), "Deudas sofia" y "Marsu". Las que tienen nombre
+  muestran "Falta el monto. Se ignora." y las que no, "Falta el nombre. Se ignora.". "Falta
+  por pagar" está porque, como todo encabezado, es un texto sin monto; además cierra la
+  columna de pagado (RN-64), y por eso 1.004.917 aparece como número sin nombre y no como
+  pagado de ninguna fila. "Deuda freezer" y "Obra social" aparecen en este grupo (no dentro
+  del bloque "Deudas"), aunque la lógica las asigna al bloque "Deudas" (CA-51.7).
+- **CA-51.3** Lectura de números (en centavos): textos "82.000" → `8200000`; "1.050.000" →
+  `105000000`; "66.020,12" → `6602012`; "$ 41.116,66" → `4111666`; "41116,66" →
+  `4111666`; número de Excel 41116,66 → `4111666`; número de Excel 22093,666 → `2209367`.
+  Una fila "Nafta | "82.5"" da dos filas incompletas ("Nafta" y "82.5"). Una fecha en la
+  columna del monto deja la fila sin monto.
+- **CA-51.4** Una fila oculta del Excel con "Luz | 1000" aparece en la lista principal.
+- **CA-51.5** Columna de pagado (RN-64), sobre `planilla-prueba.xlsx`:
+  - Cambiando E2 a "Pago", "Pagos", "Abonado" o "ABONADO", Internet y psicologo siguen
+    trayendo pagado 38.700 y 60.000. Con "Pagué", ninguna fila trae pagado (los 38.700 y
+    60.000 se descartan).
+  - Con E2 "Pagado" y un texto "x" en E4 (al lado de "Servicios | 82.000"): la "x" es un
+    valor de la fila, no un encabezado. Servicios no trae pagado, la "x" no aparece como fila
+    (ni en la lista ni en "Filas incompletas") y la columna sigue siendo de pagado: Internet
+    y psicologo siguen trayendo 38.700 y 60.000.
+  - Pagado de una fila sin monto (RN-63): borrando el monto de Servicios (D4 vacía) y
+    poniendo 3 en E4, "Servicios" queda en "Filas incompletas" con "Falta el monto. Se
+    ignora." y sin pagado. Completándola con monto 1 y tipo gasto fijo, no muestra ningún
+    error de pagado y al confirmar se importa sin pagos (pendiente 1).
+  - "Falta por pagar" (E8) cierra la columna de pagado: 1.004.917 (E9) no es el pagado de
+    ninguna fila (CA-51.2).
+  - Cambiando "Total deudas" (E11) por "Pagado", la columna E es de pagado solo para las
+    filas 12 a 16: la fila 17, totalmente vacía, cierra ese encabezado (RN-64).
+    Monotributo trae pagado 66.021 y muestra el error "El pagado ($ 66.021) es mayor que el
+    monto ($ 66.020)." (se ven distintos, así que van sin centavos, RN-69). Avant y Gym no
+    traen pagado (E13 y E15 están vacías). Los bloques "Deudas sofia" y "Marsu" quedan igual
+    que en la lista esperada: los números de E22 a E28 son sus montos (no pagados), con los
+    mismos tipos y tildes.
+- **CA-51.6** Columna de cobrado: a `planilla-prueba.xlsx` se le agrega en la columna F:
+  "Cobrado" en F21, 20000 en F22, "x" en F23, "Cobrado" en F26 y 3000 en F27. Entonces
+  "Prestamo MP" e "Internet" (Sofía) vienen con el tilde "cobrado" marcado; "tacones chiqui
+  baby" viene sin cobrar y con la nota "En la columna Cobrado dice "3.000"; los ítems 'me
+  deben' no tienen cobro parcial, quedó como no cobrado." Confirmando sin cambios, los dos
+  ítems de Sofía quedan cobrados (su total no suma nada por ellos) y el de Marsu queda no
+  cobrado (Marsu 6.785). Si el usuario destilda "cobrado" en "Prestamo MP" antes de
+  confirmar, ese ítem queda no cobrado (Sofía 20.000). Con un "no" en F22, "Prestamo MP" viene
+  sin cobrar y con la nota (el "no" es un valor de la fila, no cierra la columna: "Internet"
+  sigue cobrado por la "x" de F23). "Cobrado" en F26 está en una fila sin monto ("Marsu"), así
+  que es un encabezado nuevo y la columna sigue siendo de cobrado. Un número en una columna
+  "Cobrado" en una fila de gasto se descarta.
+- **CA-51.7** Título de bloque que entrega la lógica (RN-65) con `planilla-prueba.xlsx`:
+  filas 3 a 7 → "Gasto del Mes" (la fila 2 y las filas 8 y 9 no cortan el bloque; la 10,
+  vacía, sí); filas 12, 13 y 15 → "Deudas", y también las incompletas 14 "Deuda freezer" y
+  16 "Obra social" (están pegadas, no son títulos); filas 22, 23 y 24 → "Deudas sofia";
+  filas 27 y 28 → "Marsu". Los títulos y los números sin nombre (filas 9 y 19) no tienen
+  bloque. En la lista se ven, en este orden, los bloques "Gasto del Mes" (5 filas), "Deudas"
+  (3 filas), "Deudas sofia" (3 filas) y "Marsu" (2 filas); no hay bloque "Otras filas" ni
+  bloques vacíos ("Gastos", "Monto", "Sueldo", etc.). Un Excel sin ningún título muestra un
+  solo bloque, "Filas detectadas".
+- **CA-51.8** Variantes de bloque, sobre `planilla-prueba.xlsx`:
+  - Insertando una fila del Excel nueva debajo de la 21 con "Concepto" en D e "Importe" en E
+    (las filas 22 a 28 bajan una): "Concepto" está pegada a "Deudas sofia" y no es título;
+    "Prestamo MP" e "Internet" siguen en el bloque "Deudas sofia" y siguen viniendo como "me
+    deben" Sofía. "Concepto" e "Importe" van a "Filas incompletas".
+  - Insertando en cambio una fila del Excel totalmente vacía entre la 21 y la 22: el bloque
+    "Deudas sofia" queda sin filas; "Prestamo MP", "Internet" y "Total" van al bloque "Otras
+    filas" y "Prestamo MP" e "Internet" vienen como gasto fijo.
+  - Poniendo un texto "Préstamos" en C14 en lugar de "Deuda freezer" y dejando vacía la fila
+    13 entera (borrando Avant): "Préstamos" tiene la celda de arriba vacía, es un título, y
+    "Gym" (fila 15) queda en el bloque "Préstamos"; "Monotributo" sigue en "Deudas".
+- **CA-51.9** Una fila vacía cierra el encabezado de pagado (RN-64): un Excel con "Pagado" en
+  E1, "Luz | 5 | 3" en C2, D2 y E2, la fila 3 totalmente vacía y 99 en E4. "Luz" viene con
+  monto 5 y pagado 3; el 99 aparece en "Filas incompletas" como número sin nombre ("Falta el
+  nombre. Se ignora."), no como pagado.
+- **CA-52.1** "Tarjetas de Credito" y los dos "Total" vienen como "ignorar"; "Avant Service
+  cuota 3/ 3 $41.116,66" como cuota 3 de 3, con la nota "Plan de 3 cuotas: primera Agosto
+  2026, última Octubre 2026. Se agrega la cuota 3/3 en Octubre 2026."; "Prestamo MP" e
+  "Internet" (filas 22 y 23) como "me deben" Sofía; "tacones chiqui baby" como "me deben"
+  Marsu; el resto como gasto fijo.
+- **CA-52.2** Filas "Cumple 15/10 | 5000" y "Préstamo 0/5 | 5000" vienen como gasto fijo (no
+  cuota). "Heladera 2/12 | 30000" viene como cuota 2 de 12. "Algo 601/601 | 1000" y "Algo
+  100000/100000 | 1000" vienen como gasto fijo (N > 600, RN-66); "Algo 1/600 | 1000" viene
+  como cuota 1 de 600. "Heladera 1/1 | 30000" viene como cuota 1 de 1 con la nota "Plan de 1
+  cuota: primera Octubre 2026, última Octubre 2026. Se agrega la cuota 1/1 en Octubre 2026."
+- **CA-52.3** Con el título de la fila 21 cambiado a "Deudas Juan" (no existe la persona
+  Juan), "Prestamo MP" e "Internet" vienen como gasto fijo. Con Marsu archivada,
+  "tacones chiqui baby" viene como gasto fijo. Con el título "Sofía y Marsu", sus filas vienen
+  como "me deben" sin persona.
+- **CA-52.4** Con el título "Deudas sofia" como celda combinada D21:E21, el resultado es el
+  mismo que en CA-52.1.
+- **CA-52.5** Archivo de prueba guardado con Excel o LibreOffice (se guarda en `tests/`, sin
+  datos reales) con "Suma servicios | =SUM(D1:D2)" cuyo valor guardado es 120000: la fila
+  viene con monto 120.000 y tipo "ignorar".
+- **CA-52.6** Se puede cambiar el tipo de cualquier fila a cualquiera de los seis tipos.
+- **CA-52.7** Tilde y tipo "ignorar": "Tarjetas de Credito" (fila 6) viene sin tilde y su
+  tilde no se puede marcar. Al cambiarle el tipo a gasto fijo, queda tildada sola; al
+  volverla a "ignorar", queda sin tilde. "Alquiler" (fila 3, "ya existe", destildada) pasada
+  de gasto fijo a gasto único sigue destildada; pasada a "ignorar" y después a gasto fijo,
+  queda **tildada** y con la nota "Ya existe en Octubre 2026. Si la importás, queda
+  repetida.".
+- **CA-52.8** Acciones de bloque en "Deudas sofia" (filas 22, 23 y 24): "Destildar todas las
+  filas" destilda 22 y 23; 24 ("Total", ignorar) sigue sin tilde. "Tildar todas las filas"
+  vuelve a tildar 22 y 23; 24 sigue en "ignorar" y sin tilde. Con la base de CA-56.4 (segunda
+  importación), "Tildar todas las filas" tilda también las filas "ya existe" del bloque.
+- **CA-53.1** Cambiar el nombre "psicologo" a "Psicólogo" y el monto de "Servicios" a
+  "85.000", y confirmar: se guardan "Psicólogo" y 85.000.
+- **CA-53.2** Completar la fila incompleta "Obra social" con monto 45.000 y tipo gasto fijo:
+  al confirmar existe "Obra social" 45.000. Cambiándole el tipo a gasto fijo sin completar el
+  monto, la fila muestra el error "Falta el monto." y no se puede confirmar.
+- **CA-53.3** Cambiar "Gym" a cuota sin cuota actual ni cantidad: error "Indicá la cuota
+  actual y la cantidad de cuotas.". Con cuota 2 de 6: al confirmar existe un plan "Gym" de 6
+  cuotas de 50.000 con primera cuota 2026-09, y en 2026-10 se ve la cuota "2/6". Cuota 7 de 6:
+  error "La cuota actual tiene que estar entre 1 y la cantidad de cuotas."; cantidad 0 o 2,5:
+  error "La cantidad de cuotas tiene que ser un número entero de 1 o más.".
+- **CA-53.4** Cambiar "Servicios" a "me deben": la persona viene vacía, la fila muestra
+  "Elegí una persona." y no se puede confirmar hasta elegirla. Crear la persona nueva "Juan"
+  y elegirla: al confirmar existe Juan con el ítem "Servicios" 82.000 no cobrado. Crear una
+  persona nueva "sofía": se rechaza con "Ya existe una persona llamada "Sofía"."
+- **CA-53.5** "Cambiar tipo o categoría de todas..." con el título de la fila 21 cambiado a
+  "Sofía y Marsu" (filas 22 y 23 "me deben" sin persona): con "No cambiar el tipo" y persona
+  Marsu, las filas 22 y 23 quedan "me deben" Marsu y la 24 ("Total") sigue en "ignorar" sin
+  tilde; al confirmar, Marsu tiene "Prestamo MP" 20.000 e "Internet" 12.900. En el diálogo,
+  "Cuota" y "Sueldo (USD)" no se pueden elegir como tipo.
+- **CA-53.6** En el bloque "Deudas sofia", "Cambiar tipo o categoría de todas..." con tipo
+  "Gasto único" y categoría Servicios: las filas 22, 23 y 24 quedan como gasto único en
+  Servicios y tildadas (la 24 se tilda sola al dejar "ignorar"). En el bloque "Deudas", con
+  "No cambiar el tipo" y categoría Vivienda: Monotributo, Avant y Gym quedan en Vivienda; si
+  después la categoría por defecto pasa a Servicios, esas tres siguen en Vivienda. Las
+  incompletas "Deuda freezer" y "Obra social" no cambian.
+- **CA-53.7** Tope de cuotas en la revisión (RN-29, RN-68): editando Avant (fila 13) con
+  cuota 1 de 601, el diálogo muestra "La cantidad de cuotas es demasiado grande." y no se
+  puede aceptar (en la lógica, editar la fila con cantidad 601 devuelve ese error). Con cuota
+  1 de 600 no hay error, la nota dice "Plan de 600 cuotas: primera Octubre 2026, última
+  Septiembre 2076. Se agrega la cuota 1/600 en Octubre 2026." y al confirmar existe el plan
+  de 600 cuotas (el guardado no falla).
+- **CA-54.1** La categoría por defecto viene "Varios". Al confirmar sin tocarla, los gastos y
+  el plan importados quedan en Varios y sin medio de pago (en el total por medio de pago
+  suman en "Sin medio de pago", RF-22).
+- **CA-54.2** Cambiar la categoría de "Internet" (fila 5) a Servicios y después la categoría
+  por defecto a Vivienda: Internet queda en Servicios; las demás filas de gasto y la cuota
+  pasan a Vivienda.
+- **CA-54.3** Sin la categoría "Varios": no hay categoría por defecto, cada fila de gasto y de
+  cuota muestra "Elegí una categoría." y no se puede confirmar hasta elegir una. Crear la
+  categoría nueva "Importado" y cancelar: "Importado" no existe.
+- **CA-55.1** El mes destino viene 2026-10. Se ofrecen 2026-10 y 2026-11; no se ofrecen
+  2026-09 ni 2026-12.
+- **CA-55.2** Destino 2026-11 (no existe), con la fila 19 como sueldo: la fila de sueldo
+  muestra "Sueldo del mes: US$ 1.200,00 -> US$ 1.300,00.". Al confirmar existe 2026-11 con
+  Alquiler copiado (RN-09), sueldo 1.300,00, cotización 1.600 y las filas importadas.
+  "Alquiler" del Excel también venía "ya existe". Avant crea un plan con primera cuota
+  2026-09: 2026-11 tiene la cuota "3/3" y 2026-10 (mes actual) recibe la cuota "2/3"
+  (RN-30); 2026-10 no recibe ningún otro dato importado y su sueldo sigue en 1.200.
+- **CA-55.3** Con 2026-09 y 2026-10 existentes y destino 2026-09: la revisión avisa "Los
+  gastos fijos que importes no se agregan a los meses siguientes que ya existen.". Avant crea
+  un plan con primera cuota 2026-07 y última 2026-09; 2026-09 tiene la cuota "3/3"
+  (excepción a RN-30) y 2026-10 no tiene cuota de Avant.
+- **CA-55.4** Base sin meses, desde el primer uso, destino 2026-10 y la fila 19 como sueldo: se
+  crea 2026-10 con sueldo 1.300,00 y sin cotización (el resumen muestra "Cargá la
+  cotización"). Sin marcar sueldo: sueldo 0 y el aviso "El sueldo de este mes es 0". Mes 13 o
+  año "26": se rechaza.
+- **CA-55.5** Con último mes 2026-08 (2026-09 y 2026-10 no existen), el destino propuesto es
+  2026-08.
+- **CA-56.1** "Alquiler" viene "ya existe", destildada y con la nota "Ya existe en Octubre
+  2026. Viene destildada."; al confirmar sin tocarla, 2026-10 tiene un solo Alquiler. Si se
+  tilda, la nota pasa a "Ya existe en Octubre 2026. Si la importás, queda repetida." y al
+  confirmar quedan dos.
+- **CA-56.2** Con un gasto "Teléfono" en 2026-10, una fila " telefono " del Excel viene
+  "ya existe".
+- **CA-56.3** Un Excel con "Nafta | 30000" en dos filas: las dos vienen tildadas y con la nota
+  "Repetida en el archivo. Si no es un error del Excel, podés importarla igual.", y se puede
+  confirmar: quedan dos Nafta de 30.000. En `planilla-prueba.xlsx`, "Internet" (fila 5,
+  gasto) e "Internet" (fila 23, me deben) no se marcan como repetidas.
+- **CA-56.4** Importar `planilla-prueba.xlsx` dos veces en 2026-10: en la segunda, todas las
+  filas de gasto, la de Avant y las tres de "me deben" vienen "ya existe" y destildadas. Las
+  de "me deben" muestran, por ejemplo, "Sofía ya tiene un ítem sin cobrar con esta
+  descripción. Viene destildada." y las de gasto "Ya existe en Octubre 2026. Viene
+  destildada.". Avant (que coincide con su cuota de 2026-10 y con su plan) muestra la nota
+  de gasto, "Ya existe en Octubre 2026. Viene destildada.", y no la de plan (RN-74). Al
+  tildar "Prestamo MP", su nota pasa a "Sofía ya tiene un ítem sin cobrar con esta
+  descripción. Si la importás, queda repetida."; al destildarla, vuelve a "Viene
+  destildada.".
+- **CA-56.5** Con 2026-09 (sin Alquiler) y 2026-10 (con Alquiler) existentes: con destino
+  2026-10, "Alquiler" viene "ya existe" y destildada; al cambiar el destino a 2026-09 la marca
+  desaparece, la fila vuelve a tildarse y se ve el mensaje "Cambiaste el mes: 1 fila se volvió
+  a tildar."; al cambiar a 2026-11 (que va a copiar Alquiler de 2026-10) vuelve a "ya existe",
+  se destilda y se ve "Cambiaste el mes: 1 fila pasó a "ya existe" y se destildó.".
+- **CA-56.6** Aviso de posible gasto compartido, con `planilla-prueba.xlsx`:
+  - "Internet" (fila 23, me deben Sofía) muestra "¿Es parte de un gasto compartido? Si es así,
+    ignorala y marcá el gasto como compartido después.", porque la fila 5 "Internet" se va a
+    importar como gasto fijo. Sigue como "me deben" Sofía y tildada, y se puede confirmar.
+    "Prestamo MP" y "tacones chiqui baby" no muestran el aviso.
+  - Pasando la fila 5 a "ignorar" (o destildándola), el aviso de la fila 23 desaparece. Si
+    además 2026-10 tiene un gasto "Internet", el aviso vuelve a aparecer.
+  - Agregando una fila "Servicios Luz Gas | 35500" en el bloque de Sofía (fila 24, antes del
+    "Total"), muestra el aviso porque "Servicios" (fila 4) es gasto fijo. Una fila "Pesos
+    Check | 142406" en el bloque de Sofía no lo muestra si en el archivo y en el mes solo hay
+    "Pesos checks".
+- **CA-56.7** Nota "ya existe" de un plan de cuotas: con un plan terminado "Heladera 2/12"
+  (sin cuota en 2026-10) y un Excel con "Heladera 2/12 | 30000", la fila viene como cuota,
+  "ya existe", destildada y con la nota "Ya existe un plan de cuotas con este nombre. Viene
+  destildada."; al tildarla, la nota pasa a "Ya existe un plan de cuotas con este nombre. Si
+  la importás, queda repetida." y al confirmar quedan dos planes "Heladera 2/12".
+- **CA-57.1** Confirmar con la base, la lista esperada y la fila 19 (1.300) como sueldo, sin
+  otros cambios. 2026-10 queda con: Alquiler 260.000 (el de antes, sin cambios), Servicios
+  82.000, Internet 38.700 (pagado), psicologo 140.000 (pagado 60.000, pendiente 80.000),
+  Monotributo 66.020,12 (`6602012`, se ve "66.020"), "Avant Service cuota 3/ 3 $41.116,66"
+  41.116,66 con cuota "3/3" (plan de 3 cuotas desde 2026-08) y Gym 50.000; todos fijos salvo
+  la cuota, en Varios y sin medio de pago. Totales: gastos 677.837 (`67783678`), pagado
+  98.700, pendiente 579.137. Sueldo 1.300,00; USD a cambiar 423,65; ahorro 876,35. Me deben:
+  Sofía 32.900 (Prestamo MP 20.000 e Internet 12.900) y Marsu 6.785 (tacones chiqui baby),
+  no cobrados y con la fecha de hoy. Los pagos tienen la fecha de hoy. No se crea ninguna
+  categoría ni persona.
+- **CA-57.2** Después de CA-57.1 se ve "Importación terminada" con "Se importaron: 5 gastos,
+  1 plan de cuotas, 3 ítems "me deben" y el sueldo (US$ 1.300,00) en Octubre 2026." y, bajo
+  "Para completar:", "Los gastos quedaron sin medio de pago. Podés ponérselo en Gastos." y
+  "Si alguno es compartido, marcalo desde el gasto." (no aparece la línea de la cotización,
+  porque 2026-10 la tiene). Al tocar "Ver Octubre 2026", la app muestra 2026-10 como mes
+  seleccionado, en la pantalla Gastos, con el rail y la barra superior. No hay ninguna opción
+  para deshacer la importación.
+- **CA-57.3** Desde Ajustes: cambiar tipos, crear la persona "Juan", elegir destino 2026-11 y
+  tocar "Cancelar" (o `Esc`): la app pregunta "¿Descartar la importación?" con "Se pierden los
+  cambios que hiciste en la revisión. No se guarda nada." y "También se descartan las
+  categorías y personas nuevas: Juan.". "Seguir revisando" vuelve a la revisión sin perder
+  nada. "Descartar" vuelve a la pestaña "Importar Excel" de Ajustes, y no existen 2026-11 ni
+  Juan, ni gastos, pagos, planes o ítems nuevos, y 2026-10 sigue igual (sueldo 1.200). Sin
+  ningún cambio en la revisión, "Cancelar" sale sin preguntar. Con cambios, "Cambiar archivo u
+  hoja" pregunta "¿Volver a elegir el archivo?".
+- **CA-57.4** Si el guardado falla a mitad (simulado en las pruebas) con destino 2026-11: no
+  existe 2026-11 ni ningún dato importado, y se ve "No se pudo importar" con el texto "No se
+  pudo importar. No se guardó ningún dato." Con "Volver a la revisión" la lista está igual
+  que antes de confirmar (mismos tipos, tildes, correcciones, Juan y destino).
+- **CA-57.5** Excel con "Luz | 10000 | 12000" bajo un encabezado "Pagado": la fila muestra "El
+  pagado ($ 12.000) es mayor que el monto ($ 10.000)." y no se puede confirmar. Subiendo el
+  monto a 12.000 se importa pagada completa; bajando el pagado a 4.000, queda pendiente
+  6.000. Pagado −100: error "El pagado no puede ser negativo.". Pagado 0: se importa sin
+  pagos. Con "Gas | 1234,50 | 1234,56" (números de Excel): "El pagado ($ 1.234,56) es mayor
+  que el monto ($ 1.234,50)."; con "Gas | 1234,50 | 1234,51": "El pagado ($ 1.234,51) es
+  mayor que el monto ($ 1.234,50)." (nunca "El pagado ($ 1.235) es mayor que el monto
+  ($ 1.235).").
+- **CA-57.6** Con las filas 19 y 9 (1.004.917) marcadas como sueldo: no se puede confirmar y
+  se ve "Marcaste 2 filas como sueldo; dejá una sola." en las dos filas y en el pie.
+- **CA-57.7** Excel con "Descuento | -5000" y "Nada | 0": vienen como "ignorar" con la nota
+  "Monto no válido. Si querés importarla, corregí el monto."; pasadas a gasto fijo sin
+  corregir el monto, muestran "El monto tiene que ser mayor a 0." y no se puede confirmar.
+- **CA-57.8** Con todas las filas en "ignorar" o destildadas: no se puede confirmar y se ve
+  "No hay filas para importar." Con dos filas con error: el pie dice "Hay 2 filas con
+  errores. Corregilas, ignoralas o destildalas para continuar." y no se puede confirmar.
+- **CA-57.9** Resumen previo, en el caso de CA-57.1: antes de confirmar, el pie dice "Se
+  importan 10 filas: 5 gastos, 1 plan de cuotas, 3 ítems "me deben" y el sueldo." Al tocar
+  "Confirmar importación" todavía no se guarda nada y se ve "Revisá antes de importar" con:
+  "Se va a cargar en Octubre 2026 (ya existe).", "5 gastos: $ 376.720 (pagado $ 98.700)",
+  "1 plan de cuotas: Avant Service cuota 3/ 3 $41.116,66 (cuota 3/3, $ 41.117 por mes)",
+  "3 ítems "me deben": Sofía 2, Marsu 1 ($ 39.685 en total)", "Sueldo: US$ 1.200,00 ->
+  US$ 1.300,00", "No se importan 19 filas (ignoradas o destildadas)." y "Esta importación no
+  se puede deshacer. Si algo sale mal, lo corregís a mano en la app."; no aparece "Se crean
+  también". "Volver a la revisión" vuelve a la lista sin cambios y sin nada guardado;
+  "Importar" guarda lo de CA-57.1.
+- **CA-57.10** Importando solo "Prestamo MP" (me deben) y la fila 19 como sueldo (todas las
+  demás filas destildadas o en "ignorar"): el resultado dice "Se importaron: 1 ítem "me deben"
+  y el sueldo (US$ 1.300,00) en Octubre 2026." y "Ver Octubre 2026" muestra la pantalla
+  Resumen (no Gastos).
+- **CA-57.11** Personas y categorías nuevas solo si se usan: crear la persona "Juan" para
+  "Servicios" como "me deben" (CA-53.4) y después volver "Servicios" a gasto fijo: al
+  confirmar no existe Juan y el resumen previo no lo menciona. Crear la categoría nueva
+  "Importado" y elegirla como categoría por defecto: el resumen previo dice "Se crean también:
+  la categoría "Importado"." y, al confirmar, los gastos y el plan quedan en Importado. Si en
+  cambio "Importado" se elige solo en "Gym" y después "Gym" se destilda, al confirmar
+  "Importado" no existe.
+- **CA-57.12** Base sin meses y con la categoría Varios: desde el primer uso, importar
+  `planilla-prueba.xlsx` con destino Octubre 2026, sin marcar ninguna fila como sueldo. El
+  resumen previo dice "Se va a crear Octubre 2026, sin cotización, y cargar ahí los datos." y
+  "Sin sueldo: el sueldo de Octubre 2026 queda en US$ 0,00."; el resultado incluye "Cargá la
+  cotización de Octubre 2026 en el Resumen."; "Ver Octubre 2026" muestra la ventana normal
+  (con rail y barra superior) con 2026-10 seleccionado, en la pantalla Gastos.
+- **CA-57.13** Con cambios en la revisión (por ejemplo, los de CA-57.3), cerrar la ventana de
+  la app la cierra sin preguntar. Al volver a abrir la app no existen 2026-11 ni Juan ni
+  ningún dato importado, y 2026-10 sigue igual.
+- **CA-58.1** Un `.xls`, un `.csv`, un `.txt` renombrado a `.xlsx` y un `.xlsx` cortado
+  (dañado): se ve "No se pudo leer el archivo. Solo se aceptan archivos .xlsx de Excel." y no
+  cambia nada.
+- **CA-58.2** Una hoja vacía: "No se encontraron datos en la hoja Hoja1." y se puede elegir
+  otra hoja, otro archivo o cancelar. Una hoja con solo textos (sin números): se muestra la
+  lista con el aviso "No se encontraron filas con un texto y un monto." y todas en "Filas
+  incompletas".
+- **CA-58.3** Un archivo generado por las pruebas con "Luz" en C3 y la fórmula `=100+200` en
+  D3 (sin valor guardado, porque nunca se abrió en Excel): arriba de la lista se ve "Hay 1
+  fórmulas sin valor calculado (ej. D3)…" y "Luz" queda en "Filas incompletas", sin monto.
+- **CA-58.4** El mismo contenido guardado con Excel o LibreOffice (archivo de prueba en
+  `tests/`): "Luz" viene con monto 300 y sin aviso.
+
 ---
 
-## 8. Fuera de la v1
+## 8. Fuera de alcance (v1 y v2)
 
-- Importar la planilla de Excel.
+La importación de la planilla de Excel salió de esta lista: es la primera funcionalidad de la
+v2 (Módulo K, RF-49 a RF-58). Lo que sigue queda para más adelante o se decidió no hacerlo:
+
 - Cotización automática desde internet.
 - Cuotas (planes de cuotas) en dólares. Los gastos fijos mensuales y de pago único en dólares
   **sí** están en la v1 (RF-43 a RF-48).
 - Cálculo automático de impuestos o recargos sobre el dólar (dólar tarjeta, percepciones):
   el usuario carga la cotización que corresponda (RN-58).
 - Ajuste por inflación en previsiones.
+- Sueldo en pesos, para familiares que no cobran en USD (funcionalidad futura). Mientras
+  tanto, la importación toma el sueldo siempre en USD (RN-70).
+- Deshacer una importación ya confirmada: **no se hace** (decisión del usuario). Los errores
+  se corrigen a mano (RN-76).
 
 ---
 
@@ -1140,6 +2160,12 @@ Base: mes 2026-10 con cotización del mes 1.600 y los gastos de la base del mód
 | 5 | Gastos compartidos y "me deben" | RF-28 a RF-34, RF-47 (partes de fijos en USD compartidos); RN-32 a RN-37 |
 | 6 | Previsiones | RF-38, RF-39; RN-41 a RN-45 |
 | 7 | Gráficos | RF-40 a RF-42; RN-46 a RN-48 |
+| 8 | Importar Excel (v2). Sin cambios en la base (§5.13). Usa lo construido en los pasos 1 a 5 (gastos, pagos, sueldo, meses, planes de cuotas, personas y "me deben"). Se divide en cinco sub-pasos que se prueban por separado: 8a es solo lógica; 8b a 8e son la interfaz y siguen, en el mismo orden, los sub-pasos del Paso 8 de `docs/diseno.md` §6. Los CA que tienen una parte de lógica y una de pantalla se prueban primero en 8a (datos y textos que devuelve la lógica) y después en el sub-paso de interfaz que los muestra. | RF-49 a RF-58; RN-60 a RN-78; CA-49.1 a CA-58.4. |
+| 8a | Lógica de la importación, **sin interfaz** (en `app/logica/`, probada con pytest): lectura del `.xlsx` y de sus hojas; detección de filas con su número de fila, columnas de pagado y de cobrado (RN-64) y título de bloque (títulos, filas pegadas y bloques, RN-65); tipos propuestos; la lista de revisión en memoria con sus operaciones (cambiar tipo, tilde, datos, categoría por defecto, mes destino, personas y categorías nuevas, acciones de bloque); notas, avisos y errores por fila con sus textos; "ya existe", "repetida" y posible gasto compartido; textos del pie y del resumen previo; guardado todo o nada (incluido crear el mes destino) y texto del resultado. | RN-60 a RN-78. CA-50.2, CA-51.1 a CA-51.9, CA-52.1 a CA-52.8, CA-53.x, CA-54.x, CA-55.x, CA-56.x, CA-57.1, CA-57.4 a CA-57.11, CA-58.1, CA-58.3, CA-58.4. |
+| 8b | Entradas y elegir archivo: línea "¿Tenés una planilla? [Importar Excel]" en el primer uso, pestaña "Importar Excel" de Ajustes, pantalla completa de elegir archivo y hoja, y avisos de archivo. Termina mostrando la cantidad de filas detectadas. | RF-49, RF-50, RF-58. CA-49.1, CA-49.2, CA-50.1, CA-58.1, CA-58.2. |
+| 8c | Lista de revisión de solo lectura: bloques, filas, tipos propuestos, notas y avisos, "Filas incompletas", controles generales (mes destino y categoría por defecto), pie con conteo. Tilde, tipo, "Tildar/Destildar todas las filas" y "Cobrado" ya editables. | RF-51, RF-52, RF-54 (sin crear categorías), RF-55, RF-56. CA-51.1, CA-51.2, CA-51.6, CA-51.7, CA-52.1, CA-52.6 a CA-52.8, CA-55.1, CA-55.3, CA-56.x, CA-58.3 (en pantalla). |
+| 8d | Edición: diálogo de edición de fila, "Cambiar tipo o categoría de todas...", creación de categorías y personas nuevas, errores por fila y bloqueo de "Confirmar importación". | RF-53, RF-54. CA-53.x, CA-54.x, CA-57.5 a CA-57.8 (en pantalla). |
+| 8e | Confirmar y cancelar: resumen previo, guardado todo o nada, resultado y pantalla final (Gastos o Resumen), error al guardar, cancelar con confirmación y cierre de la ventana sin pregunta. | RF-57. CA-55.2, CA-55.4, CA-57.1 a CA-57.4, CA-57.9 a CA-57.13 (en pantalla). |
 
 Cada paso termina cuando pasan los criterios de aceptación de sus RF.
 
@@ -1148,3 +2174,14 @@ Cada paso termina cuando pasan los criterios de aceptación de sus RF.
 ## 10. Preguntas abiertas
 
 Sin preguntas abiertas.
+
+- Las cinco preguntas sobre la importación de Excel se respondieron el 2026-10-13 y están
+  incorporadas en RN-64, RN-70, RN-72, RN-76, RN-77 y §8.
+- Las decisiones del usuario sobre el diseño de la importación (observaciones 21, 22, 26, 29,
+  30 y 31 de `docs/diseno.md` §7) están en RF-49, RF-57, RN-72, RN-75, RN-76 y RN-78.
+- La pregunta sobre cómo se arman los bloques cuando hay celdas vacías o filas incompletas en
+  el medio se respondió el 2026-10-13 (opción "c": un bloque se corta solo en una fila del
+  Excel totalmente vacía o en el título siguiente, y un texto sin monto pegado a la fila de
+  arriba no abre un bloque nuevo). Está en RN-65 y CA-51.7 y CA-51.8.
+- También el 2026-10-13, el usuario confirmó que al sacar una fila de "ignorar" se tilda sola
+  aunque esté marcada "ya existe" (RN-68, CA-52.7).

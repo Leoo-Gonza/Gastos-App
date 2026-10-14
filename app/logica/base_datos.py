@@ -175,6 +175,44 @@ CREATE TABLE IF NOT EXISTS configuracion (
 """
 
 
+class Conexion(sqlite3.Connection):
+    """Conexión que permite anidar bloques "with con:" sin guardar a medias.
+
+    Cada función de la lógica guarda dentro de su propio "with con:". Con la
+    conexión común de sqlite3, cada uno de esos bloques guarda (commit) al
+    terminar, aunque esté adentro de otro. Acá solo guarda el bloque más
+    externo: así la importación de Excel puede llamar a agregar_gasto,
+    crear_plan, etc. dentro de un bloque grande y, si algo falla, se deshace
+    todo (RN-76: todo o nada).
+
+    Los bloques internos usan SAVEPOINT (un "punto de guardado" de SQLite): si
+    uno falla, se deshace solo lo suyo, igual que antes, y el error sigue.
+    """
+
+    _nivel = 0  # Cuántos "with con:" hay abiertos ahora.
+
+    def __enter__(self):
+        if self._nivel == 0 and not self.in_transaction:
+            # El bloque externo abre la transacción. Si no, el primer SAVEPOINT
+            # la abriría y su RELEASE guardaría todo como un commit (regla de SQLite).
+            self.execute("BEGIN")
+        elif self._nivel > 0:
+            self.execute(f"SAVEPOINT nivel_{self._nivel}")
+        self._nivel += 1
+        return self
+
+    def __exit__(self, tipo, valor, traza):
+        self._nivel -= 1
+        if self._nivel == 0:
+            # El bloque más externo: commit o rollback como siempre.
+            return super().__exit__(tipo, valor, traza)
+        nombre = f"nivel_{self._nivel}"
+        if tipo is not None:
+            self.execute(f"ROLLBACK TO {nombre}")
+        self.execute(f"RELEASE {nombre}")
+        return False
+
+
 def conectar(ruta: Path | str = RUTA_POR_DEFECTO) -> sqlite3.Connection:
     """Abre la base (la crea si no existe) y deja las tablas listas.
 
@@ -186,7 +224,8 @@ def conectar(ruta: Path | str = RUTA_POR_DEFECTO) -> sqlite3.Connection:
 
     # check_same_thread=False: Flet ejecuta los clics en hilos distintos al que
     # abrió la conexión. Con un solo usuario no hay escrituras simultáneas.
-    con = sqlite3.connect(ruta, check_same_thread=False)
+    # factory=Conexion: bloques "with con:" anidados sin guardar a medias.
+    con = sqlite3.connect(ruta, check_same_thread=False, factory=Conexion)
     # Row permite leer las columnas por nombre: fila["nombre"] en vez de fila[1].
     con.row_factory = sqlite3.Row
     # SQLite no controla las claves foráneas salvo que se lo pida en cada conexión.

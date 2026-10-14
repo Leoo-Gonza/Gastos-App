@@ -16,6 +16,10 @@ from app.logica import gastos, meses
 from app.logica.errores import ErrorDeValidacion
 from app.logica.formato import clave_orden, validar_centavos
 
+# 50 años: más cuotas que eso es un error de tipeo (RN-29). La usa también la
+# revisión de la importación, para avisar antes de guardar.
+MAXIMO_CUOTAS = 600
+
 ACTIVO = "activo"
 TERMINADO = "terminado"
 CANCELADO = "cancelado"
@@ -211,7 +215,7 @@ def _validar(
             "La cantidad de cuotas tiene que ser un número entero mayor o igual a 1.",
             "cantidad",
         )
-    if cantidad_cuotas > 600:  # 50 años: más que eso es un error de tipeo.
+    if cantidad_cuotas > MAXIMO_CUOTAS:
         raise ErrorDeValidacion(
             "La cantidad de cuotas es demasiado grande.", "cantidad"
         )
@@ -364,6 +368,25 @@ def _insertar_cuota(con: sqlite3.Connection, plan, mes_id: int) -> None:
             plan["id"],
         ),
     )
+
+
+def cuota_en_mes(con: sqlite3.Connection, plan_id: int, mes_id: int) -> int | None:
+    """La cuota del plan en ese mes (id del gasto); si falta y el plan está activo
+    ahí, la crea. None si el plan no tiene cuota en ese mes.
+
+    La usa la importación de Excel (RN-71): la cuota va en el mes destino aunque
+    sea anterior al mes actual, una excepción a RN-30. Sin commit: se llama
+    dentro de la transacción de la importación.
+    """
+    plan = _exigir_plan(con, plan_id)
+    mes = meses.exigir_mes(con, mes_id)
+    cuota = _cuota_del_mes(con, plan_id, mes["anio"], mes["mes"])
+    if cuota is not None:
+        return cuota["id"]
+    if not activo_en(con, plan, mes["anio"], mes["mes"]):
+        return None
+    _insertar_cuota(con, plan, mes_id)
+    return _cuota_del_mes(con, plan_id, mes["anio"], mes["mes"])["id"]
 
 
 def _sincronizar(con: sqlite3.Connection, plan_id: int, hoy: date | None) -> None:
