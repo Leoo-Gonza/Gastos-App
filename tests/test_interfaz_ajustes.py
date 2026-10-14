@@ -67,6 +67,7 @@ def test_pestanas_y_titulo(ajustes):
         "Personas",
         "Meta de ahorro",
         "Apariencia",
+        "Importar Excel",  # v2 (paso 8b, diseno.md §3.10): sexta pestaña, la última
     ]
 
 

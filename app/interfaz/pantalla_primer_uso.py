@@ -83,6 +83,27 @@ class PantallaPrimerUso:
                         "Para empezar, creá el primer mes que querés registrar."
                     ),
                     tarjeta,
+                    # v2: quien tiene una planilla puede empezar importándola.
+                    # Es un botón de texto para que "Crear mes" siga siendo la
+                    # acción principal (§3.1).
+                    ft.Row(
+                        [
+                            ft.Text(
+                                "¿Tenés una planilla?",
+                                size=14,
+                                color=estilos.TEXTO_SECUNDARIO,
+                            ),
+                            ft.TextButton(
+                                "Importar Excel",
+                                icon=ft.Icons.UPLOAD_FILE,
+                                on_click=lambda e: app.mostrar_importacion(
+                                    "primer_uso"
+                                ),
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        tight=True,
+                    ),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 tight=True,

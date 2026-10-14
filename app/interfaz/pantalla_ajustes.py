@@ -1,7 +1,5 @@
-"""Ajustes: categorías y medios de pago (RF-10, RF-11, docs/diseno.md §3.10).
-
-Personas, meta de ahorro y apariencia se agregan en pasos siguientes.
-"""
+"""Ajustes: categorías, medios de pago, personas, meta de ahorro, apariencia e
+importar Excel (RF-10, RF-11, RF-28, RF-36, RF-49, docs/diseno.md §3.10)."""
 
 import flet as ft
 
@@ -365,6 +363,51 @@ class PestanaApariencia:
         self.app.avisar("Tema actualizado")
 
 
+class PestanaImportar:
+    """Pestaña "Importar Excel" (v2, §3.10): explica y abre la importación."""
+
+    def __init__(self, app) -> None:
+        self.app = app
+        puntos = [
+            "Antes de guardar, revisás y corregís todo fila por fila.",
+            "El archivo no se modifica ni se guarda en la app.",
+            "Lo importado se agrega al mes que elijas: "
+            "no se borra nada de lo que ya cargaste.",
+            "Si importás dos veces la misma planilla, "
+            "las filas repetidas vienen destildadas.",
+        ]
+        self.control = ft.Column(
+            [
+                ft.Text(
+                    "Importar desde Excel",
+                    size=estilos.TAM_SECCION,
+                    weight=ft.FontWeight.W_600,
+                ),
+                ft.Text(
+                    "Traé gastos, cuotas, lo que te deben y el sueldo "
+                    "desde una planilla .xlsx."
+                ),
+                ft.Column([texto_ayuda(f"•  {p}") for p in puntos], spacing=4),
+                ft.Row(
+                    [
+                        ft.FilledButton(
+                            "Importar Excel",
+                            icon=ft.Icons.UPLOAD_FILE,
+                            on_click=lambda e: app.mostrar_importacion("ajustes"),
+                        )
+                    ]
+                ),
+            ],
+            spacing=16,
+        )
+
+    def refrescar(self) -> None:
+        """No muestra datos de la base: no hay nada que refrescar."""
+
+    def nuevo(self) -> None:
+        """Ctrl+N no tiene acción en esta pestaña (§3.10)."""
+
+
 class PantallaAjustes:
     def __init__(self, app) -> None:
         self.app = app
@@ -375,8 +418,9 @@ class PantallaAjustes:
         ]
         self.meta = PestanaMeta(app)
         self.apariencia = PestanaApariencia(app)
+        self.importar = PestanaImportar(app)
         # Todas las pestañas, en el orden en que se ven.
-        self._pestanas = [*self.listas, self.meta, self.apariencia]
+        self._pestanas = [*self.listas, self.meta, self.apariencia, self.importar]
         # En Flet 1.0 las pestañas son tres piezas: Tabs (el conjunto),
         # TabBar (los títulos) y TabBarView (el contenido de cada una).
         self.pestanas = ft.Tabs(
@@ -393,6 +437,7 @@ class PantallaAjustes:
                             ft.Tab(label="Personas"),
                             ft.Tab(label="Meta de ahorro"),
                             ft.Tab(label="Apariencia"),
+                            ft.Tab(label="Importar Excel"),
                         ]
                     ),
                     ft.TabBarView(

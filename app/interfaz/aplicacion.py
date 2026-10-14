@@ -17,6 +17,7 @@ from app.interfaz.pantalla_ajustes import PantallaAjustes
 from app.interfaz.pantalla_cuotas import PantallaCuotas
 from app.interfaz.pantalla_gastos import PantallaGastos
 from app.interfaz.pantalla_graficos import PantallaGraficos
+from app.interfaz.pantalla_importar import PantallaImportar
 from app.interfaz.pantalla_me_deben import PantallaMeDeben
 from app.interfaz.pantalla_prevision import PantallaPrevision
 from app.interfaz.pantalla_primer_uso import PantallaPrimerUso
@@ -47,6 +48,11 @@ class Aplicacion:
         self._dialogos: list[ft.AlertDialog] = []
         self._pantallas: list = []
         self._indice = 0
+        # La pantalla de importar Excel, mientras está abierta (si no, None).
+        self._importacion: PantallaImportar | None = None
+        # El selector de archivos del sistema. Flet deja de atender un servicio
+        # que no se guarda en ningún lado, por eso queda acá (se crea al usarlo).
+        self._selector_de_archivos: ft.FilePicker | None = None
 
         page.window.width = 1280
         page.window.height = 800
@@ -72,12 +78,48 @@ class Aplicacion:
     def mostrar_primer_uso(self) -> None:
         """Pantalla completa sin menú, para crear el primer mes (§3.1)."""
         self._pantallas = []  # Sin menú: los atajos no hacen nada en esta pantalla.
+        self._importacion = None
         self.page.title = "Gastos – Bienvenido"
         self.page.controls.clear()
         self.page.add(PantallaPrimerUso(self).control)
 
+    def mostrar_importacion(self, origen: str) -> None:
+        """Pantalla completa de importar Excel, sin menú ni barra (§3.11).
+
+        origen: "primer_uso" o "ajustes", para volver ahí al cancelar.
+        """
+        # Sin pantallas del menú: mientras se importa, los atajos no hacen nada
+        # (no se puede cambiar de mes ni de pantalla con una revisión a medias).
+        self._pantallas = []
+        self._importacion = PantallaImportar(self, origen)
+        self.page.title = "Gastos – Importar Excel"
+        self.page.controls.clear()
+        self.page.add(self._importacion.control)
+        self.page.update()
+
+    def salir_de_importacion(self, origen: str) -> None:
+        """Cancelar la importación: vuelve al primer uso o a la pestaña de Ajustes."""
+        mes = meses.obtener_mes(self.con, self.mes_id) if self.mes_id else None
+        if origen != "ajustes" or mes is None:
+            self.iniciar()
+            return
+        self.mostrar_principal(self.mes_id)
+        # mostrar_principal arma Ajustes de nuevo y arrancaría en la primera
+        # pestaña: se vuelve a "Importar Excel" (§3.10), como en BUG-23.
+        ajustes = self.pantalla("Ajustes")
+        ajustes.pestanas.selected_index = ajustes.indice_de(ajustes.importar)
+        ajustes.refrescar()
+        self.page.update()
+
+    def selector_de_archivos(self) -> ft.FilePicker:
+        """El mismo FilePicker para toda la app (se registra en la página al crearse)."""
+        if self._selector_de_archivos is None:
+            self._selector_de_archivos = ft.FilePicker()
+        return self._selector_de_archivos
+
     def mostrar_principal(self, mes_id: int) -> None:
         self.mes_id = mes_id
+        self._importacion = None
         self._pantallas = [
             PantallaResumen(self),
             PantallaGastos(self),
@@ -450,6 +492,11 @@ class Aplicacion:
             # Con un diálogo abierto, los atajos se ignoran. Esc cierra el de arriba.
             if e.key == "Escape":
                 self.cerrar_dialogo(self._dialogos[-1])
+            return
+        if self._importacion is not None:
+            # Importando: ningún atajo; Esc es lo mismo que "Cancelar" (§3.14).
+            if e.key == "Escape":
+                self._importacion.cancelar()
             return
         if not self._pantallas:
             return  # Todavía en la pantalla de primer uso.

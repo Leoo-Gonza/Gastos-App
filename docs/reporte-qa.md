@@ -1136,3 +1136,40 @@ Como la revisión ya detecta el archivado y los años, el fallo real se provoca 
 - **O80:** una categoría o persona que se archiva durante la revisión ahora se ve como "Elegí una categoría." / "Elegí una persona." aunque el usuario la había elegido; el texto no explica que está archivada. Es razonable (pasa solo si se archiva en otro lugar mientras dura la revisión).
 - **O81:** `confirmada` no se incluye en "lo que cuenta como cambio" (`hubo_cambios`) ni se reinicia: una lista confirmada queda inutilizable y la pantalla tiene que armar una nueva para otra importación. Es lo pedido.
 - Pendientes sin cambios: pantallas del guardado (8e) y archivo real de Excel (CA-52.5 / CA-58.4). Ruff sigue bloqueado por Windows.
+
+---
+
+## Ronda 36 (2026-10-14): paso 8b, entradas y elegir archivo de la importación de Excel
+
+### Qué se probó
+Archivo nuevo `tests/test_interfaz_importar.py` (100 pruebas, 2 de ellas xfail). Sin ventanas: página falsa, `app.selector_de_archivos` reemplazado por un selector falso y las tareas de `run_task` ejecutadas a mano con `asyncio.run`. Archivos inventados con `tests/ayudantes_excel.py`. Se actualizó `test_pestanas_y_titulo` de `tests/test_interfaz_ajustes.py` (ahora 6 pestañas, cambio esperado por diseno.md §3.10).
+
+| Área | Qué se verificó | Resultado |
+|---|---|---|
+| CA-49.1 primer uso | Línea "¿Tenés una planilla?" + TextButton "Importar Excel" después de "Crear mes" (orden del árbol); abre pantalla completa sin rail, título "Gastos – Importar Excel"; Cancelar y Esc vuelven al formulario, base sin cambios | Pasa |
+| CA-49.2 Ajustes | Sexta pestaña, última; Ctrl+N no hace nada; abre sin rail; Cancelar y Esc vuelven a la pestaña "Importar Excel" y al mismo mes; base sin cambios; abrir/cancelar 3 veces | Pasa |
+| Atajos (§1.3) | Ctrl+1/3/7, Ctrl+N, Ctrl+Shift+N, Ctrl+K, Ctrl+coma, Alt+flechas (y Cmd en macOS) no hacen nada durante la importación; otras teclas no cancelan; al salir vuelven a funcionar | Pasa |
+| Selector | Llamado con título "Elegir una planilla de Excel", CUSTOM, `["xlsx"]`, `with_data=True`; cerrar sin elegir (lista vacía o None) no cambia nada; lee de los bytes; con `bytes` None lee del disco; ruta inexistente o sin bytes ni ruta da el aviso (no crash); el archivo no se modifica ni se copia; excepción del selector muestra el diálogo de error y libera `ocupada`; un solo FilePicker | Pasa |
+| CA-58.1 | `.txt`, `.csv`, `.xls`, `.xlsm`, `.ods`, sin extensión (por nombre); `.txt` y `.csv` renombrados a `.xlsx`; `.xlsx` cortado, de 0 bytes, con hoja interna rota, zip sin estructura de Excel, hoja que falla al leerla: texto exacto, aviso negativo con ERROR_OUTLINE, botón "Elegir otro archivo", sin "Revisar filas"; el aviso se reemplaza (no se acumula); `.XLSX` en mayúsculas se acepta | Pasa |
+| CA-58.2 | Una hoja vacía ("Sheet" y con nombre propio), varias hojas todas vacías (nombra la primera), hoja con solo una fecha, nombre con Ñ y paréntesis: "No se encontraron datos en la hoja X." con WARNING_AMBER; hoja con solo textos no es error en esta pantalla | Pasa |
+| Elegir hoja (RF-50, CA-50.1) | Una hoja: no pregunta; una con datos y otras vacías: no pregunta; varias: RadioGroup, primera elegida, textos exactos, vacías no se ofrecen, Revisar filas con foco; 8 hojas sin scroll, 9 con alto 240 y scroll; "Revisar filas" lee la hoja elegida; hoja sin datos entre varias: aviso debajo de las hojas con la selección conservada, se puede elegir otra, el aviso no se acumula en 3 intentos; "Elegir otro" vuelve al inicio | Pasa |
+| `planilla-prueba.xlsx` | "En la hoja Octubre se detectaron 13 filas con texto y monto, y 5 filas incompletas." (primer uso, Ajustes y por el selector); no guarda nada | Pasa |
+| Ocupada | Leyendo: "Leyendo el archivo..." con ProgressRing y botones deshabilitados (también visto durante la lectura real); con `ocupada` los clics no lanzan tareas y Esc/Cancelar no actúan; se libera siempre | Pasa |
+| Lógica sin interfaz | Ningún módulo de `app/logica/` importa `app.interfaz` ni `flet` (análisis del código); `mensaje_sin_datos`, `primera_hoja`, `aviso_en_pantalla` (4 roles) | Pasa |
+
+### Resultado
+Suite completa: 2.732 pruebas: 2.729 pasan, 1 omitida (archivo real de Excel), 0 fallan, 2 xfail (observación O82). Cobertura de `app/` 98 %; `pantalla_importar.py` 100 % con la prueba de hoja dañada.
+
+### Bugs
+Ninguno nuevo.
+
+### Observaciones
+- **O82 (baja, teórica):** `ocupada` se pone en True cuando la tarea de `run_task` arranca, no cuando se hace clic. Dos clics procesados antes de que Flet corra la tarea encolarían dos tareas (dos selectores, o dos lecturas). En Flet, el manejador de clic termina y la tarea suele arrancar antes del siguiente evento, así que probablemente no se puede dar; la página falsa no puede confirmarlo. Reproducción en pruebas: `test_dos_clics_antes_de_que_corra_la_tarea` y `test_doble_clic_en_revisar_filas` (marcadas xfail, no strict; si se corrige poniendo `self.ocupada = True` en `elegir_archivo`/`revisar_hoja` antes de `run_task`, pasan solas). Hay que mirarlo a mano con un doble clic rápido en la ventana real.
+- **O83:** el texto provisorio dice "1 filas" (plural fijo). Es temporal hasta el 8c; se anota por si se conserva.
+- **O84:** el selector real de archivos (`ft.FilePicker` y sus parámetros reales, el caso de Edge sin ruta) no se pudo probar sin ventana; queda para prueba manual: abrir con Elegir archivo..., cerrar con Cancelar del sistema, elegir `planilla-prueba.xlsx`, elegir un `.txt` escribiendo el nombre.
+- Pendiente de prueba manual: aspecto (foco inicial, scroll de 9+ hojas, colores de avisos en tema oscuro).
+
+**Correcciones después de la ronda 36 (agente principal):**
+- **O82 corregida:** `elegir_archivo` y `revisar_hoja` ponen `ocupada = True` al hacer clic, antes de `run_task`. Se sacó la marca xfail de las dos pruebas, que ahora pasan.
+- **O83 corregida:** "1 fila con texto y monto" / "1 fila incompleta". Se ajustaron las dos pruebas que esperaban "1 filas".
+- Suite completa: 2.732 pruebas: 2.731 pasan, 1 omitida (archivo real de Excel).

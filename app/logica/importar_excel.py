@@ -25,6 +25,11 @@ MENSAJE_ARCHIVO_INVALIDO = (
     "No se pudo leer el archivo. Solo se aceptan archivos .xlsx de Excel."
 )
 
+
+def mensaje_sin_datos(nombre_hoja: str) -> str:
+    """RN-60: la hoja no tiene ninguna celda con texto o número."""
+    return f"No se encontraron datos en la hoja {nombre_hoja}."
+
 # Encabezados que marcan una columna de pagado o de cobrado (RN-64), ya normalizados.
 TITULOS_PAGADO = {"pagado", "pago", "pagos", "abonado"}
 TITULO_COBRADO = "cobrado"
@@ -274,6 +279,13 @@ class LibroExcel:
         # tienen valor guardado (RN-61).
         self._valores = load_workbook(io.BytesIO(contenido), data_only=True)
         self._formulas = load_workbook(io.BytesIO(contenido), data_only=False)
+
+    def primera_hoja(self) -> str | None:
+        """Nombre de la primera hoja, aunque esté vacía. Sirve para el aviso
+        "No se encontraron datos en la hoja X." cuando ninguna hoja tiene datos
+        (hojas() no ofrece las vacías)."""
+        hojas = self._formulas.worksheets
+        return hojas[0].title if hojas else None
 
     def hojas(self) -> list[str]:
         """Las hojas que tienen alguna celda con algo (RN-60). Las hojas que son

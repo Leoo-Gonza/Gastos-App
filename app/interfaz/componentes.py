@@ -69,6 +69,27 @@ def texto_ayuda(texto: str, **opciones) -> ft.Text:
     )
 
 
+def aviso_en_pantalla(
+    page: ft.Page, rol: str, icono: ft.IconData, texto: str
+) -> ft.Container:
+    """Aviso dentro de la pantalla: fondo suave + ícono + texto (§2.5).
+
+    rol: "negativo", "pendiente", "positivo" o "info" (los colores de estilos).
+    """
+    return ft.Container(
+        padding=12,
+        border_radius=8,
+        bgcolor=estilos.color(page, f"{rol}_suave"),
+        content=ft.Row(
+            [
+                ft.Icon(icono, color=estilos.color(page, rol), size=20),
+                ft.Text(texto, color=estilos.color(page, rol), expand=True),
+            ],
+            spacing=8,
+        ),
+    )
+
+
 def estado_vacio(
     icono: ft.IconData, texto: str, texto_boton: str, al_hacer_clic: Callable
 ) -> ft.Control:
