@@ -451,9 +451,14 @@ class Aplicacion:
         )
         self.abrir_dialogo(dialogo)
 
-    def avisar(self, texto: str, al_deshacer: Callable | None = None) -> None:
-        """Mensaje breve abajo de la ventana (SnackBar), opcionalmente con "Deshacer"."""
-        aviso = ft.SnackBar(ft.Text(texto), duration=4000)
+    def avisar(
+        self, texto: str, al_deshacer: Callable | None = None, duracion: int = 4000
+    ) -> None:
+        """Mensaje breve abajo de la ventana (SnackBar), opcionalmente con "Deshacer".
+
+        duracion en milisegundos (ej. 6000 para el aviso de cambio de mes, §3.12).
+        """
+        aviso = ft.SnackBar(ft.Text(texto), duration=duracion)
         if al_deshacer:
             aviso.action = "Deshacer"
             aviso.on_action = lambda e: al_deshacer()
@@ -491,12 +496,17 @@ class Aplicacion:
         if self._dialogos:
             # Con un diálogo abierto, los atajos se ignoran. Esc cierra el de arriba.
             if e.key == "Escape":
-                self.cerrar_dialogo(self._dialogos[-1])
+                arriba = self._dialogos[-1]
+                # Un diálogo puede guardar en "data" algo para cerrar primero (ej.
+                # la fila de "nueva categoría"): si lo cerró, el diálogo sigue (O86).
+                if callable(arriba.data) and arriba.data():
+                    return
+                self.cerrar_dialogo(arriba)
             return
         if self._importacion is not None:
-            # Importando: ningún atajo; Esc es lo mismo que "Cancelar" (§3.14).
-            if e.key == "Escape":
-                self._importacion.cancelar()
+            # Importando: ningún atajo de la app. Esc cancela y Ctrl+Enter confirma
+            # (§3.13, §3.14); eso lo decide la pantalla de importar.
+            self._importacion.al_presionar_tecla(e)
             return
         if not self._pantallas:
             return  # Todavía en la pantalla de primer uso.

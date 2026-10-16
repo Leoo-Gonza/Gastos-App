@@ -405,15 +405,14 @@ def test_selector_none_tambien_es_cancelar(app_vacia, pagina):
 
 
 def test_selector_con_bytes_lee_el_archivo(app_vacia, pagina):
-    # Camino completo: selector -> bytes -> una sola hoja -> resultado provisorio.
+    # Camino completo: selector -> bytes -> una sola hoja -> lista de revisión (8c).
     p = abrir_desde_primer_uso(app_vacia, pagina)
     con_selector(app_vacia, [archivo("planilla-prueba.xlsx", planilla_prueba())])
     clic(p.tarjeta, "Elegir archivo...")
     correr_ultima_tarea(pagina)
-    assert (
-        "En la hoja Octubre se detectaron 13 filas con texto y monto, y 5 filas incompletas."
-        in tarjeta(p)
-    )
+    assert p.vista is not None
+    assert p.lista.hoja.nombre == "Octubre"
+    assert len(p.vista.bloques) == 4  # Gasto del Mes, Deudas, Deudas sofia, Marsu
     assert p.ocupada is False
 
 
@@ -425,7 +424,8 @@ def test_selector_sin_bytes_lee_del_disco(app_vacia, pagina, tmp_path):
     con_selector(app_vacia, [archivo("mi-planilla.xlsx", None, str(ruta))])
     clic(p.tarjeta, "Elegir archivo...")
     correr_ultima_tarea(pagina)
-    assert any("13 filas con texto y monto" in t for t in tarjeta(p))
+    assert p.vista is not None
+    assert sum(len(b.filas) for b in p.vista.bloques) == 13
 
 
 def test_ruta_inexistente_da_aviso_de_archivo_invalido(app_vacia, pagina, tmp_path):
@@ -637,7 +637,8 @@ def test_error_y_luego_archivo_bueno_borra_el_aviso(app_vacia, pagina):
     leer(p, "a.txt", b"x")
     leer(p, "ok.xlsx", planilla_prueba())
     assert INVALIDO not in tarjeta(p)
-    assert any("13 filas" in t for t in tarjeta(p))
+    assert p.vista is not None
+    assert sum(len(b.filas) for b in p.vista.bloques) == 13
 
 
 def test_aviso_invalido_estilo_negativo(app_vacia, pagina):
@@ -724,12 +725,13 @@ def test_nombre_de_hoja_con_caracteres_raros_en_el_aviso(app_vacia, pagina):
 
 def test_hoja_con_solo_textos_no_es_error_en_8b(app_vacia, pagina):
     # CA-58.2 (parte 2): una hoja con solo textos NO es "sin datos" en esta pantalla.
-    # En 8b muestra el conteo (la lista con su aviso llega en 8c).
+    # Desde 8c muestra la lista con el aviso "No se encontraron filas con un texto y un monto."
     p = abrir_desde_primer_uso(app_vacia, pagina)
     leer(p, "t.xlsx", xlsx({"C3": "Luz", "C4": "Gas"}))
-    t = tarjeta(p)
+    assert p.vista is not None
+    t = textos(p.vista.control)
     assert not any("No se encontraron datos" in x for x in t)
-    assert any("0 filas con texto y monto" in x for x in t)
+    assert "No se encontraron filas con un texto y un monto." in t
 
 
 # ---------------------------------------------------------------------------
@@ -743,7 +745,9 @@ def test_una_sola_hoja_no_pregunta(app_vacia, pagina):
     leer(p, "planilla-prueba.xlsx", planilla_prueba())
     assert not hay_boton(p.tarjeta, "Revisar filas")
     assert not de_tipo(p.tarjeta, ft.RadioGroup)
-    assert "Archivo: planilla-prueba.xlsx" in tarjeta(p)
+    # Va directo a la lista, que muestra el nombre del archivo y la hoja.
+    assert p.vista is not None
+    assert 'planilla-prueba.xlsx  ·  Hoja "Octubre"' in textos(p.vista.control)
 
 
 def test_una_hoja_con_datos_y_otras_vacias_no_pregunta(app_vacia, pagina):
@@ -751,7 +755,8 @@ def test_una_hoja_con_datos_y_otras_vacias_no_pregunta(app_vacia, pagina):
     p = abrir_desde_primer_uso(app_vacia, pagina)
     leer(p, "x.xlsx", varias_hojas(3, vacias=(1, 3)))
     assert not de_tipo(p.tarjeta, ft.RadioGroup)
-    assert any("En la hoja Hoja2" in t for t in tarjeta(p))
+    assert p.vista is not None
+    assert p.lista.hoja.nombre == "Hoja2"
 
 
 def test_varias_hojas_preguntan_cual(app_vacia, pagina):
@@ -820,10 +825,10 @@ def test_revisar_filas_usa_la_hoja_elegida(app_vacia, pagina):
     p.selector_hojas.value = "Septiembre"
     clic(p.tarjeta, "Revisar filas")
     correr_ultima_tarea(pagina)
-    assert (
-        "En la hoja Septiembre se detectaron 1 fila con texto y monto, y 1 fila incompleta."
-        in tarjeta(p)
-    )
+    assert p.vista is not None
+    assert p.lista.hoja.nombre == "Septiembre"
+    nombres = [f.nombre for f in p.lista.filas]
+    assert "Agua" in nombres and "Luz" not in nombres
     assert p.ocupada is False
 
 
@@ -838,7 +843,9 @@ def test_revisar_filas_con_la_primera_por_defecto(app_vacia, pagina):
     leer(p, "x.xlsx", a_bytes(libro))
     clic(p.tarjeta, "Revisar filas")
     correr_ultima_tarea(pagina)
-    assert any(t.startswith("En la hoja Octubre se detectaron 2 filas") for t in tarjeta(p))
+    assert p.vista is not None
+    assert p.lista.hoja.nombre == "Octubre"
+    assert len([f for f in p.lista.filas if not f.incompleta]) == 2
 
 
 def test_hoja_elegida_sin_datos_entre_varias_avisa_debajo(app_vacia, pagina):
@@ -875,7 +882,9 @@ def test_tras_hoja_sin_datos_se_puede_elegir_otra(app_vacia, pagina):
     correr_ultima_tarea(pagina)
     t = tarjeta(p)
     assert "No se encontraron datos en la hoja Fechas." not in t
-    assert any("En la hoja Octubre se detectaron 1 fila con texto" in x for x in t)
+    assert p.vista is not None
+    assert p.lista.hoja.nombre == "Octubre"
+    assert len([f for f in p.lista.filas if not f.incompleta]) == 1
 
 
 def test_aviso_sin_datos_no_se_acumula_entre_varias(app_vacia, pagina):
@@ -903,7 +912,9 @@ def test_elegir_otro_vuelve_al_inicio(app_vacia, pagina):
 def test_elegir_otro_desde_el_resultado(app_vacia, pagina):
     p = abrir_desde_primer_uso(app_vacia, pagina)
     leer(p, "x.xlsx", planilla_prueba())
-    clic(p.tarjeta, "Elegir otro")
+    # Desde 8c, en la lista el botón es "Cambiar archivo u hoja" (§3.12) y vuelve al inicio.
+    clic(p.vista.control, "Cambiar archivo u hoja")
+    assert p.vista is None
     assert hay_boton(p.tarjeta, "Elegir archivo...")
 
 
@@ -958,20 +969,20 @@ def test_doble_clic_en_revisar_filas(app_vacia, pagina):
 
 
 def test_planilla_prueba_13_completas_5_incompletas(app_vacia, pagina):
-    # El resultado provisorio coincide con la tabla esperada de CA-51.1.
+    # La lista coincide en cantidad con la tabla esperada de CA-51.1 (13 filas principales).
+    # Las incompletas son 16 según CA-51.2 (el texto viejo decía 5).
     p = abrir_desde_primer_uso(app_vacia, pagina)
     leer(p, "planilla-prueba.xlsx", planilla_prueba())
-    assert (
-        "En la hoja Octubre se detectaron 13 filas con texto y monto, y 5 filas incompletas."
-        in tarjeta(p)
-    )
-    assert hay_boton(p.tarjeta, "Cancelar")
+    assert len([f for f in p.lista.filas if not f.incompleta]) == 13
+    assert len(p.lista.incompletas()) == 16
+    assert hay_boton(p.vista.control, "Cancelar")
 
 
 def test_planilla_prueba_desde_ajustes(app, pagina):
     p = abrir_desde_ajustes(app)
     leer(p, "planilla-prueba.xlsx", planilla_prueba())
-    assert any("13 filas con texto y monto, y 5 filas incompletas" in t for t in tarjeta(p))
+    assert p.vista is not None
+    assert len([f for f in p.lista.filas if not f.incompleta]) == 13
 
 
 def test_resultado_provisorio_no_guarda_nada(app, pagina, con):
@@ -984,7 +995,7 @@ def test_resultado_provisorio_no_guarda_nada(app, pagina, con):
 def test_nombre_de_archivo_mostrado(app_vacia, pagina):
     p = abrir_desde_primer_uso(app_vacia, pagina)
     leer(p, "Gastos año 2026 (copia).xlsx", planilla_prueba())
-    assert "Archivo: Gastos año 2026 (copia).xlsx" in tarjeta(p)
+    assert 'Gastos año 2026 (copia).xlsx  ·  Hoja "Octubre"' in textos(p.vista.control)
 
 
 # ---------------------------------------------------------------------------

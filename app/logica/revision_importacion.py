@@ -726,16 +726,32 @@ class ListaRevision:
     def errores(self, fila: FilaRevision) -> list[str]:
         return list(self._errores_por_campo(fila).values())
 
+    def errores_por_campo(self, fila: FilaRevision) -> dict[str, str]:
+        """Los errores de la fila por campo ("nombre", "monto", "categoria",
+        "persona", "cuota", "pagado", "sueldo"), para el diálogo de edición."""
+        return self._errores_por_campo(fila)
+
     def _nota_cuota(self, fila: FilaRevision) -> str | None:
         if "cuota" in self._errores_por_campo(fila) or fila.cuota_actual is None:
             return None
-        n, total = fila.cuota_actual, fila.cuota_total
+        return self.texto_plan(fila.cuota_actual, fila.cuota_total)
+
+    def texto_plan(self, n, total) -> str | None:
+        """Vista previa del plan con el mes destino (RN-71), o None si la cuota
+        no es válida. La usa el diálogo de edición en cada tecla."""
         if not (_es_entero(n) and _es_entero(total) and 1 <= n <= total):
+            return None
+        if total > cuotas.MAXIMO_CUOTAS:
             return None
         # Primera cuota = mes destino − (n − 1) meses (RN-71). Con aritmética y no
         # mes por mes: un bucle con números grandes colgaba la app (BUG-34).
         primera = sumar_meses(self.anio, self.mes, -(n - 1))
         ultima = sumar_meses(*primera, total - 1)
+        for anio, mes in (primera, ultima):
+            try:
+                meses.validar_anio_mes(anio, mes)
+            except ErrorDeValidacion:
+                return None
         cuotas_texto = "1 cuota" if total == 1 else f"{total} cuotas"
         return (
             f"Plan de {cuotas_texto}: primera {nombre_mes(*primera)}, "
@@ -745,54 +761,79 @@ class ListaRevision:
 
     def notas(self, fila: FilaRevision) -> list[str]:
         """Notas y avisos que no son errores, en el orden en que se muestran."""
-        notas: list[str] = []
+        return [texto for _, texto in self.notas_con_clase(fila)]
+
+    def notas_con_clase(self, fila: FilaRevision) -> list[tuple[str, str]]:
+        """Como notas(), pero cada una con su clase, para elegir ícono y color:
+        "ignorada" (fila incompleta), "aviso", "repetida", "compartido" o "info"."""
+        notas: list[tuple[str, str]] = []
         if fila.tipo == "ignorar":
             if fila.incompleta:
                 notas.append(
-                    "Falta el monto. Se ignora."
-                    if fila.origen.nombre is not None
-                    else "Falta el nombre. Se ignora."
+                    (
+                        "ignorada",
+                        "Falta el monto. Se ignora."
+                        if fila.origen.nombre is not None
+                        else "Falta el nombre. Se ignora.",
+                    )
                 )
             elif fila.origen.monto_cent is not None and fila.origen.monto_cent <= 0:
-                notas.append("Monto no válido. Si querés importarla, corregí el monto.")
+                notas.append(
+                    ("aviso", "Monto no válido. Si querés importarla, corregí el monto.")
+                )
         if fila.ya_existe == "gasto":
             notas.append(
-                f"Ya existe en {self.nombre_mes_destino}. "
-                + ("Si la importás, queda repetida." if fila.tildada else "Viene destildada.")
+                (
+                    "aviso",
+                    f"Ya existe en {self.nombre_mes_destino}. "
+                    + ("Si la importás, queda repetida." if fila.tildada else "Viene destildada."),
+                )
             )
         elif fila.ya_existe == "plan":
             notas.append(
-                "Ya existe un plan de cuotas con este nombre. "
-                + ("Si la importás, queda repetida." if fila.tildada else "Viene destildada.")
+                (
+                    "aviso",
+                    "Ya existe un plan de cuotas con este nombre. "
+                    + ("Si la importás, queda repetida." if fila.tildada else "Viene destildada."),
+                )
             )
         elif fila.ya_existe == "me_deben":
             persona = self.nombre_persona(fila.persona)
             notas.append(
-                f"{persona} ya tiene un ítem sin cobrar con esta descripción. "
-                + ("Si la importás, queda repetida." if fila.tildada else "Viene destildada.")
+                (
+                    "aviso",
+                    f"{persona} ya tiene un ítem sin cobrar con esta descripción. "
+                    + ("Si la importás, queda repetida." if fila.tildada else "Viene destildada."),
+                )
             )
         if fila.repetida:
             notas.append(
-                "Repetida en el archivo. Si no es un error del Excel, podés importarla igual."
+                (
+                    "repetida",
+                    "Repetida en el archivo. Si no es un error del Excel, podés importarla igual.",
+                )
             )
         if fila.aviso_compartido:
             notas.append(
-                "¿Es parte de un gasto compartido? Si es así, ignorala y marcá el gasto "
-                "como compartido después."
+                (
+                    "compartido",
+                    "¿Es parte de un gasto compartido? Si es así, ignorala y marcá el gasto "
+                    "como compartido después.",
+                )
             )
         if fila.tipo == "me_deben" and fila.nota_cobrado:
-            notas.append(fila.nota_cobrado)
+            notas.append(("aviso", fila.nota_cobrado))
         if fila.tipo == "cuota":
             nota = self._nota_cuota(fila)
             if nota:
-                notas.append(nota)
+                notas.append(("info", nota))
         if fila.tipo == "sueldo" and fila.monto_cent and fila.monto_cent > 0:
             actual = self.sueldo_actual_cent()
             nuevo = formatear_usd(fila.monto_cent)
             if actual is None or actual == fila.monto_cent:
-                notas.append(f"Sueldo del mes: {nuevo}.")
+                notas.append(("info", f"Sueldo del mes: {nuevo}."))
             else:
-                notas.append(f"Sueldo del mes: {formatear_usd(actual)} -> {nuevo}.")
+                notas.append(("info", f"Sueldo del mes: {formatear_usd(actual)} -> {nuevo}."))
         return notas
 
     def nombre_persona(self, persona: int | Nueva | None) -> str:

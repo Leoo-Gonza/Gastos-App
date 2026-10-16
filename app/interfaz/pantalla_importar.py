@@ -3,8 +3,8 @@
 Es una pantalla completa, sin menú ni barra superior, como el primer uso. Se
 abre desde el primer uso o desde Ajustes, y "Cancelar" vuelve a ese lugar.
 
-Paso 8b: termina mostrando cuántas filas se detectaron. La lista de revisión
-(§3.12) llega en el paso 8c.
+Después de elegir la hoja se muestra la lista de revisión (lista_revision.py).
+Confirmar y guardar llega en el paso 8e.
 """
 
 import asyncio
@@ -14,6 +14,7 @@ import flet as ft
 
 from app.interfaz import estilos
 from app.interfaz.componentes import aviso_en_pantalla, texto_ayuda
+from app.interfaz.lista_revision import VistaRevision
 from app.logica.errores import ErrorDeValidacion
 from app.logica.importar_excel import (
     MENSAJE_ARCHIVO_INVALIDO,
@@ -23,6 +24,7 @@ from app.logica.importar_excel import (
     es_nombre_xlsx,
     mensaje_sin_datos,
 )
+from app.logica.revision_importacion import ListaRevision
 
 
 class PantallaImportar:
@@ -35,9 +37,14 @@ class PantallaImportar:
         # True mientras se elige o se lee el archivo: evita abrir dos selectores
         # o leer dos veces si se hace doble clic, y que Esc cancele a mitad.
         self.ocupada = False
+        # La lista de revisión, cuando ya se eligió la hoja (si no, None).
+        self.vista: VistaRevision | None = None
+        self.lista: ListaRevision | None = None
 
         self.tarjeta = ft.Column(spacing=16, tight=True)
-        self.control = ft.Container(
+        # La tarjeta de elegir archivo, centrada. La lista de revisión ocupa toda
+        # la ventana: al mostrarla se cambia el contenido de self.control.
+        self._elegir = ft.Container(
             expand=True,
             alignment=ft.Alignment.CENTER,
             content=ft.Column(
@@ -61,6 +68,7 @@ class PantallaImportar:
                 spacing=16,
             ),
         )
+        self.control = ft.Container(expand=True, content=self._elegir)
         self._mostrar_inicio()
 
     # ------------------------------------------------------------------
@@ -81,6 +89,8 @@ class PantallaImportar:
         """Sin archivo todavía. Con aviso: el archivo anterior tuvo un problema."""
         self.libro = None
         self.nombre_archivo = None
+        self.vista = self.lista = None
+        self.control.content = self._elegir
         # Con un error, el botón dice "Elegir otro archivo" (§3.11).
         texto = "Elegir otro archivo" if aviso else "Elegir archivo..."
         controles = [
@@ -168,27 +178,19 @@ class PantallaImportar:
         self._dibujar(controles)
 
     def _mostrar_lista(self, hoja: HojaLeida) -> None:
-        """Paso 8b: por ahora solo la cantidad. En el 8c va la lista de revisión."""
-        # Se cuentan como en la lista: los títulos de bloque no son filas (RN-65).
-        completas = sum(1 for f in hoja.filas if f.completa)
-        incompletas = sum(1 for f in hoja.filas if not f.completa and not f.es_titulo)
-        # O83: "1 fila" en singular (y "1 fila incompleta").
-        def filas(n: int, final: str = "") -> str:
-            return f"1 fila{final}" if n == 1 else f"{n} filas{final and final + 's'}"
-
-        texto = (
-            f"En la hoja {hoja.nombre} se detectaron {filas(completas)} con texto y "
-            f"monto, y {filas(incompletas, ' incompleta')}."
+        """La lista de revisión de la hoja elegida (§3.12), a toda la ventana."""
+        # Una lista nueva cada vez: una ya confirmada no se puede reusar (O81).
+        self.lista = ListaRevision(self.app.con, hoja)
+        self.vista = VistaRevision(
+            self.app,
+            self.lista,
+            self.nombre_archivo,
+            al_cambiar_archivo=self._mostrar_inicio,
+            al_cancelar=self.cancelar,
+            al_confirmar=self.confirmar,
         )
-        self._dibujar(
-            [
-                self._linea_archivo(),
-                aviso_en_pantalla(
-                    self.app.page, "info", ft.Icons.INFO_OUTLINE, texto
-                ),
-                self._botones(self._cancelar_boton()),
-            ]
-        )
+        self.control.content = self.vista.control
+        self.app.page.update()
 
     def _aviso_archivo_invalido(self) -> ft.Control:
         return aviso_en_pantalla(
@@ -316,9 +318,27 @@ class PantallaImportar:
             return
         self._mostrar_lista(hoja)
 
+    def confirmar(self) -> None:
+        """"Confirmar importación" (o Ctrl+Enter). El guardado llega en el paso 8e."""
+        if self.vista is None:
+            return
+        self.app.avisar("Todavía no se puede guardar: eso llega en el próximo paso.")
+
+    def al_presionar_tecla(self, e: ft.KeyboardEvent) -> None:
+        """Teclas durante la importación (los atajos de la app no actúan)."""
+        if e.key == "Escape":
+            # Con la fila de "nueva categoría" abierta, Esc cierra solo esa fila.
+            if self.vista is not None and self.vista.cerrar_en_linea():
+                return
+            self.cancelar()
+            return
+        es_mac = self.app.page.platform == ft.PagePlatform.MACOS
+        if (e.meta if es_mac else e.ctrl) and e.key == "Enter" and self.vista is not None:
+            self.vista.confirmar()
+
     def cancelar(self) -> None:
         """Cancelar o Esc: vuelve a donde se abrió, sin guardar nada (§3.14).
-        En el paso de elegir archivo no hay nada que perder: no se pregunta."""
+        La confirmación cuando ya hubo cambios en la revisión llega en el paso 8e."""
         if self.ocupada:
             return
         self.app.salir_de_importacion(self.origen)
