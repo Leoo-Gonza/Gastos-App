@@ -111,6 +111,13 @@ class Aplicacion:
         ajustes.refrescar()
         self.page.update()
 
+    def mostrar_importado(self, mes_id: int, pantalla: str) -> None:
+        """Después de importar: la ventana principal con el mes destino, en la
+        pantalla pedida ("Gastos" o "Resumen"). Sirve igual desde el primer uso
+        (arma el menú y la barra) que desde Ajustes (§3.13)."""
+        self._indice = [texto for texto, _, _ in _DESTINOS].index(pantalla)
+        self.mostrar_principal(mes_id)
+
     def selector_de_archivos(self) -> ft.FilePicker:
         """El mismo FilePicker para toda la app (se registra en la página al crearse)."""
         if self._selector_de_archivos is None:
@@ -464,18 +471,25 @@ class Aplicacion:
             aviso.on_action = lambda e: al_deshacer()
         self.page.show_dialog(aviso)
 
-    def error_inesperado(self, error: Exception) -> None:
+    def error_inesperado(
+        self,
+        error: Exception,
+        titulo: str = "No se pudo guardar",
+        mensaje: str = "Los datos no se modificaron.",
+        texto_boton: str = "Cerrar",
+    ) -> None:
         """Algo falló que no es culpa de un dato mal cargado (§2.5).
 
         Muestra el detalle técnico para poder copiarlo y pasárselo al agente.
+        La importación cambia los textos: "No se pudo importar" (§3.13, O91).
         """
         detalle = "".join(traceback.format_exception(error))
         dialogo = ft.AlertDialog(
             modal=True,
-            title=ft.Text("No se pudo guardar"),
+            title=ft.Text(titulo),
             content=ft.Column(
                 [
-                    ft.Text("Los datos no se modificaron."),
+                    ft.Text(mensaje),
                     texto_ayuda(detalle, selectable=True),
                 ],
                 tight=True,
@@ -483,7 +497,11 @@ class Aplicacion:
                 scroll=ft.ScrollMode.AUTO,
             ),
             actions=[
-                ft.TextButton("Cerrar", on_click=lambda e: self.cerrar_dialogo(dialogo))
+                ft.TextButton(
+                    texto_boton,
+                    autofocus=True,
+                    on_click=lambda e: self.cerrar_dialogo(dialogo),
+                )
             ],
         )
         self.abrir_dialogo(dialogo)

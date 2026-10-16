@@ -4,7 +4,8 @@ Es una pantalla completa, sin menú ni barra superior, como el primer uso. Se
 abre desde el primer uso o desde Ajustes, y "Cancelar" vuelve a ese lugar.
 
 Después de elegir la hoja se muestra la lista de revisión (lista_revision.py).
-Confirmar y guardar llega en el paso 8e.
+"Confirmar importación" abre el resumen previo, guarda todo o nada y muestra el
+resultado (§3.13). Cancelar pregunta si hubo cambios en la revisión (§3.14).
 """
 
 import asyncio
@@ -15,6 +16,8 @@ import flet as ft
 from app.interfaz import estilos
 from app.interfaz.componentes import aviso_en_pantalla, texto_ayuda
 from app.interfaz.lista_revision import VistaRevision
+from app.logica import confirmar_importacion
+from app.logica.confirmar_importacion import AVISO_SIN_DESHACER, MENSAJE_ERROR
 from app.logica.errores import ErrorDeValidacion
 from app.logica.importar_excel import (
     MENSAJE_ARCHIVO_INVALIDO,
@@ -24,6 +27,7 @@ from app.logica.importar_excel import (
     es_nombre_xlsx,
     mensaje_sin_datos,
 )
+from app.logica.formato import nombre_mes
 from app.logica.revision_importacion import ListaRevision
 
 
@@ -40,6 +44,9 @@ class PantallaImportar:
         # La lista de revisión, cuando ya se eligió la hoja (si no, None).
         self.vista: VistaRevision | None = None
         self.lista: ListaRevision | None = None
+        # True mientras se guarda la importación: los botones del resumen previo
+        # quedan apagados y Esc no lo cierra (§3.13, "Mientras guarda").
+        self.guardando = False
 
         self.tarjeta = ft.Column(spacing=16, tight=True)
         # La tarjeta de elegir archivo, centrada. La lista de revisión ocupa toda
@@ -185,7 +192,7 @@ class PantallaImportar:
             self.app,
             self.lista,
             self.nombre_archivo,
-            al_cambiar_archivo=self._mostrar_inicio,
+            al_cambiar_archivo=self.cambiar_archivo,
             al_cancelar=self.cancelar,
             al_confirmar=self.confirmar,
         )
@@ -318,11 +325,137 @@ class PantallaImportar:
             return
         self._mostrar_lista(hoja)
 
+    # ------------------------------------------------------------------
+    # Confirmar: resumen previo, guardado y resultado (§3.13)
+    # ------------------------------------------------------------------
+
     def confirmar(self) -> None:
-        """"Confirmar importación" (o Ctrl+Enter). El guardado llega en el paso 8e."""
-        if self.vista is None:
+        """"Confirmar importación" (o Ctrl+Enter): abre el resumen previo."""
+        if self.vista is None or self.lista is None or self.app.hay_dialogo_abierto():
             return
-        self.app.avisar("Todavía no se puede guardar: eso llega en el próximo paso.")
+        lineas = confirmar_importacion.resumen_previo(self.lista)
+        # El aviso de "no se puede deshacer" va aparte, como aviso info. La
+        # primera línea (el mes) y las del final van sin viñeta, como en §3.13.
+        lineas = [linea for linea in lineas if linea != AVISO_SIN_DESHACER]
+        controles: list[ft.Control] = [ft.Text(lineas[0])]
+        for linea in lineas[1:]:
+            if linea.startswith(("Se crean también", "No se importa")):
+                controles.append(ft.Text(linea))
+            elif linea.startswith("Sin sueldo"):
+                # Algo que queda por completar: color pendiente, sin viñeta (O93).
+                controles.append(
+                    ft.Text(linea, color=estilos.color(self.app.page, "pendiente"))
+                )
+            else:
+                controles.append(ft.Text(f"•  {linea}"))
+        controles.append(
+            aviso_en_pantalla(
+                self.app.page, "info", ft.Icons.INFO_OUTLINE, AVISO_SIN_DESHACER
+            )
+        )
+        self.progreso = ft.ProgressRing(
+            width=20, height=20, stroke_width=2, visible=False
+        )
+        self.boton_volver = ft.TextButton(
+            "Volver a la revisión",
+            # Foco en la opción segura: un Enter sin pensar no importa nada (§5).
+            autofocus=True,
+            on_click=lambda e: self._volver_a_la_revision(),
+        )
+        self.boton_importar = ft.FilledButton(
+            "Importar", on_click=lambda e: self.importar()
+        )
+        self.dialogo_resumen = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Revisá antes de importar"),
+            content=ft.Column(controles, tight=True, width=520, spacing=12),
+            actions=[self.progreso, self.boton_volver, self.boton_importar],
+            actions_alignment=ft.MainAxisAlignment.END,
+            # Esc mientras guarda: devolver True deja el diálogo abierto (O86).
+            data=lambda: self.guardando,
+        )
+        self.app.abrir_dialogo(self.dialogo_resumen)
+
+    def _volver_a_la_revision(self) -> None:
+        if not self.guardando:
+            self.app.cerrar_dialogo(self.dialogo_resumen)
+
+    def importar(self) -> None:
+        """Botón "Importar" del resumen previo."""
+        if self.guardando:
+            return
+        # Se marca ya, al hacer clic: un doble clic no guarda dos veces (como O82).
+        self.guardando = True
+        self.progreso.visible = True
+        self.boton_volver.disabled = self.boton_importar.disabled = True
+        self.app.page.update()
+        self.app.page.run_task(self._guardar)
+
+    async def _guardar(self) -> None:
+        try:
+            # En otro hilo, para que la ruedita se vea mientras se guarda.
+            resultado = await asyncio.to_thread(
+                confirmar_importacion.confirmar, self.lista
+            )
+        except Exception as error:  # noqa: BLE001 (todo error va al mismo diálogo)
+            self.guardando = False
+            self.app.cerrar_dialogo(self.dialogo_resumen)
+            # confirmar() envuelve la causa real en ErrorDeValidacion(MENSAJE_ERROR):
+            # el detalle técnico útil es el de la causa. La revisión queda igual.
+            self.app.error_inesperado(
+                error.__cause__ or error,
+                titulo="No se pudo importar",
+                mensaje=MENSAJE_ERROR,
+                texto_boton="Volver a la revisión",
+            )
+            return
+        self.guardando = False
+        self.app.cerrar_dialogo(self.dialogo_resumen)
+        self._mostrar_resultado(resultado)
+
+    def _mostrar_resultado(self, resultado: confirmar_importacion.Resultado) -> None:
+        principal, completar = confirmar_importacion.texto_resultado(resultado)
+        controles: list[ft.Control] = [ft.Text(principal)]
+        if completar:
+            controles.append(ft.Text("Para completar:", weight=ft.FontWeight.W_600))
+            controles += [texto_ayuda(f"•  {linea}") for linea in completar]
+        # Solo "me deben" o sueldo: se va al Resumen; si no, a Gastos (§3.13).
+        pantalla = "Gastos" if resultado.pantalla == "gastos" else "Resumen"
+
+        def ver() -> bool:
+            self.app.cerrar_dialogo(dialogo)
+            self.app.mostrar_importado(resultado.mes_id, pantalla)
+            return True  # Para Esc: el diálogo ya se cerró acá.
+
+        dialogo = ft.AlertDialog(
+            modal=True,
+            title=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.CHECK_CIRCLE,
+                        color=estilos.color(self.app.page, "positivo"),
+                    ),
+                    ft.Text("Importación terminada"),
+                ]
+            ),
+            content=ft.Column(controles, tight=True, width=520, spacing=8),
+            actions=[
+                ft.FilledButton(
+                    f"Ver {nombre_mes(resultado.anio, resultado.mes)}",
+                    autofocus=True,
+                    on_click=lambda e: ver(),
+                )
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+            # Lo importado ya está guardado: Esc también lleva al mes, para no
+            # quedar en una revisión que ya no se puede usar.
+            data=ver,
+        )
+        self.app.abrir_dialogo(dialogo)
+
+    # ------------------------------------------------------------------
+    # Teclado, cancelar y cambiar archivo (§3.14)
+    # ------------------------------------------------------------------
 
     def al_presionar_tecla(self, e: ft.KeyboardEvent) -> None:
         """Teclas durante la importación (los atajos de la app no actúan)."""
@@ -338,7 +471,38 @@ class PantallaImportar:
 
     def cancelar(self) -> None:
         """Cancelar o Esc: vuelve a donde se abrió, sin guardar nada (§3.14).
-        La confirmación cuando ya hubo cambios en la revisión llega en el paso 8e."""
-        if self.ocupada:
+        Si hubo cambios en la revisión, pregunta antes."""
+        if self.ocupada or self.guardando:
             return
-        self.app.salir_de_importacion(self.origen)
+        if self.lista is None or not self.lista.hubo_cambios:
+            self.app.salir_de_importacion(self.origen)
+            return
+        explicacion = (
+            "Se pierden los cambios que hiciste en la revisión. No se guarda nada."
+        )
+        nuevas = self.lista.categorias_nuevas + self.lista.personas_nuevas
+        if nuevas:
+            nombres = ", ".join(n.nombre for n in nuevas)
+            explicacion += (
+                f"\nTambién se descartan las categorías y personas nuevas: {nombres}."
+            )
+        self.app.confirmar(
+            "¿Descartar la importación?",
+            explicacion,
+            "Descartar",
+            lambda: self.app.salir_de_importacion(self.origen),
+            texto_volver="Seguir revisando",
+        )
+
+    def cambiar_archivo(self) -> None:
+        """"Cambiar archivo u hoja" en la revisión: vuelve a elegir el archivo."""
+        if self.lista is None or not self.lista.hubo_cambios:
+            self._mostrar_inicio()
+            return
+        self.app.confirmar(
+            "¿Volver a elegir el archivo?",
+            "Se pierden los cambios que hiciste en la revisión.",
+            "Volver a elegir",
+            self._mostrar_inicio,
+            texto_volver="Seguir revisando",
+        )

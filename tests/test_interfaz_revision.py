@@ -1024,8 +1024,10 @@ def test_ca_54_3_crear_categoria_nueva_la_elige_y_cancelar_no_la_crea(
     assert c.dropdown.error_text is None
     assert p.vista.boton_confirmar.disabled is False
     assert fv(p, "Gym").categoria.value == "Importado (nueva)"
-    # Cancelar la importación.
+    # Cancelar la importación: como hubo cambios (8e), pide confirmar y hay que tocar "Descartar".
     clic(p.vista.control, "Cancelar")
+    assert app_sin_varios._importacion is p
+    clic(dialogo_arriba(app_sin_varios), "Descartar")
     assert app_sin_varios._importacion is None
     assert "Importado" not in [c_["nombre"] for c_ in catalogos.listar(con, catalogos.CATEGORIAS, True)]
     assert foto(con) == antes
@@ -2418,19 +2420,21 @@ def test_dialogo_bloque_categoria_por_defecto_vuelve_a_seguir_la_por_defecto(app
 # ---------------------------------------------------------------------------
 
 
-def test_ctrl_enter_confirma_y_hoy_solo_avisa_que_falta_el_guardado(app_rev):
-    # 8c/8d: confirmar todavía no guarda (llega en 8e): muestra el aviso y no toca la base.
+def test_ctrl_enter_abre_el_resumen_previo_y_no_guarda_nada(app_rev):
+    # 8e: Ctrl+Enter abre "Revisá antes de importar"; todavía no se escribe nada en la base.
     antes = foto(app_rev.con)
     p = abrir(app_rev)
     app_rev._al_presionar_tecla(tecla("Enter", ctrl=True))
-    assert p.app.page.avisos()[-1] == "Todavía no se puede guardar: eso llega en el próximo paso."
+    d = dialogo_arriba(app_rev)
+    assert d is not None and d.title.value == "Revisá antes de importar"
     assert foto(app_rev.con) == antes
 
 
 def test_clic_en_confirmar_hace_lo_mismo_que_ctrl_enter(app_rev):
+    # Tocar "Confirmar importación" abre el mismo resumen previo que Ctrl+Enter.
     p = abrir(app_rev)
     clic(p.vista.control, "Confirmar importación")
-    assert p.app.page.avisos()[-1].startswith("Todavía no se puede guardar")
+    assert dialogo_arriba(app_rev).title.value == "Revisá antes de importar"
 
 
 def test_ctrl_enter_con_el_boton_deshabilitado_no_hace_nada(app_rev):
@@ -2449,16 +2453,17 @@ def test_enter_solo_sin_ctrl_no_confirma(app_rev):
 
 
 def test_cmd_enter_en_macos_confirma_y_ctrl_enter_no(pagina, con, base):
+    # En macOS confirma Cmd+Enter; Ctrl+Enter no hace nada.
     import flet as ft_
 
     pagina.platform = ft_.PagePlatform.MACOS
     app = Aplicacion(pagina, con)
     app.iniciar()
-    p = abrir(app)
+    abrir(app)
     app._al_presionar_tecla(tecla("Enter", ctrl=True))
-    assert not pagina.avisos()
+    assert not app.hay_dialogo_abierto()
     app._al_presionar_tecla(tecla("Enter", meta=True))
-    assert pagina.avisos()[-1].startswith("Todavía no se puede guardar")
+    assert dialogo_arriba(app).title.value == "Revisá antes de importar"
 
 
 def test_ctrl_enter_con_un_dialogo_abierto_no_confirma(app_rev):

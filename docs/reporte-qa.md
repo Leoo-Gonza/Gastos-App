@@ -1236,3 +1236,44 @@ Además se adaptaron las 13 pruebas de `tests/test_interfaz_importar.py` (ronda 
 - **O85 corregida:** el subtítulo dice "· 1 con error". Se ajustó la prueba que esperaba el texto sin "·".
 - Quedan abiertas O87 a O92 (menores) para revisar con el usuario o en el 8e.
 - Suite completa: 2.951 pruebas: 2.950 pasan, 1 omitida (archivo real de Excel).
+
+
+## Ronda 38 (2026-10-16): paso 8e, confirmar, guardar, resultado, error y cancelar de la importación de Excel
+
+### Qué se probó
+Archivo nuevo `tests/test_interfaz_importar_confirmar.py`: 47 pruebas. Sin ventanas: página falsa; los handlers se llaman a mano y el guardado (`page.run_task(self._guardar)`) se ejecuta de verdad con `asyncio.run`, o sea con `asyncio.to_thread` y la base SQLite en memoria. Se reusan las fixtures de `test_interfaz_revision.py` (base de los CA, hoy = 2026-10-14). Datos inventados; no se leyó `datos-privados/`.
+
+Además se reemplazaron las 4 pruebas de `tests/test_interfaz_revision.py` que describían el 8d: `test_ctrl_enter_confirma_y_hoy_solo_avisa_que_falta_el_guardado` (ahora `test_ctrl_enter_abre_el_resumen_previo_y_no_guarda_nada`), `test_clic_en_confirmar_hace_lo_mismo_que_ctrl_enter` (ahora verifica que se abre "Revisá antes de importar"), `test_cmd_enter_en_macos_confirma_y_ctrl_enter_no` (idem) y `test_ca_54_3_crear_categoria_nueva_la_elige_y_cancelar_no_la_crea` (ahora comprueba que Cancelar con cambios pregunta y que hay que tocar "Descartar"). No se relajó ninguna verificación: se cambió el comportamiento esperado, que es el que pide el diseño.
+
+| Área | Qué se verificó | Resultado |
+|---|---|---|
+| Resumen previo (CA-57.9, §3.13) | Título, modal, ancho 520, las 5 líneas exactas del caso (con viñetas salvo mes y "No se importan 19 filas"), aviso info de "sin deshacer" aparte, sin "Se crean también"; foco en "Volver a la revisión"; ruedita oculta; no escribe nada; "Volver" y Esc vuelven a la lista intacta (misma lista y vista) y se puede reabrir; Ctrl+Enter y clic con el diálogo abierto no abren otro; con errores o sin filas para importar no se abre | Pasa |
+| Importar de verdad (CA-57.1) | Gastos, montos, pagos (2, fecha de hoy), plan de 1 cuota, ítems de Sofía y Marsu, totales (677.837 / 98.700 / 579.137), sueldo 1.300, USD a cambiar 423,65, ahorro 876,35; no se crea ninguna persona; sin transacción abierta después | Pasa |
+| Resultado (CA-57.2, 57.10, 57.12, §3.13) | Ícono CHECK_CIRCLE, texto exacto y "Para completar:" con 2 líneas (sin cotización), sin "Deshacer", un solo botón "Ver Octubre 2026" con foco; "Ver" deja 2026-10 seleccionado en Gastos con rail y título; Esc hace lo mismo que "Ver"; solo me deben + sueldo y solo sueldo van a Resumen (y solo sueldo no muestra "Para completar:"); destino 2026-11 dice "Ver Noviembre 2026" y lo selecciona; primer uso: "Se va a crear Octubre 2026, sin cotización...", línea "Sin sueldo...", línea de cotización en el resultado, ventana normal en Gastos, mes con sueldo 0 | Pasa |
+| Categorías y personas nuevas (CA-57.11) | Juan creado y luego sin uso: no se menciona ni se crea; "Importado" por defecto: se menciona ("Se crean también: la categoría "Importado".") y los 3 gastos/plan quedan ahí; "Importado" solo en Gym y Gym destildado: no se crea | Pasa |
+| Mientras guarda | Ruedita visible y ambos botones deshabilitados; doble clic (dos clics y `importar()` directo): una sola tarea `_guardar`, una sola vez los 7 gastos, 3 ítems y 1 plan; "Volver" y Esc no cierran; `cancelar()` no hace nada | Pasa |
+| Todo o nada (CA-57.4) | Fallo forzado en el 2º ítem "me deben" (después de crear el mes 2026-11, Juan y los gastos): foto de todas las tablas idéntica; sin transacción abierta; diálogo "No se pudo importar" con "No se pudo importar. No se guardó ningún dato." y el detalle técnico de la causa real (no del envoltorio); botón "Volver a la revisión" con foco; fallo al crear el plan (primer uso y Ajustes) también deja la base intacta, incluido el mes; "Volver a la revisión" deja misma lista, misma vista, mismos tipos, tildes, Juan y destino 2026-11; reintentar tras "arreglar" guarda todo una vez; Esc cierra el error y queda la revisión | Pasa |
+| Lista confirmada | Con el resultado abierto, Ctrl+Enter, `confirmar()` y el botón no abren nada; llamar a la lógica otra vez da "Esta importación ya se guardó." y la base no cambia; una segunda importación arma una lista nueva | Pasa |
+| Cancelar (CA-57.3, §3.14) | Con cambios: "¿Descartar la importación?" con el texto exacto y "También se descartan las categorías y personas nuevas: Juan." (o Importado); foco en "Seguir revisando", que conserva todo; "Descartar" vuelve a la pestaña "Importar Excel" de Ajustes con la base idéntica (sueldo 1.200); Esc = Cancelar, Esc dentro de la pregunta la cierra y otro Esc la repite; sin cambios sale directo (también después de abrir y cerrar el resumen); primer uso vuelve a la bienvenida | Pasa |
+| Cambiar archivo u hoja | Con cambios: "¿Volver a elegir el archivo?" con su texto; "Seguir revisando" conserva; "Volver a elegir" descarta; sin cambios no pregunta; la lista nueva no arrastra nada y se importa bien | Pasa |
+| CA-57.13 | La app no tiene ningún manejador de cierre de ventana (`prevent_close`, `on_window_event`, `on_close`): cerrar no pregunta | Pasa (verificación estática; el cierre real es manual) |
+| Otros | `error_inesperado()` sin parámetros conserva "No se pudo guardar / Los datos no se modificaron." y "Cerrar" con foco; `mostrar_importado` con un nombre desconocido falla con `ValueError` | Pasa |
+
+### Resultado
+- `tests/test_interfaz_importar_confirmar.py`: 47 pasan. `tests/test_interfaz_revision.py`: 219 pasan (4 reemplazadas).
+- Suite completa con `pytest --cov=app`: 2.997 pasan, 1 omitida (archivo real de Excel), 0 fallan. Cobertura de `app/` 98 %; `pantalla_importar.py`, `aplicacion.py` y `confirmar_importacion.py` 100 %.
+
+### Bugs
+Ninguno nuevo en este paso.
+
+### Observaciones
+- **O93 (cosmética):** el diseño (§3.13) pide la línea "Sin sueldo: el sueldo de Octubre 2026 queda en US$ 0,00." como línea *pendiente* (color de advertencia) y sin la lógica de viñeta; la pantalla la muestra con la viñeta "•  " y color normal (`confirmar()` solo saca la viñeta a "Se crean también" y "No se importa"). La prueba acepta las dos formas.
+- **O94 (baja, no alcanzable hoy):** si por algún camino se llamara a `importar()` con una lista ya confirmada, el diálogo de error diría "No se pudo importar. No se guardó ningún dato." aunque los datos sí se guardaron (la lógica lanza `ErrorDeValidacion("Esta importación ya se guardó.")`, pero `_guardar` lo muestra con `MENSAJE_ERROR`). Hoy no se llega: el resultado es modal y "Ver..." descarta la pantalla. Se anota por si se agregan atajos.
+- **O95:** `cancelar()` y `cambiar_archivo()` no comprueban `hay_dialogo_abierto()`. En la ventana real el diálogo modal bloquea los clics, así que no se ve; con la página falsa se podría apilar una confirmación sobre otro diálogo.
+- Con una base sin personas (primer uso), las filas "Prestamo MP", etc., llegan como gastos fijos (CA-52.3, correcto) y no hay ítems "me deben"; por eso el fallo forzado del primer uso se hace en la creación del plan.
+
+### Limitaciones y pendiente de prueba manual
+- Con página falsa no se ve: que la ruedita se vea realmente mientras se guarda (el hilo real), el foco real en "Volver a la revisión" / "Ver ...", Esc con el teclado real mientras guarda, el aspecto del diálogo de 520 px con muchas líneas en tema oscuro, la barra superior y el rail después de "Ver ..." desde el primer uso, y el cierre de la ventana durante la revisión (CA-57.13) sin preguntar.
+- El fallo del guardado es simulado con `monkeypatch`; un fallo real de disco (base bloqueada, disco lleno) solo se puede probar a mano.
+- Ruff no se puede correr en este equipo (WinError 4551): hay líneas largas en las pruebas nuevas.
+- Con el 8e termina la importación (8a a 8e). Pendiente recomendado: una pasada manual completa con `planilla-prueba.xlsx` desde Ajustes y desde el primer uso.

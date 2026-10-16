@@ -781,7 +781,8 @@ class VistaRevision:
         except ErrorDeValidacion as error:
             self.app.avisar(str(error))
         except Exception as error:  # noqa: BLE001 (a propósito: ver error_inesperado)
-            self.app.error_inesperado(error)
+            # Durante la revisión no se guarda nada: el título no dice "guardar" (O91).
+            self.app.error_inesperado(error, titulo="No se pudo importar")
         self.actualizar()
 
     def cambiar_tilde(self, indice: int, tildada: bool) -> None:
