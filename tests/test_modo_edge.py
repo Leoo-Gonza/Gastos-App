@@ -8,6 +8,7 @@ nunca a la de AppData real ni a datos-privados/.
 import os
 import runpy
 import socket
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -552,3 +553,238 @@ def test_o53_variables_de_flet_se_quitan_antes_de_arrancar(entorno, monkeypatch)
     assert vistas["puerto"] is None
     assert vistas["kwargs"]["host"] == "127.0.0.1"
     assert vistas["kwargs"]["port"] == 54321
+
+
+# ---------------------------------------------------------------------------
+# Corrección: Edge colgado con el perfil de la app (lockfile)
+# ---------------------------------------------------------------------------
+
+
+class Corte(Exception):
+    """Corta una espera que no termina (prueba de 'no vuelve mientras exista')."""
+
+
+class RelojFalso:
+    """Reemplaza al módulo time dentro de modo_edge: el tiempo avanza solo con
+    sleep(), así las esperas de segundos corren al instante."""
+
+    def __init__(self, al_dormir=None):
+        self.ahora = 0.0
+        self.pausas = []
+        self.al_dormir = al_dormir
+
+    def monotonic(self):
+        return self.ahora
+
+    def sleep(self, segundos):
+        self.pausas.append(segundos)
+        self.ahora += segundos
+        if self.al_dormir:
+            self.al_dormir(self)
+
+
+class VentanaFalsa:
+    """Hace de subprocess.Popen: wait() vuelve enseguida y se anota la llamada."""
+
+    def __init__(self, eventos=None):
+        self.llamadas = 0
+        self.eventos = eventos if eventos is not None else []
+
+    def wait(self):
+        self.llamadas += 1
+        self.eventos.append("wait")
+        return 0
+
+
+def _con_reloj(monkeypatch, al_dormir=None):
+    reloj = RelojFalso(al_dormir)
+    monkeypatch.setattr(modo_edge, "time", reloj)
+    return reloj
+
+
+def test_edge_abierto_con_lockfile(tmp_path):
+    # Con el archivo "lockfile" en el perfil, hay un Edge usándolo: True.
+    (tmp_path / "lockfile").touch()
+    assert modo_edge.edge_abierto(tmp_path) is True
+
+
+def test_edge_abierto_sin_lockfile(tmp_path):
+    # Perfil existente pero sin lockfile: Edge se cerró, False.
+    assert modo_edge.edge_abierto(tmp_path) is False
+
+
+def test_edge_abierto_con_perfil_inexistente(tmp_path):
+    # Borde: el perfil todavía no se creó (primera vez): False, sin error.
+    assert modo_edge.edge_abierto(tmp_path / "no-existe") is False
+
+
+def test_edge_abierto_cambia_al_borrar_el_lockfile(tmp_path):
+    # Windows borra el lockfile al cerrar Edge: de True pasa a False.
+    lock = tmp_path / "lockfile"
+    lock.touch()
+    assert modo_edge.edge_abierto(tmp_path) is True
+    lock.unlink()
+    assert modo_edge.edge_abierto(tmp_path) is False
+
+
+def test_edge_abierto_ignora_otros_archivos(tmp_path):
+    # Borde: otros archivos del perfil no cuentan, solo "lockfile" exacto.
+    (tmp_path / "lockfile.bak").touch()
+    (tmp_path / "Lockfile2").touch()
+    assert modo_edge.edge_abierto(tmp_path) is False
+
+
+def test_esperar_cierre_vuelve_cuando_se_borra_el_lockfile(tmp_path, monkeypatch):
+    # El lockfile existe y se borra en la 4.ª pausa (como si el usuario cerrara
+    # Edge): la función vuelve justo después, sin esperar el margen de 3 s.
+    lock = tmp_path / "lockfile"
+    lock.touch()
+
+    def borrar(reloj):
+        if len(reloj.pausas) == 4:
+            lock.unlink()
+
+    reloj = _con_reloj(monkeypatch, borrar)
+    ventana = VentanaFalsa()
+    modo_edge.esperar_cierre_edge(tmp_path, ventana)
+    assert ventana.llamadas == 1
+    assert not lock.exists()
+    assert len(reloj.pausas) == 4
+
+
+def test_esperar_cierre_vuelve_con_hilo_que_borra_el_lockfile(tmp_path):
+    # Igual que la anterior pero con tiempo y hilo reales: otro hilo borra el
+    # lockfile a los 0,2 s y la función vuelve (la pausa interna es de 1 s).
+    lock = tmp_path / "lockfile"
+    lock.touch()
+    hilo = threading.Timer(0.2, lock.unlink)
+    hilo.start()
+    inicio = time.monotonic()
+    try:
+        modo_edge.esperar_cierre_edge(tmp_path, VentanaFalsa())
+    finally:
+        hilo.join()
+    assert not lock.exists()
+    assert time.monotonic() - inicio < 5
+
+
+def test_esperar_cierre_sin_lockfile_vuelve_tras_el_margen(tmp_path, monkeypatch):
+    # El lockfile nunca aparece: espera el margen de ~3 s (no menos) y vuelve.
+    reloj = _con_reloj(monkeypatch)
+    ventana = VentanaFalsa()
+    modo_edge.esperar_cierre_edge(tmp_path, ventana)
+    assert ventana.llamadas == 1
+    assert 3 <= reloj.ahora < 3.5
+    assert all(p <= 0.2 for p in reloj.pausas)
+
+
+def test_esperar_cierre_no_vuelve_mientras_exista_el_lockfile(tmp_path, monkeypatch):
+    # Con el lockfile presente (Edge colgado o ventana abierta) no vuelve nunca:
+    # tras 1.000 pausas (más de 15 minutos simulados) sigue esperando.
+    (tmp_path / "lockfile").touch()
+
+    def cortar(reloj):
+        if len(reloj.pausas) >= 1000:
+            raise Corte
+
+    reloj = _con_reloj(monkeypatch, cortar)
+    with pytest.raises(Corte):
+        modo_edge.esperar_cierre_edge(tmp_path, VentanaFalsa())
+    assert reloj.ahora > 900
+
+
+def test_esperar_cierre_no_vuelve_aunque_pase_el_margen(tmp_path, monkeypatch):
+    # El proceso lanzado terminó en 0,1 s (Edge le pasó la ventana a otro, el
+    # caso del bug): el lockfile existe más de 3 s y la función sigue esperando
+    # hasta que se borra, y recién ahí vuelve.
+    lock = tmp_path / "lockfile"
+    lock.touch()
+
+    def borrar_tarde(reloj):
+        if reloj.ahora >= 60:
+            lock.unlink()
+
+    reloj = _con_reloj(monkeypatch, borrar_tarde)
+    modo_edge.esperar_cierre_edge(tmp_path, VentanaFalsa())
+    assert 60 <= reloj.ahora < 62
+    assert not lock.exists()
+
+
+def test_esperar_cierre_lockfile_que_aparece_dentro_del_margen(tmp_path, monkeypatch):
+    # Edge tarda 1 s en crear el lockfile (dentro del margen): se detecta y se
+    # espera hasta que se borra (a los 10 s).
+    lock = tmp_path / "lockfile"
+
+    def ciclo(reloj):
+        if 1 <= reloj.ahora < 2 and not lock.exists():
+            lock.touch()
+        if reloj.ahora >= 10 and lock.exists():
+            lock.unlink()
+
+    reloj = _con_reloj(monkeypatch, ciclo)
+    modo_edge.esperar_cierre_edge(tmp_path, VentanaFalsa())
+    assert not lock.exists()
+    assert 10 <= reloj.ahora < 12
+
+
+def test_esperar_cierre_primero_espera_al_proceso(tmp_path, monkeypatch):
+    # Primero ventana.wait() y recién después se mira el lockfile / se duerme.
+    eventos = []
+    reloj = _con_reloj(monkeypatch)
+    reloj.al_dormir = lambda r: eventos.append("sleep")
+    modo_edge.esperar_cierre_edge(tmp_path, VentanaFalsa(eventos))
+    assert eventos[0] == "wait"
+    assert eventos.count("wait") == 1
+
+
+def test_esperar_cierre_si_wait_falla_propaga_el_error(tmp_path, monkeypatch):
+    # Borde: si ventana.wait() lanza un error, no se traga.
+    class Rota:
+        def wait(self):
+            raise OSError("falla inventada")
+
+    _con_reloj(monkeypatch)
+    with pytest.raises(OSError):
+        modo_edge.esperar_cierre_edge(tmp_path, Rota())
+
+
+def test_hilo_con_edge_colgado_no_apaga_el_servidor(entorno, monkeypatch):
+    # Regresión del bug: el proceso lanzado termina enseguida (wait() vuelve) pero
+    # otro Edge con el mismo perfil sigue abierto (lockfile). No se debe llamar a
+    # os._exit ni borrar puerto.txt hasta que ese Edge se cierre.
+    monkeypatch.setattr(modo_edge, "esperar_servidor", lambda puerto: True)
+    modo_edge.ejecutar(_principal)
+    r = entorno.registro
+    lock = entorno.perfil / "lockfile"
+    lock.touch()
+    archivo = entorno.perfil.parent / "puerto.txt"
+    vistas = []
+
+    def al_dormir(reloj):
+        # Durante la espera el servidor sigue vivo: sin salida y con puerto.txt.
+        if lock.exists():
+            vistas.append((list(r.salidas), archivo.exists()))
+        if reloj.ahora >= 30:
+            lock.unlink()  # el usuario cierra la última ventana
+
+    _con_reloj(monkeypatch, al_dormir)
+    with pytest.raises(Salida):
+        r.hilos[0].target()
+    assert vistas and all(v == ([], True) for v in vistas)
+    assert r.salidas == [0]
+    assert not archivo.exists()
+
+
+def test_ejecutar_usa_esperar_cierre_edge(entorno, monkeypatch):
+    # El hilo le pasa a esperar_cierre_edge el perfil y la ventana que abrió.
+    monkeypatch.setattr(modo_edge, "esperar_servidor", lambda puerto: True)
+    recibidos = []
+    monkeypatch.setattr(
+        modo_edge, "esperar_cierre_edge", lambda p, v: recibidos.append((p, v))
+    )
+    modo_edge.ejecutar(_principal)
+    with pytest.raises(Salida):
+        entorno.registro.hilos[0].target()
+    [(perfil, ventana)] = recibidos
+    assert perfil == entorno.perfil
+    assert hasattr(ventana, "wait")

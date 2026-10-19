@@ -1344,3 +1344,29 @@ Los tres son de baja probabilidad (la fuente real hoy no manda esos valores), pe
 - **O-39 corregida:** la ruedita tiene `semantics_label="Buscando la cotización"`.
 - Se sacó la marca xfail de las 5 pruebas (ahora pasan como normales) y se agregó `test_borde_exacto_del_tope_de_la_cotizacion` (el tope exacto se acepta; un centavo más se rechaza).
 - Suite completa con `pytest --cov=app`: 3.250 pasan, 1 omitida (archivo real de Excel), 0 fallan, 0 xfail. `cotizacion_online.py` 100 %.
+
+## Corrección: Edge colgado con el perfil de la app (`modo_edge.py`)
+
+No hay requisito nuevo en `docs/requisitos.md`: es la corrección de un bug. Antes, si había un Edge colgado con el perfil (`LOCALAPPDATA/gastos-app/edge`), Edge le pasaba la ventana a ese proceso, el lanzado terminaba en 0,1 s, `ventana.wait()` volvía y la app hacía `os._exit(0)` apagando el servidor ("Vaya… no se puede acceder a esta página"). Arreglo: `edge_abierto(perfil)` y `esperar_cierre_edge(perfil, ventana)`, usada por `ejecutar()`.
+
+### Qué se probó (15 pruebas nuevas en `tests/test_modo_edge.py`, sin abrir Edge; `tmp_path`, ventana falsa y reloj falso)
+| Caso | Prueba | Resultado |
+|---|---|---|
+| `edge_abierto` con lockfile / sin lockfile | `test_edge_abierto_con_lockfile`, `..._sin_lockfile` | Pasa |
+| Bordes: perfil inexistente; lockfile que se borra; archivos parecidos (`lockfile.bak`) no cuentan | `..._con_perfil_inexistente`, `..._cambia_al_borrar_el_lockfile`, `..._ignora_otros_archivos` | Pasa |
+| Vuelve cuando se borra el lockfile (reloj falso, y otra con hilo real) | `test_esperar_cierre_vuelve_cuando_se_borra_el_lockfile`, `..._con_hilo_que_borra_el_lockfile` | Pasa |
+| Lockfile nunca aparece: vuelve tras ~3 s (no antes) | `test_esperar_cierre_sin_lockfile_vuelve_tras_el_margen` | Pasa |
+| No vuelve mientras exista (1.000 pausas simuladas; y pasado el margen de 3 s hasta que se borra a los 60 s) | `..._no_vuelve_mientras_exista_el_lockfile`, `..._no_vuelve_aunque_pase_el_margen` | Pasa |
+| Lockfile que aparece dentro del margen (a 1 s) y luego se borra | `..._lockfile_que_aparece_dentro_del_margen` | Pasa |
+| `wait()` se llama una vez y primero; si falla, el error se propaga | `..._primero_espera_al_proceso`, `..._si_wait_falla_propaga_el_error` | Pasa |
+| Regresión del bug: con `wait()` ya vuelto y lockfile presente, el hilo no llama a `os._exit` ni borra `puerto.txt` hasta que se borra el lockfile | `test_hilo_con_edge_colgado_no_apaga_el_servidor` | Pasa |
+| `ejecutar()` usa `esperar_cierre_edge(perfil, ventana)` | `test_ejecutar_usa_esperar_cierre_edge` | Pasa |
+
+### Resultado
+- `tests/test_modo_edge.py`: 71 pasan (56 previas + 15 nuevas). Suite completa con `pytest --cov=app`: 3.265 pasan, 1 omitida (archivo real de Excel), 0 fallan. `modo_edge.py` 100 %; `app/` 98 %.
+- Bugs nuevos: ninguno.
+
+### Observaciones
+- Dos pruebas previas (`test_hilo_abre_edge_y_al_cerrar_borra_puerto_y_termina` y `test_hilo_con_puerto_txt_ya_borrado`) ahora tardan 3 s reales cada una: sin lockfile, `esperar_cierre_edge` espera el margen completo. Pasan y no se tocaron; si molesta, se les puede poner un reloj falso.
+- Diseño (no es un fallo): si Edge tarda más de 3 s en crear el lockfile, la app se cierra igual que antes del arreglo. Si el lockfile queda huérfano (cierre brusco de Windows sin borrarlo), la app no termina sola. Ninguno de los dos casos está probado con Edge real.
+- No se probó con un Edge real colgado: la verificación manual es la que hizo el agente principal (HTTP 200 y `puerto.txt` borrado al cerrar).

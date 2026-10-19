@@ -90,6 +90,33 @@ def carpeta_perfil() -> Path:
     return Path(base) / "gastos-app" / "edge"
 
 
+def edge_abierto(perfil: Path) -> bool:
+    """True mientras quede algún Edge usando el perfil de la app.
+
+    Edge crea el archivo "lockfile" en la carpeta del perfil al abrir, y Windows
+    lo borra solo cuando el último proceso de Edge de ese perfil se cierra
+    (también si se cierra a la fuerza).
+    """
+    return (perfil / "lockfile").exists()
+
+
+def esperar_cierre_edge(perfil: Path, ventana: subprocess.Popen) -> None:
+    """Vuelve cuando no queda ninguna ventana de Edge con el perfil de la app.
+
+    No alcanza con esperar al proceso que se abrió: si ya había un Edge con este
+    perfil (por ejemplo, uno que quedó colgado), Edge le pasa la ventana a ese y
+    el proceso nuevo termina enseguida. Antes eso apagaba el servidor y la
+    ventana mostraba "No se puede acceder a esta página".
+    """
+    ventana.wait()
+    # Edge puede tardar un momento en crear el lockfile: se le da un margen.
+    limite = time.monotonic() + 3
+    while not edge_abierto(perfil) and time.monotonic() < limite:
+        time.sleep(0.2)
+    while edge_abierto(perfil):
+        time.sleep(1)
+
+
 def puerto_en_uso(archivo: Path) -> int | None:
     """Si la app ya está abierta, el puerto donde atiende; si no, None."""
     try:
@@ -130,8 +157,8 @@ def ejecutar(main: Callable[[ft.Page], None]) -> None:
             os._exit(1)
         ventana = subprocess.Popen(comando_edge(edge, url, perfil))
         # Hasta que el usuario cierra la ventana (y las otras que se hayan
-        # abierto con doble clic: Edge mantiene el proceso mientras quede una).
-        ventana.wait()
+        # abierto con doble clic).
+        esperar_cierre_edge(perfil, ventana)
         archivo_puerto.unlink(missing_ok=True)
         # La app no tiene más ventana: se termina todo (también el servidor).
         os._exit(0)
