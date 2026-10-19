@@ -99,8 +99,12 @@ def base_sin_varios(con, mes_id):
     marsu = catalogos.crear(con, catalogos.PERSONAS, "Marsu")
     gastos.agregar_gasto(con, mes_id, "Alquiler", ids["Vivienda"], 26000000, "fijo")
     return SimpleNamespace(
-        con=con, mes_id=mes_id, vivienda=ids["Vivienda"], servicios=ids["Servicios"],
-        sofia=sofia, marsu=marsu,
+        con=con,
+        mes_id=mes_id,
+        vivienda=ids["Vivienda"],
+        servicios=ids["Servicios"],
+        sofia=sofia,
+        marsu=marsu,
     )
 
 
@@ -146,13 +150,16 @@ def fv(p, nombre, fila_excel=None):
         if f.fila.nombre == nombre
         and (fila_excel is None or f.fila.origen.fila_excel == fila_excel)
     ]
-    assert len(hallazgos) == 1, f"{nombre!r} (fila {fila_excel}): {len(hallazgos)} filas"
+    assert len(hallazgos) == 1, (
+        f"{nombre!r} (fila {fila_excel}): {len(hallazgos)} filas"
+    )
     return hallazgos[0]
 
 
 def sin_nombre(p, fila_excel):
     hallazgos = [
-        f for f in p.vista.filas
+        f
+        for f in p.vista.filas
         if f.fila.nombre is None and f.fila.origen.fila_excel == fila_excel
     ]
     assert hallazgos
@@ -183,7 +190,9 @@ def iconos(f):
 
 
 def bloque(p, titulo):
-    for b in p.vista.bloques + ([p.vista.bloque_incompletas] if p.vista.bloque_incompletas else []):
+    for b in p.vista.bloques + (
+        [p.vista.bloque_incompletas] if p.vista.bloque_incompletas else []
+    ):
         if b.titulo == titulo:
             return b
     raise AssertionError(f"No hay bloque {titulo!r}")
@@ -227,7 +236,9 @@ def aceptar(dlg):
 def abrir_bloque(p, titulo):
     menu_bloque(bloque(p, titulo), "Cambiar tipo o categoría de todas...")
     d = dialogo_arriba(p.app)
-    return d, boton(d, [t for t in textos(d) if t.startswith("Aplicar")][0]).on_click.__self__
+    return d, boton(
+        d, [t for t in textos(d) if t.startswith("Aplicar")][0]
+    ).on_click.__self__
 
 
 def clave_cat(id_):
@@ -247,7 +258,10 @@ def foto(con):
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )
     ]
-    return {t: [tuple(r) for r in con.execute(f"SELECT * FROM {t} ORDER BY 1")] for t in tablas}
+    return {
+        t: [tuple(r) for r in con.execute(f"SELECT * FROM {t} ORDER BY 1")]
+        for t in tablas
+    }
 
 
 def cargar_primera_importacion(b):
@@ -261,7 +275,14 @@ def cargar_primera_importacion(b):
     ]:
         gastos.agregar_gasto(b.con, b.mes_id, nombre, b.varios, monto, "fijo")
     cuotas.crear_plan(
-        b.con, "Avant Service cuota 3/ 3 $41.116,66", b.varios, None, 4111666, 3, 2026, 8,
+        b.con,
+        "Avant Service cuota 3/ 3 $41.116,66",
+        b.varios,
+        None,
+        4111666,
+        3,
+        2026,
+        8,
         hoy=HOY,
     )
     for persona, descripcion, monto in [
@@ -287,7 +308,15 @@ ESPERADA = {
     ],
     "Deudas": [
         (12, "Monotributo 66.020,12", "fijo", True, "$ 66.020", "Varios", "-"),
-        (13, "Avant Service cuota 3/ 3 $41.116,66", "cuota", True, "$ 41.117", "Varios", "3/3"),
+        (
+            13,
+            "Avant Service cuota 3/ 3 $41.116,66",
+            "cuota",
+            True,
+            "$ 41.117",
+            "Varios",
+            "3/3",
+        ),
         (15, "Gym", "fijo", True, "$ 50.000", "Varios", "-"),
     ],
     "Deudas sofia": [
@@ -350,7 +379,9 @@ def test_cada_fila_muestra_su_numero_de_fila_del_excel_con_tooltip(app_rev):
     # §3.12 columna "Fila": el número y el tooltip "Fila N del Excel".
     p = abrir(app_rev)
     f = fv(p, "Gym")
-    numeros = [t for t in de_tipo(f.control, ft.Text) if t.tooltip == "Fila 15 del Excel"]
+    numeros = [
+        t for t in de_tipo(f.control, ft.Text) if t.tooltip == "Fila 15 del Excel"
+    ]
     assert [t.value for t in numeros] == ["15"]
 
 
@@ -373,8 +404,19 @@ def test_incompletas_nombres_y_notas(app_rev):
     con_nombre = [f for f in p.vista.bloque_incompletas.filas if f.fila.nombre]
     sin = [f for f in p.vista.bloque_incompletas.filas if not f.fila.nombre]
     assert [f.nombre.value for f in con_nombre] == [
-        "Gasto del Mes", "Gastos", "Pagado", "total", "Falta por pagar", "Deudas", "Monto",
-        "Total deudas", "Deuda freezer", "Obra social", "Sueldo", "Deudas sofia", "Marsu",
+        "Gasto del Mes",
+        "Gastos",
+        "Pagado",
+        "total",
+        "Falta por pagar",
+        "Deudas",
+        "Monto",
+        "Total deudas",
+        "Deuda freezer",
+        "Obra social",
+        "Sueldo",
+        "Deudas sofia",
+        "Marsu",
     ]
     assert all(notas(f) == ["Falta el monto. Se ignora."] for f in con_nombre)
     assert len(sin) == 3
@@ -447,7 +489,10 @@ def test_filas_apagadas_se_ven_en_color_secundario(app_rev):
     p = abrir(app_rev)
     apagada = fv(p, "Alquiler")  # destildada
     normal = fv(p, "Servicios")
-    assert apagada.nombre.color == "onSurfaceVariant" and apagada.monto.color == "onSurfaceVariant"
+    assert (
+        apagada.nombre.color == "onSurfaceVariant"
+        and apagada.monto.color == "onSurfaceVariant"
+    )
     assert normal.nombre.color is None
     assert apagada.control.opacity in (1, None)
 
@@ -466,7 +511,9 @@ def test_tipo_ofrece_los_seis_tipos_con_sus_textos(app_rev):
     ]
 
 
-@pytest.mark.parametrize("tipo", ["fijo", "unico", "cuota", "me_deben", "sueldo", "ignorar"])
+@pytest.mark.parametrize(
+    "tipo", ["fijo", "unico", "cuota", "me_deben", "sueldo", "ignorar"]
+)
 def test_se_puede_cambiar_a_cualquiera_de_los_seis_tipos(app_rev, tipo):
     # CA-52.6: cualquier fila a cualquiera de los seis tipos, sin que reviente.
     p = abrir(app_rev)
@@ -527,7 +574,9 @@ def test_iconos_de_las_notas(app_rev):
     p = abrir(app_rev)
     assert iconos(fv(p, "Alquiler")) == [ft.Icons.WARNING_AMBER]
     assert iconos(fv(p, "Internet", 23)) == [ft.Icons.PEOPLE_OUTLINE]
-    assert iconos(fv(p, "Avant Service cuota 3/ 3 $41.116,66")) == [ft.Icons.INFO_OUTLINE]
+    assert iconos(fv(p, "Avant Service cuota 3/ 3 $41.116,66")) == [
+        ft.Icons.INFO_OUTLINE
+    ]
     assert iconos(fv(p, "Obra social")) == [ft.Icons.INFO_OUTLINE]
 
 
@@ -580,14 +629,16 @@ def test_cobrado_de_la_columna_f_ca_51_6(app_rev):
     # CA-51.6: Prestamo MP e Internet (Sofía) vienen cobrados; tacones sin cobrar y con la
     # nota del "3.000".
     celdas = celdas_planilla()
-    celdas.update({"F21": "Cobrado", "F22": 20000, "F23": "x", "F26": "Cobrado", "F27": 3000})
+    celdas.update(
+        {"F21": "Cobrado", "F22": 20000, "F23": "x", "F26": "Cobrado", "F27": 3000}
+    )
     p = abrir(app_rev, xlsx(celdas))
     assert fv(p, "Prestamo MP").cobrado.value is True
     assert fv(p, "Internet", 23).cobrado.value is True
     tacones = fv(p, "tacones chiqui baby")
     assert tacones.cobrado.value is False
     assert notas(tacones) == [
-        'En la columna Cobrado dice "3.000"; los ítems \'me deben\' no tienen cobro parcial, '
+        "En la columna Cobrado dice \"3.000\"; los ítems 'me deben' no tienen cobro parcial, "
         "quedó como no cobrado."
     ]
     assert iconos(tacones) == [ft.Icons.WARNING_AMBER]
@@ -603,7 +654,9 @@ def test_destildar_cobrado_cambia_la_lista_y_borra_la_nota(app_rev):
     assert f.fila.cobrado is False
     cobrado(fv(p, "tacones chiqui baby"), True)
     assert fv(p, "tacones chiqui baby").fila.cobrado is True
-    assert notas(fv(p, "tacones chiqui baby")) == []  # la nota explicaba lo que leyó la app
+    assert (
+        notas(fv(p, "tacones chiqui baby")) == []
+    )  # la nota explicaba lo que leyó la app
 
 
 def test_cobrado_no_cambia_el_tilde_ni_el_pie(app_rev):
@@ -741,15 +794,21 @@ def test_ca_55_3_mes_que_existe_pero_no_es_el_ultimo_avisa(app_rev, base):
     # CA-55.3: destino 2026-09 con 2026-09 y 2026-10 existentes: aviso en ámbar.
     insertar_mes(base.con, 2026, 9)
     p = abrir(app_rev)
-    assert "Los gastos fijos que importes no se agregan a los meses siguientes que ya existen." \
+    assert (
+        "Los gastos fijos que importes no se agregan a los meses siguientes que ya existen."
         not in textos(p.vista.ayuda_mes)
+    )
     p.vista.mes.value = "2026-9"
     p.vista.mes.on_select(evento(p.vista.mes))
     assert (
         "Los gastos fijos que importes no se agregan a los meses siguientes que ya existen."
         in textos(p.vista.ayuda_mes)
     )
-    avisos = [c for c in de_tipo(p.vista.ayuda_mes, ft.Icon) if c.icon == ft.Icons.WARNING_AMBER]
+    avisos = [
+        c
+        for c in de_tipo(p.vista.ayuda_mes, ft.Icon)
+        if c.icon == ft.Icons.WARNING_AMBER
+    ]
     assert avisos
 
 
@@ -783,7 +842,10 @@ def test_ca_56_5_cambiar_de_mes_retilda_y_avisa_6_segundos(app_rev, base):
     p.vista.mes.on_select(evento(p.vista.mes))
     assert f.tilde.value is False
     assert notas(f) == ["Ya existe en Noviembre 2026. Viene destildada."]
-    assert p.app.page.avisos()[-1] == 'Cambiaste el mes: 1 fila pasó a "ya existe" y se destildó.'
+    assert (
+        p.app.page.avisos()[-1]
+        == 'Cambiaste el mes: 1 fila pasó a "ya existe" y se destildó.'
+    )
     assert p.app.page.ultimo_aviso().duration == 6000
 
 
@@ -797,7 +859,9 @@ def test_cambiar_de_mes_sin_efecto_no_avisa(app_rev):
     assert len(p.app.page.avisos()) == antes
 
 
-def test_ca_56_5_la_marca_se_recalcula_tambien_en_la_nota_de_las_otras_filas(app_rev, base):
+def test_ca_56_5_la_marca_se_recalcula_tambien_en_la_nota_de_las_otras_filas(
+    app_rev, base
+):
     # El resumen del pie y el subtítulo del bloque se actualizan con el mes.
     insertar_mes(base.con, 2026, 9)
     p = abrir(app_rev)
@@ -838,7 +902,9 @@ def abrir_primer_uso(app, contenido=None):
     return p
 
 
-def test_primer_uso_muestra_mes_y_anio_libres_con_valores_del_calendario(app_primer_uso):
+def test_primer_uso_muestra_mes_y_anio_libres_con_valores_del_calendario(
+    app_primer_uso,
+):
     p = abrir_primer_uso(app_primer_uso)
     v = p.vista
     assert v.mes.label == "Mes" and v.mes.value == "10"
@@ -904,7 +970,9 @@ def test_primer_uso_alquiler_no_es_ya_existe(app_primer_uso):
     assert notas(fv(p, "Alquiler")) == []
 
 
-def test_primer_uso_sueldo_dice_que_el_mes_todavia_no_existe_en_el_dialogo(app_primer_uso):
+def test_primer_uso_sueldo_dice_que_el_mes_todavia_no_existe_en_el_dialogo(
+    app_primer_uso,
+):
     # §4.9: si el mes no existe: "Octubre 2026 todavía no existe."
     p = abrir_primer_uso(app_primer_uso)
     f = sin_nombre(p, 19)
@@ -925,7 +993,9 @@ def test_categoria_por_defecto_viene_varios_con_boton_mas(app_rev, base):
     assert c.dropdown.label == "Categoría por defecto"
     assert c.dropdown.value == clave_cat(base.varios)
     assert c.dropdown.error_text is None
-    mas = [b for b in de_tipo(c.control, ft.IconButton) if b.tooltip == "Nueva categoría"]
+    mas = [
+        b for b in de_tipo(c.control, ft.IconButton) if b.tooltip == "Nueva categoría"
+    ]
     assert len(mas) == 1 and mas[0].icon == ft.Icons.ADD
 
 
@@ -992,8 +1062,17 @@ def test_ca_54_3_sin_varios_no_hay_por_defecto_y_cada_fila_da_error(app_sin_vari
     p = abrir(app_sin_varios)
     v = p.vista
     assert v.categoria_defecto.dropdown.value is None
-    assert v.categoria_defecto.dropdown.error_text == "Elegí una categoría para los gastos y cuotas."
-    for nombre in ("Servicios", "Internet", "psicologo", "Gym", "Monotributo 66.020,12"):
+    assert (
+        v.categoria_defecto.dropdown.error_text
+        == "Elegí una categoría para los gastos y cuotas."
+    )
+    for nombre in (
+        "Servicios",
+        "Internet",
+        "psicologo",
+        "Gym",
+        "Monotributo 66.020,12",
+    ):
         f = fv(p, nombre, 5 if nombre == "Internet" else None)
         assert "Elegí una categoría." in notas(f), nombre
         assert f.control.bgcolor == "#FCE8E6"
@@ -1029,7 +1108,9 @@ def test_ca_54_3_crear_categoria_nueva_la_elige_y_cancelar_no_la_crea(
     assert app_sin_varios._importacion is p
     clic(dialogo_arriba(app_sin_varios), "Descartar")
     assert app_sin_varios._importacion is None
-    assert "Importado" not in [c_["nombre"] for c_ in catalogos.listar(con, catalogos.CATEGORIAS, True)]
+    assert "Importado" not in [
+        c_["nombre"] for c_ in catalogos.listar(con, catalogos.CATEGORIAS, True)
+    ]
     assert foto(con) == antes
 
 
@@ -1038,7 +1119,9 @@ def test_fila_de_nueva_categoria_texto_de_ayuda_y_botones(app_rev):
     p = abrir(app_rev)
     c = p.vista.categoria_defecto
     assert c.fila_nueva.visible is False
-    [mas] = [b for b in de_tipo(c.control, ft.IconButton) if b.tooltip == "Nueva categoría"]
+    [mas] = [
+        b for b in de_tipo(c.control, ft.IconButton) if b.tooltip == "Nueva categoría"
+    ]
     mas.on_click(None)
     assert c.fila_nueva.visible is True
     ayuda = textos(c.fila_nueva)
@@ -1075,7 +1158,10 @@ def test_categoria_nueva_validaciones(app_rev, base):
     c.abrir()
     c.nombre.value = "HOBBIES"
     c.agregar()
-    assert c.nombre.error == 'Ya agregaste una categoría llamada "Hobbies" en esta importación.'
+    assert (
+        c.nombre.error
+        == 'Ya agregaste una categoría llamada "Hobbies" en esta importación.'
+    )
     # La fila en línea sigue abierta con el error.
     assert c.fila_nueva.visible
 
@@ -1115,9 +1201,17 @@ def test_filtro_se_importan_oculta_el_resto_y_los_bloques_sin_filas(app_rev):
     p = abrir(app_rev)
     filtrar(p, "importan")
     assert sorted(visibles(p)) == sorted(
-        ["Servicios", "Internet", "psicologo", "Monotributo 66.020,12",
-         "Avant Service cuota 3/ 3 $41.116,66", "Gym", "Prestamo MP", "Internet",
-         "tacones chiqui baby"]
+        [
+            "Servicios",
+            "Internet",
+            "psicologo",
+            "Monotributo 66.020,12",
+            "Avant Service cuota 3/ 3 $41.116,66",
+            "Gym",
+            "Prestamo MP",
+            "Internet",
+            "tacones chiqui baby",
+        ]
     )
     assert p.vista.bloque_incompletas.control.visible is False
     assert all(b.control.visible for b in p.vista.bloques)  # todos tienen alguna
@@ -1227,10 +1321,18 @@ def test_ca_52_8_destildar_y_tildar_todas_en_deudas_sofia(app_rev):
     # ignorada y sin tilde.
     p = abrir(app_rev)
     menu_bloque(bloque(p, "Deudas sofia"), "Destildar todas las filas")
-    assert [f.tilde.value for f in bloque(p, "Deudas sofia").filas] == [False, False, False]
+    assert [f.tilde.value for f in bloque(p, "Deudas sofia").filas] == [
+        False,
+        False,
+        False,
+    ]
     assert subtitulo(bloque(p, "Deudas sofia")) == "filas 22 a 24 · se importan 0 de 3"
     menu_bloque(bloque(p, "Deudas sofia"), "Tildar todas las filas")
-    assert [f.tilde.value for f in bloque(p, "Deudas sofia").filas] == [True, True, False]
+    assert [f.tilde.value for f in bloque(p, "Deudas sofia").filas] == [
+        True,
+        True,
+        False,
+    ]
     assert fv(p, "Total", 24).tipo.value == "ignorar"
 
 
@@ -1240,8 +1342,9 @@ def test_ca_52_8_tildar_todas_tilda_tambien_las_ya_existe(app_rev, base):
     p = abrir(app_rev)
     sofia = bloque(p, "Deudas sofia")
     assert [f.tilde.value for f in sofia.filas] == [False, False, False]
-    assert "Sofía ya tiene un ítem sin cobrar con esta descripción. Viene destildada." in notas(
-        sofia.filas[0]
+    assert (
+        "Sofía ya tiene un ítem sin cobrar con esta descripción. Viene destildada."
+        in notas(sofia.filas[0])
     )
     menu_bloque(sofia, "Tildar todas las filas")
     assert [f.tilde.value for f in sofia.filas] == [True, True, False]
@@ -1256,9 +1359,16 @@ def test_ca_56_4_segunda_importacion_todo_ya_existe(app_rev, base):
     cargar_primera_importacion(base)
     p = abrir(app_rev)
     for nombre, excel in [
-        ("Servicios", 4), ("Internet", 5), ("psicologo", 7), ("Monotributo 66.020,12", 12),
-        ("Gym", 15), ("Avant Service cuota 3/ 3 $41.116,66", 13), ("Prestamo MP", 22),
-        ("Internet", 23), ("tacones chiqui baby", 27), ("Alquiler", 3),
+        ("Servicios", 4),
+        ("Internet", 5),
+        ("psicologo", 7),
+        ("Monotributo 66.020,12", 12),
+        ("Gym", 15),
+        ("Avant Service cuota 3/ 3 $41.116,66", 13),
+        ("Prestamo MP", 22),
+        ("Internet", 23),
+        ("tacones chiqui baby", 27),
+        ("Alquiler", 3),
     ]:
         f = fv(p, nombre, excel)
         assert f.tilde.value is False, nombre
@@ -1305,7 +1415,9 @@ def test_ca_56_3_repetida_en_el_archivo(app_rev):
 
 def test_ca_56_2_nombre_con_espacios_y_sin_acento_ya_existe(app_rev, base):
     # CA-56.2: gasto "Teléfono" en 2026-10, fila " telefono " del Excel viene "ya existe".
-    gastos.agregar_gasto(base.con, base.mes_id, "Teléfono", base.varios, 1000000, "fijo")
+    gastos.agregar_gasto(
+        base.con, base.mes_id, "Teléfono", base.varios, 1000000, "fijo"
+    )
     p = abrir(app_rev, xlsx({"C3": " telefono ", "D3": 5000}))
     f = p.vista.filas[0]
     assert f.tilde.value is False
@@ -1339,13 +1451,20 @@ def test_ca_56_6_sigue_como_me_deben_y_tildada_y_se_puede_confirmar(app_rev):
 
 def test_ca_56_7_plan_terminado_ya_existe(app_rev, base):
     # CA-56.7: plan terminado "Heladera 2/12" y un Excel con la misma fila -> cuota, ya existe.
-    cuotas.crear_plan(base.con, "Heladera 2/12", base.varios, None, 3000000, 3, 2026, 1, hoy=HOY)
+    cuotas.crear_plan(
+        base.con, "Heladera 2/12", base.varios, None, 3000000, 3, 2026, 1, hoy=HOY
+    )
     p = abrir(app_rev, xlsx({"C3": "Heladera 2/12", "D3": 30000}))
     f = p.vista.filas[0]
     assert f.tipo.value == "cuota" and f.tilde.value is False
-    assert notas(f)[0] == "Ya existe un plan de cuotas con este nombre. Viene destildada."
+    assert (
+        notas(f)[0] == "Ya existe un plan de cuotas con este nombre. Viene destildada."
+    )
     tildar(f, True)
-    assert notas(f)[0] == "Ya existe un plan de cuotas con este nombre. Si la importás, queda repetida."
+    assert (
+        notas(f)[0]
+        == "Ya existe un plan de cuotas con este nombre. Si la importás, queda repetida."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1356,7 +1475,10 @@ def test_ca_56_7_plan_terminado_ya_existe(app_rev, base):
 def test_pie_con_todo_bien(app_rev):
     p = abrir(app_rev)
     v = p.vista
-    assert v.texto_pie.value == 'Se importan 9 filas: 5 gastos, 1 plan de cuotas y 3 ítems "me deben".'
+    assert (
+        v.texto_pie.value
+        == 'Se importan 9 filas: 5 gastos, 1 plan de cuotas y 3 ítems "me deben".'
+    )
     assert v.boton_confirmar.disabled is False
     assert v.boton_confirmar.tooltip == "Ctrl+Enter"
     assert v.icono_pie.visible is False and v.ir_al_error.visible is False
@@ -1376,7 +1498,10 @@ def test_tooltip_del_boton_en_macos_usa_cmd(pagina, con, base):
 def test_pie_se_actualiza_con_cada_cambio_de_tilde(app_rev):
     p = abrir(app_rev)
     tildar(fv(p, "Servicios"), False)
-    assert p.vista.texto_pie.value == 'Se importan 8 filas: 4 gastos, 1 plan de cuotas y 3 ítems "me deben".'
+    assert (
+        p.vista.texto_pie.value
+        == 'Se importan 8 filas: 4 gastos, 1 plan de cuotas y 3 ítems "me deben".'
+    )
     tildar(fv(p, "Alquiler"), True)
     assert p.vista.texto_pie.value.startswith("Se importan 9 filas: 5 gastos")
 
@@ -1461,7 +1586,10 @@ def test_subtitulo_del_bloque_muestra_con_error_aunque_este_plegado(app_rev):
     p = abrir(app_rev)
     bloque(p, "Deudas").control.expanded = False
     elegir_tipo(fv(p, "Gym"), "cuota")
-    assert subtitulo(bloque(p, "Deudas")) == "filas 12 a 15 · se importan 3 de 3 · 1 con error"
+    assert (
+        subtitulo(bloque(p, "Deudas"))
+        == "filas 12 a 15 · se importan 3 de 3 · 1 con error"
+    )
     iconos_ = de_tipo(bloque(p, "Deudas").subtitulo, ft.Icon)
     assert [i.icon for i in iconos_] == [ft.Icons.ERROR_OUTLINE]
     elegir_tipo(fv(p, "Gym"), "fijo")
@@ -1545,7 +1673,9 @@ def test_hoja_sin_filas_completas_abre_el_grupo_y_avisa(app_rev):
     # §3.12: sin filas con texto y monto: aviso, sin bloques, "Filas incompletas" abierto.
     p = abrir(app_rev, xlsx({"C3": "Luz", "C4": "Gas"}))
     v = p.vista
-    assert "No se encontraron filas con un texto y un monto." in textos(v.avisos_archivo)
+    assert "No se encontraron filas con un texto y un monto." in textos(
+        v.avisos_archivo
+    )
     assert v.bloques == []
     assert v.bloque_incompletas.control.expanded is True
     assert v.texto_pie.value == "No hay filas para importar."
@@ -1586,7 +1716,9 @@ def test_clic_en_la_fila_tambien_abre_el_dialogo(app_rev):
     p = abrir(app_rev)
     f = fv(p, "Gym")
     contenedores = [
-        c for c in de_tipo(f.control, ft.Container) if c.on_click is not None and c.expand
+        c
+        for c in de_tipo(f.control, ft.Container)
+        if c.on_click is not None and c.expand
     ]
     assert contenedores
     contenedores[0].on_click(None)
@@ -1614,12 +1746,54 @@ def test_dialogo_campos_visibles_segun_el_tipo(app_rev):
     p = abrir(app_rev)
     d, dlg = abrir_fila(p, fv(p, "Gym"))
     esperado = {
-        "fijo": dict(pagado=True, cat=True, cuota=False, persona=False, cobrado=False, sueldo=False),
-        "unico": dict(pagado=True, cat=True, cuota=False, persona=False, cobrado=False, sueldo=False),
-        "cuota": dict(pagado=True, cat=True, cuota=True, persona=False, cobrado=False, sueldo=False),
-        "me_deben": dict(pagado=False, cat=False, cuota=False, persona=True, cobrado=True, sueldo=False),
-        "sueldo": dict(pagado=False, cat=False, cuota=False, persona=False, cobrado=False, sueldo=True),
-        "ignorar": dict(pagado=False, cat=False, cuota=False, persona=False, cobrado=False, sueldo=False),
+        "fijo": dict(
+            pagado=True,
+            cat=True,
+            cuota=False,
+            persona=False,
+            cobrado=False,
+            sueldo=False,
+        ),
+        "unico": dict(
+            pagado=True,
+            cat=True,
+            cuota=False,
+            persona=False,
+            cobrado=False,
+            sueldo=False,
+        ),
+        "cuota": dict(
+            pagado=True,
+            cat=True,
+            cuota=True,
+            persona=False,
+            cobrado=False,
+            sueldo=False,
+        ),
+        "me_deben": dict(
+            pagado=False,
+            cat=False,
+            cuota=False,
+            persona=True,
+            cobrado=True,
+            sueldo=False,
+        ),
+        "sueldo": dict(
+            pagado=False,
+            cat=False,
+            cuota=False,
+            persona=False,
+            cobrado=False,
+            sueldo=True,
+        ),
+        "ignorar": dict(
+            pagado=False,
+            cat=False,
+            cuota=False,
+            persona=False,
+            cobrado=False,
+            sueldo=False,
+        ),
     }
     for tipo, e in esperado.items():
         dlg.tipo.value = tipo
@@ -1647,7 +1821,11 @@ def test_dialogo_conserva_lo_escrito_al_cambiar_de_tipo(app_rev):
     dlg.tipo.on_select(evento(dlg.tipo))
     dlg.tipo.value = "cuota"
     dlg.tipo.on_select(evento(dlg.tipo))
-    assert (dlg.cuota_actual.value, dlg.cuota_total.value, dlg.pagado.value) == ("2", "6", "10.000")
+    assert (dlg.cuota_actual.value, dlg.cuota_total.value, dlg.pagado.value) == (
+        "2",
+        "6",
+        "10.000",
+    )
 
 
 def test_dialogo_sueldo_cambia_etiqueta_a_dolares_y_muestra_ayuda(app_rev):
@@ -1656,7 +1834,11 @@ def test_dialogo_sueldo_cambia_etiqueta_a_dolares_y_muestra_ayuda(app_rev):
     d, dlg = abrir_fila(p, sin_nombre(p, 19))
     dlg.tipo.value = "sueldo"
     dlg.tipo.on_select(evento(dlg.tipo))
-    assert dlg.monto.label == "Sueldo" and dlg.monto.prefix == "US$ " and dlg.monto.suffix == "USD"
+    assert (
+        dlg.monto.label == "Sueldo"
+        and dlg.monto.prefix == "US$ "
+        and dlg.monto.suffix == "USD"
+    )
     assert dlg.ayuda_sueldo.value == "Hoy el sueldo de Octubre 2026 es US$ 1.200,00."
     dlg.tipo.value = "fijo"
     dlg.tipo.on_select(evento(dlg.tipo))
@@ -1949,10 +2131,16 @@ def test_ca_53_3_gym_a_cuota(app_rev):
     assert dialogo_arriba(p.app) is d
     dlg.cuota_actual.value, dlg.cuota_total.value = "7", "6"
     aceptar(dlg)
-    assert dlg.cuota_actual.error == "La cuota actual tiene que estar entre 1 y la cantidad de cuotas."
+    assert (
+        dlg.cuota_actual.error
+        == "La cuota actual tiene que estar entre 1 y la cantidad de cuotas."
+    )
     dlg.cuota_actual.value, dlg.cuota_total.value = "1", "0"
     aceptar(dlg)
-    assert dlg.cuota_total.error == "La cantidad de cuotas tiene que ser un número entero de 1 o más."
+    assert (
+        dlg.cuota_total.error
+        == "La cantidad de cuotas tiene que ser un número entero de 1 o más."
+    )
     dlg.cuota_actual.value, dlg.cuota_total.value = "2", "6"
     aceptar(dlg)
     assert dialogo_arriba(p.app) is None
@@ -1983,7 +2171,9 @@ def test_dialogo_cuota_vista_previa_se_actualiza_en_cada_tecla(app_rev):
     dlg.cuota_total.value = "1"
     dlg.cuota_actual.value = "1"
     dlg.cuota_total.on_change(evento(dlg.cuota_total))
-    assert dlg.texto_plan.value.startswith("Plan de 1 cuota: primera Octubre 2026, última Octubre 2026.")
+    assert dlg.texto_plan.value.startswith(
+        "Plan de 1 cuota: primera Octubre 2026, última Octubre 2026."
+    )
     assert "Ej.: cuota 3 de 12" in textos(dlg.bloque_cuota)
 
 
@@ -1993,7 +2183,10 @@ def test_dialogo_cuota_campos_solo_numeros(app_rev):
     assert dlg.cuota_actual.input_filter is not None
     assert dlg.cuota_actual.input_filter.regex_string == r"[0-9]"
     assert dlg.cuota_total.input_filter.regex_string == r"[0-9]"
-    assert dlg.cuota_actual.label == "Cuota actual" and dlg.cuota_total.label == "Cantidad de cuotas"
+    assert (
+        dlg.cuota_actual.label == "Cuota actual"
+        and dlg.cuota_total.label == "Cantidad de cuotas"
+    )
 
 
 def test_dialogo_cuota_con_texto_no_numerico_pegado(app_rev):
@@ -2062,7 +2255,11 @@ def test_ca_53_4_crear_juan_y_elegirlo(app_rev, base):
     d, dlg = abrir_fila(p, f)
     dlg.tipo.value = "me_deben"
     dlg.tipo.on_select(evento(dlg.tipo))
-    [mas] = [b for b in de_tipo(dlg.persona.control, ft.IconButton) if b.tooltip == "Nueva persona"]
+    [mas] = [
+        b
+        for b in de_tipo(dlg.persona.control, ft.IconButton)
+        if b.tooltip == "Nueva persona"
+    ]
     mas.on_click(None)
     assert dlg.persona.nombre.label == "Nombre de la persona"
     dlg.persona.nombre.value = "Juan"
@@ -2076,7 +2273,9 @@ def test_ca_53_4_crear_juan_y_elegirlo(app_rev, base):
     assert p.lista.personas_nuevas == [Nueva("Juan")]
     assert p.vista.boton_confirmar.disabled is False
     assert foto(base.con) == antes
-    assert "Juan" not in [x["nombre"] for x in catalogos.listar(base.con, catalogos.PERSONAS, True)]
+    assert "Juan" not in [
+        x["nombre"] for x in catalogos.listar(base.con, catalogos.PERSONAS, True)
+    ]
 
 
 def test_ca_53_4_persona_nueva_se_elige_en_otras_filas(app_rev):
@@ -2105,7 +2304,9 @@ def test_ca_53_4_persona_sofia_con_acento_y_mayuscula_se_rechaza(app_rev):
     for escrito in ("sofía", "SOFIA", "  Sofia  "):
         dlg.persona.nombre.value = escrito
         dlg.persona.agregar()
-        assert dlg.persona.nombre.error == 'Ya existe una persona llamada "Sofía".', escrito
+        assert dlg.persona.nombre.error == 'Ya existe una persona llamada "Sofía".', (
+            escrito
+        )
     assert p.lista.personas_nuevas == []
     assert dlg.persona.fila_nueva.visible
 
@@ -2124,7 +2325,10 @@ def test_persona_nueva_vacia_o_repetida_en_la_revision(app_rev):
     dlg.persona.abrir()
     dlg.persona.nombre.value = "juan"
     dlg.persona.agregar()
-    assert dlg.persona.nombre.error == 'Ya agregaste una persona llamada "Juan" en esta importación.'
+    assert (
+        dlg.persona.nombre.error
+        == 'Ya agregaste una persona llamada "Juan" en esta importación.'
+    )
 
 
 def test_persona_archivada_se_rechaza_con_el_mensaje_de_archivada(app_rev, base):
@@ -2208,7 +2412,11 @@ def test_dialogo_pagado_de_me_deben_se_descarta(app_rev):
     dlg.pagado.value = "10.000"
     dlg.tipo.value = "me_deben"
     dlg.tipo.on_select(evento(dlg.tipo))
-    dlg.persona.dropdown.value = f"id:{p.lista.filas[0].persona or 0}" if False else dlg.persona.dropdown.options[0].key
+    dlg.persona.dropdown.value = (
+        f"id:{p.lista.filas[0].persona or 0}"
+        if False
+        else dlg.persona.dropdown.options[0].key
+    )
     aceptar(dlg)
     assert f.fila.pagado_cent is None
     assert not f.pagado.visible
@@ -2259,14 +2467,20 @@ def test_dialogo_bloque_titulo_ayuda_y_botones(app_rev):
 def test_dialogo_bloque_sin_ignoradas_no_dice_incluidas(app_rev):
     p = abrir(app_rev)
     d, dlg = abrir_bloque(p, "Deudas")
-    assert "Se cambian las 3 filas de este bloque. Después podés ajustar cada una." in textos(d)
+    assert (
+        "Se cambian las 3 filas de este bloque. Después podés ajustar cada una."
+        in textos(d)
+    )
 
 
 def test_dialogo_bloque_una_sola_fila_en_singular(app_rev):
     p = abrir(app_rev, xlsx({"C1": "Titulo", "C2": "Luz", "D2": 1000}))
     d, dlg = abrir_bloque(p, "Titulo")
     assert hay_boton(d, "Aplicar a la fila")
-    assert "Se cambian la fila de este bloque. Después podés ajustar cada una." in textos(d)
+    assert (
+        "Se cambian la fila de este bloque. Después podés ajustar cada una."
+        in textos(d)
+    )
 
 
 def test_dialogo_bloque_cuota_y_sueldo_deshabilitados_con_tooltip(app_rev):
@@ -2296,7 +2510,10 @@ def test_dialogo_bloque_campos_segun_el_tipo(app_rev):
     for tipo, (persona, categoria) in esperado.items():
         dlg.tipo.value = tipo
         dlg.tipo.on_select(evento(dlg.tipo))
-        assert (dlg.persona.control.visible, dlg.categoria.control.visible) == (persona, categoria), tipo
+        assert (dlg.persona.control.visible, dlg.categoria.control.visible) == (
+            persona,
+            categoria,
+        ), tipo
 
 
 def test_ca_53_5_sofia_y_marsu_con_persona_marsu(app_rev, base):
@@ -2327,7 +2544,9 @@ def test_ca_53_6_deudas_sofia_a_gasto_unico_en_servicios(app_rev, base):
         assert f.categoria.value == "• Servicios"
 
 
-def test_ca_53_6_deudas_no_cambia_tipo_y_pone_vivienda_sin_tocar_incompletas(app_rev, base):
+def test_ca_53_6_deudas_no_cambia_tipo_y_pone_vivienda_sin_tocar_incompletas(
+    app_rev, base
+):
     # CA-53.6: en "Deudas", "No cambiar el tipo" + Vivienda: Monotributo, Avant y Gym quedan
     # en Vivienda y siguen así si la por defecto pasa a Servicios; "Deuda freezer" y "Obra
     # social" no cambian.
@@ -2388,10 +2607,16 @@ def test_dialogo_bloque_a_ignorar_deja_todo_sin_tilde(app_rev):
 def test_dialogo_bloque_sin_cambios_no_hace_nada(app_rev):
     # "Un campo que se deja sin elegir no cambia nada".
     p = abrir(app_rev)
-    antes = [(f.fila.tipo, f.fila.categoria, f.fila.persona, f.fila.tildada) for f in p.vista.filas]
+    antes = [
+        (f.fila.tipo, f.fila.categoria, f.fila.persona, f.fila.tildada)
+        for f in p.vista.filas
+    ]
     d, dlg = abrir_bloque(p, "Deudas sofia")
     clic(d, "Aplicar a las 3 filas")
-    assert antes == [(f.fila.tipo, f.fila.categoria, f.fila.persona, f.fila.tildada) for f in p.vista.filas]
+    assert antes == [
+        (f.fila.tipo, f.fila.categoria, f.fila.persona, f.fila.tildada)
+        for f in p.vista.filas
+    ]
 
 
 def test_dialogo_bloque_cancelar_no_cambia_nada(app_rev, base):
@@ -2402,7 +2627,9 @@ def test_dialogo_bloque_cancelar_no_cambia_nada(app_rev, base):
     assert fv(p, "Gym").categoria.value == "Varios"
 
 
-def test_dialogo_bloque_categoria_por_defecto_vuelve_a_seguir_la_por_defecto(app_rev, base):
+def test_dialogo_bloque_categoria_por_defecto_vuelve_a_seguir_la_por_defecto(
+    app_rev, base
+):
     # La primera opción "Categoría por defecto" quita la categoría propia de las filas.
     p = abrir(app_rev)
     d, dlg = abrir_bloque(p, "Deudas")
@@ -2594,7 +2821,9 @@ def test_nada_se_escribe_en_la_base_durante_toda_la_revision(app_rev, base):
     assert foto(base.con) == antes
 
 
-def test_importar_el_archivo_no_cambia_la_base_ni_crea_personas_ni_categorias(app_rev, base):
+def test_importar_el_archivo_no_cambia_la_base_ni_crea_personas_ni_categorias(
+    app_rev, base
+):
     antes = foto(base.con)
     abrir(app_rev, planilla_con({"D21": "Deudas Juan"}))
     assert foto(base.con) == antes
@@ -2669,12 +2898,24 @@ def test_errores_por_campo_publico(app_rev):
 @pytest.mark.parametrize(
     "n,total,esperado",
     [
-        (3, 3, "Plan de 3 cuotas: primera Agosto 2026, última Octubre 2026. "
-               "Se agrega la cuota 3/3 en Octubre 2026."),
-        (1, 1, "Plan de 1 cuota: primera Octubre 2026, última Octubre 2026. "
-               "Se agrega la cuota 1/1 en Octubre 2026."),
-        (1, 600, "Plan de 600 cuotas: primera Octubre 2026, última Septiembre 2076. "
-                 "Se agrega la cuota 1/600 en Octubre 2026."),
+        (
+            3,
+            3,
+            "Plan de 3 cuotas: primera Agosto 2026, última Octubre 2026. "
+            "Se agrega la cuota 3/3 en Octubre 2026.",
+        ),
+        (
+            1,
+            1,
+            "Plan de 1 cuota: primera Octubre 2026, última Octubre 2026. "
+            "Se agrega la cuota 1/1 en Octubre 2026.",
+        ),
+        (
+            1,
+            600,
+            "Plan de 600 cuotas: primera Octubre 2026, última Septiembre 2076. "
+            "Se agrega la cuota 1/600 en Octubre 2026.",
+        ),
         (601, 601, None),
         (1, 601, None),
         (0, 5, None),
@@ -2701,7 +2942,9 @@ def test_texto_plan_con_anio_fuera_de_rango(con, mes_id):
 
     meses.borrar_ultimo_mes(con, mes_id)
     meses.crear_primer_mes(con, 1000, 1, 120000, 160000)
-    lista = ListaRevision(con, abrir_libro(pp()).leer_hoja("Octubre"), hoy=date(1000, 1, 1))
+    lista = ListaRevision(
+        con, abrir_libro(pp()).leer_hoja("Octubre"), hoy=date(1000, 1, 1)
+    )
     assert lista.texto_plan(2, 3) is None
     assert lista.texto_plan(1, 3).startswith("Plan de 3 cuotas: primera Enero 1000")
 
@@ -2730,7 +2973,11 @@ def test_ca_52_4_titulo_combinado_da_el_mismo_resultado(app_rev):
     celdas = celdas_planilla()
     p = abrir(app_rev, xlsx(celdas, combinadas={"Octubre": ["D21:E21"]}))
     assert [b.titulo for b in p.vista.bloques] == list(ESPERADA)
-    assert [f.tipo.value for f in bloque(p, "Deudas sofia").filas] == ["me_deben", "me_deben", "ignorar"]
+    assert [f.tipo.value for f in bloque(p, "Deudas sofia").filas] == [
+        "me_deben",
+        "me_deben",
+        "ignorar",
+    ]
 
 
 def test_ca_52_2_cuotas_y_falsas_cuotas_en_la_lista(app_rev):
@@ -2740,16 +2987,24 @@ def test_ca_52_2_cuotas_y_falsas_cuotas_en_la_lista(app_rev):
         app_rev,
         xlsx(
             {
-                "C1": "Heladera 2/12", "D1": 30000,
-                "C2": "Cumple 15/10", "D2": 5000,
-                "C3": "Algo 601/601", "D3": 1000,
-                "C4": "Algo 1/600", "D4": 1000,
-                "C5": "Heladera 1/1", "D5": 30000,
+                "C1": "Heladera 2/12",
+                "D1": 30000,
+                "C2": "Cumple 15/10",
+                "D2": 5000,
+                "C3": "Algo 601/601",
+                "D3": 1000,
+                "C4": "Algo 1/600",
+                "D4": 1000,
+                "C5": "Heladera 1/1",
+                "D5": 30000,
             }
         ),
     )
     por_nombre = {f.fila.nombre: f for f in p.vista.filas}
-    assert (por_nombre["Heladera 2/12"].tipo.value, por_nombre["Heladera 2/12"].cuota.value) == ("cuota", "2/12")
+    assert (
+        por_nombre["Heladera 2/12"].tipo.value,
+        por_nombre["Heladera 2/12"].cuota.value,
+    ) == ("cuota", "2/12")
     assert por_nombre["Cumple 15/10"].tipo.value == "fijo"
     assert por_nombre["Algo 601/601"].tipo.value == "fijo"
     assert por_nombre["Algo 1/600"].cuota.value == "1/600"
@@ -2758,7 +3013,9 @@ def test_ca_52_2_cuotas_y_falsas_cuotas_en_la_lista(app_rev):
     ]
 
 
-def test_categoria_elegida_a_mano_se_conserva_al_cambiar_de_tipo_en_la_lista(app_rev, base):
+def test_categoria_elegida_a_mano_se_conserva_al_cambiar_de_tipo_en_la_lista(
+    app_rev, base
+):
     # RN-75: cambiar el tipo con el selector no pierde la categoría propia.
     p = abrir(app_rev)
     f = fv(p, "Gym")
@@ -2806,7 +3063,10 @@ def test_sueldo_cero_o_vacio_en_el_dialogo(app_rev):
     d, dlg = abrir_fila(p, f)
     dlg.tipo.value = "sueldo"
     dlg.tipo.on_select(evento(dlg.tipo))
-    for valor, error in (("0", "El monto tiene que ser mayor a 0."), ("", "Falta el monto.")):
+    for valor, error in (
+        ("0", "El monto tiene que ser mayor a 0."),
+        ("", "Falta el monto."),
+    ):
         dlg.monto.value = valor
         aceptar(dlg)
         assert dlg.monto.error == error
@@ -2830,7 +3090,10 @@ def test_categoria_por_defecto_archivada_durante_la_revision_marca_error(app_rev
     archivar(base.con, "categorias", base.varios)
     elegir_tipo(fv(p, "Gym"), "fijo")
     assert p.vista.categoria_defecto.dropdown.value is None
-    assert p.vista.categoria_defecto.dropdown.error_text == "Elegí una categoría para los gastos y cuotas."
+    assert (
+        p.vista.categoria_defecto.dropdown.error_text
+        == "Elegí una categoría para los gastos y cuotas."
+    )
     assert "Elegí una categoría." in notas(fv(p, "Gym"))
     assert p.vista.boton_confirmar.disabled is True
 
@@ -2854,7 +3117,9 @@ def test_fila_incompleta_completada_aparece_con_el_filtro_se_importan(app_rev):
     aceptar(dlg)
     filtrar(p, "importan")
     assert p.vista.bloque_incompletas.control.visible is True
-    assert [x.fila.nombre for x in p.vista.bloque_incompletas.filas if x.control.visible] == ["Obra social"]
+    assert [
+        x.fila.nombre for x in p.vista.bloque_incompletas.filas if x.control.visible
+    ] == ["Obra social"]
 
 
 # BUG-37 (corregido).
@@ -2882,7 +3147,10 @@ def test_primer_uso_anio_de_cuatro_digitos_pero_invalido(app_primer_uso):
         assert v.anio.error == "El año tiene que tener 4 dígitos."
         assert v.boton_confirmar.disabled is True
         assert v.boton_confirmar.tooltip == "Corregí el mes destino."
-    assert (p.lista.anio, p.lista.mes) == (2026, 10)  # la lista conserva el último mes válido
+    assert (p.lista.anio, p.lista.mes) == (
+        2026,
+        10,
+    )  # la lista conserva el último mes válido
 
 
 def test_ir_al_primer_error_sin_errores_no_hace_nada(app_rev):
@@ -2892,7 +3160,9 @@ def test_ir_al_primer_error_sin_errores_no_hace_nada(app_rev):
     assert p.app.page.tareas == []
 
 
-def test_dialogo_en_base_sin_varios_marca_la_categoria_y_no_deja_aceptar(app_sin_varios):
+def test_dialogo_en_base_sin_varios_marca_la_categoria_y_no_deja_aceptar(
+    app_sin_varios,
+):
     # §4.9: sin categoría por defecto, la fila de gasto ya viene con "Elegí una categoría."
     # y el diálogo lo muestra bajo el selector; tampoco se acepta sin elegir una.
     p = abrir(app_sin_varios)
@@ -2900,13 +3170,17 @@ def test_dialogo_en_base_sin_varios_marca_la_categoria_y_no_deja_aceptar(app_sin
     assert dlg.categoria.dropdown.error_text == "Elegí una categoría."
     aceptar(dlg)
     assert dialogo_arriba(p.app) is d
-    dlg.categoria.dropdown.value = clave_cat(p.vista.categoria_defecto.dropdown.options[0].key.split(":")[1])
+    dlg.categoria.dropdown.value = clave_cat(
+        p.vista.categoria_defecto.dropdown.options[0].key.split(":")[1]
+    )
     aceptar(dlg)
     assert dialogo_arriba(p.app) is None
     assert fv(p, "Gym").categoria.value.startswith("• ")
 
 
-def test_un_error_inesperado_en_un_cambio_se_muestra_y_la_pantalla_sigue(app_rev, monkeypatch):
+def test_un_error_inesperado_en_un_cambio_se_muestra_y_la_pantalla_sigue(
+    app_rev, monkeypatch
+):
     # Si la lista falla por algo que no es un dato mal cargado, se muestra el diálogo de error
     # de la app y la pantalla se vuelve a dibujar.
     p = abrir(app_rev)
@@ -2918,7 +3192,9 @@ def test_un_error_inesperado_en_un_cambio_se_muestra_y_la_pantalla_sigue(app_rev
     tildar(fv(p, "Gym"), False)
     d = dialogo_arriba(p.app)
     assert d is not None and any("falla inventada" in t for t in textos(d))
-    assert fv(p, "Gym").tilde.value is True  # la pantalla sigue mostrando lo que dice la lista
+    assert (
+        fv(p, "Gym").tilde.value is True
+    )  # la pantalla sigue mostrando lo que dice la lista
 
 
 def test_confirmar_sin_lista_no_hace_nada(app_rev):

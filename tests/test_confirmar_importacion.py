@@ -66,8 +66,14 @@ def base(con, mes_id):
     marsu = catalogos.crear(con, catalogos.PERSONAS, "Marsu")
     gastos.agregar_gasto(con, mes_id, "Alquiler", ids["Vivienda"], 26000000, "fijo")
     return SimpleNamespace(
-        con=con, mes_id=mes_id, varios=varios, vivienda=ids["Vivienda"],
-        servicios=ids["Servicios"], salud=ids["Salud"], sofia=sofia, marsu=marsu,
+        con=con,
+        mes_id=mes_id,
+        varios=varios,
+        vivienda=ids["Vivienda"],
+        servicios=ids["Servicios"],
+        salud=ids["Salud"],
+        sofia=sofia,
+        marsu=marsu,
     )
 
 
@@ -102,7 +108,14 @@ def solo(lista, *nombres_o_filas):
 def gastos_de(con, mes_id):
     """[(nombre, monto_cent, tipo, categoría, medio, pagado_cent)] de un mes, en orden."""
     return [
-        (g["nombre"], g["monto_cent"], g["tipo"], g["categoria"], g["medio_pago"], g["pagado_cent"])
+        (
+            g["nombre"],
+            g["monto_cent"],
+            g["tipo"],
+            g["categoria"],
+            g["medio_pago"],
+            g["pagado_cent"],
+        )
         for g in gastos.listar_gastos(con, mes_id)
     ]
 
@@ -143,9 +156,13 @@ def test_ca_57_1_los_gastos_de_octubre_quedan_como_dice_el_criterio(base):
         AVANT: (4111666, "cuota", "Varios", 0),
         "Gym": (5000000, "fijo", "Varios", 0),
     }
-    obtenidos = {n: (m, t, c, p) for n, m, t, c, _medio, p in gastos_de(base.con, base.mes_id)}
+    obtenidos = {
+        n: (m, t, c, p) for n, m, t, c, _medio, p in gastos_de(base.con, base.mes_id)
+    }
     assert obtenidos == esperados
-    assert all(g[4] is None for g in gastos_de(base.con, base.mes_id))  # sin medio de pago
+    assert all(
+        g[4] is None for g in gastos_de(base.con, base.mes_id)
+    )  # sin medio de pago
 
 
 def test_ca_57_1_totales_pagado_pendiente_y_resumen(base):
@@ -168,7 +185,9 @@ def test_ca_57_1_me_deben_quedan_no_cobrados_con_la_fecha_de_hoy(base):
     assert me_deben.total_de(base.con, base.marsu) == 678500
     assert me_deben.total_general(base.con) == 3968500
     items = base.con.execute("SELECT * FROM items_me_deben ORDER BY id").fetchall()
-    assert [(i["descripcion"], i["monto_cent"], i["cobrado"], i["fecha"]) for i in items] == [
+    assert [
+        (i["descripcion"], i["monto_cent"], i["cobrado"], i["fecha"]) for i in items
+    ] == [
         ("Prestamo MP", 2000000, 0, "2026-10-14"),
         ("Internet", 1290000, 0, "2026-10-14"),
         ("tacones chiqui baby", 678500, 0, "2026-10-14"),
@@ -191,9 +210,13 @@ def test_ca_57_1_pagado_completo_es_un_solo_pago_y_el_parcial_deja_pendiente(bas
     confirmar(lista_con_sueldo(base.con))
     internet = gasto_por_nombre(base.con, base.mes_id, "Internet")
     psico = gasto_por_nombre(base.con, base.mes_id, "psicologo")
-    assert [(p["monto_cent"]) for p in pagos.listar_pagos(base.con, internet["id"])] == [3870000]
+    assert [
+        (p["monto_cent"]) for p in pagos.listar_pagos(base.con, internet["id"])
+    ] == [3870000]
     assert pagos.pendiente(base.con, internet["id"]) == 0
-    assert [(p["monto_cent"]) for p in pagos.listar_pagos(base.con, psico["id"])] == [6000000]
+    assert [(p["monto_cent"]) for p in pagos.listar_pagos(base.con, psico["id"])] == [
+        6000000
+    ]
     assert pagos.pendiente(base.con, psico["id"]) == 8000000  # 80.000
 
 
@@ -203,7 +226,11 @@ def test_ca_57_1_el_plan_de_avant_empieza_en_agosto_y_la_cuota_es_3_de_3(base):
     confirmar(lista_con_sueldo(base.con))
     plan = base.con.execute("SELECT * FROM planes_cuotas").fetchone()
     assert plan["nombre"] == AVANT
-    assert (plan["primer_anio"], plan["primer_mes"], plan["cantidad_cuotas"]) == (2026, 8, 3)
+    assert (plan["primer_anio"], plan["primer_mes"], plan["cantidad_cuotas"]) == (
+        2026,
+        8,
+        3,
+    )
     assert plan["monto_cuota_cent"] == 4111666
     assert plan["medio_pago_id"] is None
     assert cuotas.numero_de_cuota(plan, 2026, 10) == 3
@@ -319,7 +346,10 @@ def test_resumen_previo_mes_que_se_crea(base):
     # RN-76: "Se va a crear Noviembre 2026 y cargar ahí los datos."
     lista = lista_con_sueldo(base.con)
     lista.cambiar_mes_destino(2026, 11)
-    assert resumen_previo(lista)[0] == "Se va a crear Noviembre 2026 y cargar ahí los datos."
+    assert (
+        resumen_previo(lista)[0]
+        == "Se va a crear Noviembre 2026 y cargar ahí los datos."
+    )
 
 
 def test_resumen_previo_sueldo_sin_cambio_muestra_solo_el_valor(base):
@@ -333,7 +363,10 @@ def test_resumen_previo_primer_uso_sin_cotizacion(base_vacia):
     # RN-76 / CA-57.12: primer uso, sin fila de sueldo.
     lista = revisar(base_vacia.con)
     previo = resumen_previo(lista)
-    assert previo[0] == "Se va a crear Octubre 2026, sin cotización, y cargar ahí los datos."
+    assert (
+        previo[0]
+        == "Se va a crear Octubre 2026, sin cotización, y cargar ahí los datos."
+    )
     assert "Sin sueldo: el sueldo de Octubre 2026 queda en US$ 0,00." in previo
     assert not any(linea.startswith("Sueldo:") for linea in previo)
 
@@ -365,11 +398,16 @@ def test_ca_57_10_solo_un_item_y_el_sueldo_va_a_resumen(base):
     lista.cambiar_tilde(sin_nombre(lista, 19).indice, True)
     resultado = confirmar(lista)
     frase, completar = texto_resultado(resultado)
-    assert frase == 'Se importaron: 1 ítem "me deben" y el sueldo (US$ 1.300,00) en Octubre 2026.'
+    assert (
+        frase
+        == 'Se importaron: 1 ítem "me deben" y el sueldo (US$ 1.300,00) en Octubre 2026.'
+    )
     assert resultado.pantalla == "resumen"
     # Solo hay ítems: no hay gastos sin medio de pago, pero sí la sugerencia de compartido.
     assert completar == ["Si alguno es compartido, marcalo desde el gasto."]
-    assert gastos_de(base.con, base.mes_id) == [("Alquiler", 26000000, "fijo", "Vivienda", None, 0)]
+    assert gastos_de(base.con, base.mes_id) == [
+        ("Alquiler", 26000000, "fijo", "Vivienda", None, 0)
+    ]
 
 
 def test_solo_el_sueldo_va_a_resumen_y_no_tiene_para_completar(base):
@@ -392,7 +430,9 @@ def test_solo_una_cuota_va_a_gastos_y_pide_medio_de_pago(base):
     assert resultado.pantalla == "gastos"
     frase, completar = texto_resultado(resultado)
     assert frase == "Se importaron: 1 plan de cuotas en Octubre 2026."
-    assert completar == ["Los gastos quedaron sin medio de pago. Podés ponérselo en Gastos."]
+    assert completar == [
+        "Los gastos quedaron sin medio de pago. Podés ponérselo en Gastos."
+    ]
 
 
 def test_solo_gastos_dice_las_dos_lineas(base):
@@ -408,7 +448,9 @@ def test_solo_gastos_dice_las_dos_lineas(base):
 # ---------------------------------------------------------------------------
 
 
-def test_ca_55_2_destino_noviembre_se_crea_con_los_fijos_el_sueldo_y_la_cotizacion(base):
+def test_ca_55_2_destino_noviembre_se_crea_con_los_fijos_el_sueldo_y_la_cotizacion(
+    base,
+):
     # CA-55.2: se crea 2026-11 con Alquiler copiado, sueldo 1.300, cotización 1.600 y las
     # filas importadas. "Alquiler" del Excel venía "ya existe" (destildada): no se duplica.
     lista = lista_con_sueldo(base.con)
@@ -421,7 +463,15 @@ def test_ca_55_2_destino_noviembre_se_crea_con_los_fijos_el_sueldo_y_la_cotizaci
     nombres = [g["nombre"] for g in gastos.listar_gastos(base.con, nuevo["id"])]
     assert nombres.count("Alquiler") == 1
     assert sorted(nombres) == sorted(
-        ["Alquiler", "Servicios", "Internet", "psicologo", "Monotributo 66.020,12", "Gym", AVANT]
+        [
+            "Alquiler",
+            "Servicios",
+            "Internet",
+            "psicologo",
+            "Monotributo 66.020,12",
+            "Gym",
+            AVANT,
+        ]
     )
     assert pagos.totales_del_mes(base.con, nuevo["id"])["pagado"] == 9870000
     # El alquiler copiado no trae pagos (RN-09) y octubre sigue con su sueldo.
@@ -446,7 +496,9 @@ def test_ca_55_2_la_cuota_va_3_de_3_en_noviembre_y_2_de_3_en_octubre(base):
         "Alquiler",
         AVANT,
     ]
-    assert cantidad(base.con, "pagos") == 2  # Solo en noviembre; la cuota de octubre sin pagos.
+    assert (
+        cantidad(base.con, "pagos") == 2
+    )  # Solo en noviembre; la cuota de octubre sin pagos.
 
 
 def test_ca_55_2_el_mes_nuevo_sin_fila_de_sueldo_copia_el_sueldo_del_ultimo(base):
@@ -461,7 +513,9 @@ def test_ca_55_2_el_mes_nuevo_sin_fila_de_sueldo_copia_el_sueldo_del_ultimo(base
 
 def test_mes_que_se_crea_copia_tambien_las_cuotas_de_planes_activos(base):
     # RN-09 + RN-73: un plan que ya existe, activo en el mes nuevo, aporta su cuota.
-    cuotas.crear_plan(base.con, "Heladera", base.varios, None, 3000000, 12, 2026, 8, hoy=HOY)
+    cuotas.crear_plan(
+        base.con, "Heladera", base.varios, None, 3000000, 12, 2026, 8, hoy=HOY
+    )
     lista = revisar(base.con)
     lista.cambiar_mes_destino(2026, 11)
     resultado = confirmar(lista)
@@ -503,7 +557,9 @@ def test_ca_55_3_mes_existente_que_no_es_el_ultimo(base):
     assert cuotas.ultima_cuota(plan) == (2026, 9)
     assert gasto_por_nombre(base.con, sept, AVANT)["plan_cuotas_id"] == plan["id"]
     # Octubre no recibe nada: solo conserva su Alquiler.
-    assert [g["nombre"] for g in gastos.listar_gastos(base.con, base.mes_id)] == ["Alquiler"]
+    assert [g["nombre"] for g in gastos.listar_gastos(base.con, base.mes_id)] == [
+        "Alquiler"
+    ]
     assert meses.obtener_mes(base.con, base.mes_id)["sueldo_usd_cent"] == 120000
     # El sueldo nuevo va al mes destino, no al último.
     assert meses.obtener_mes(base.con, sept)["sueldo_usd_cent"] == 130000
@@ -528,7 +584,10 @@ def test_cuota_en_mes_pasado_no_toca_los_meses_del_medio(base):
     assert nombres(sept) == []
     assert "Heladera 2/6" in nombres(base.mes_id)
     cuota_oct = gasto_por_nombre(base.con, base.mes_id, "Heladera 2/6")
-    assert cuotas.numero_de_cuota(plan, 2026, 10) == 4 and cuota_oct["monto_cent"] == 3000000
+    assert (
+        cuotas.numero_de_cuota(plan, 2026, 10) == 4
+        and cuota_oct["monto_cent"] == 3000000
+    )
 
 
 def test_cuota_en_mes_pasado_con_n_igual_a_N_termina_ahi(base):
@@ -540,8 +599,12 @@ def test_cuota_en_mes_pasado_con_n_igual_a_N_termina_ahi(base):
     plan = base.con.execute("SELECT * FROM planes_cuotas").fetchone()
     assert cuotas.ultima_cuota(plan) == (2026, 9)
     assert cuotas.estado(plan, HOY) == cuotas.TERMINADO
-    assert [g["nombre"] for g in gastos.listar_gastos(base.con, sept)] == ["Prestamo 4/4"]
-    assert [g["nombre"] for g in gastos.listar_gastos(base.con, base.mes_id)] == ["Alquiler"]
+    assert [g["nombre"] for g in gastos.listar_gastos(base.con, sept)] == [
+        "Prestamo 4/4"
+    ]
+    assert [g["nombre"] for g in gastos.listar_gastos(base.con, base.mes_id)] == [
+        "Alquiler"
+    ]
 
 
 def test_cuota_n_igual_a_N_en_el_mes_actual_se_libera_el_mes_siguiente(base):
@@ -550,7 +613,9 @@ def test_cuota_n_igual_a_N_en_el_mes_actual_se_libera_el_mes_siguiente(base):
     nuevo = meses.crear_mes_siguiente(base.con, 130000, 160000)
     nombres = [g["nombre"] for g in gastos.listar_gastos(base.con, nuevo)]
     assert AVANT not in nombres
-    assert "Alquiler" in nombres and "Gym" in nombres  # los fijos importados sí se copian
+    assert (
+        "Alquiler" in nombres and "Gym" in nombres
+    )  # los fijos importados sí se copian
 
 
 def test_cuota_1_de_N_importada_en_mes_nuevo_no_aparece_en_el_mes_anterior(base):
@@ -560,14 +625,28 @@ def test_cuota_1_de_N_importada_en_mes_nuevo_no_aparece_en_el_mes_anterior(base)
     resultado = confirmar(lista)
     plan = base.con.execute("SELECT * FROM planes_cuotas").fetchone()
     assert (plan["primer_anio"], plan["primer_mes"]) == (2026, 11)
-    assert "Notebook 1/12" not in [g["nombre"] for g in gastos.listar_gastos(base.con, base.mes_id)]
-    assert "Notebook 1/12" in [g["nombre"] for g in gastos.listar_gastos(base.con, resultado.mes_id)]
+    assert "Notebook 1/12" not in [
+        g["nombre"] for g in gastos.listar_gastos(base.con, base.mes_id)
+    ]
+    assert "Notebook 1/12" in [
+        g["nombre"] for g in gastos.listar_gastos(base.con, resultado.mes_id)
+    ]
 
 
-def test_cuota_con_pagado_completo_y_parcial_se_aplica_solo_a_la_cuota_del_destino(base):
+def test_cuota_con_pagado_completo_y_parcial_se_aplica_solo_a_la_cuota_del_destino(
+    base,
+):
     # RN-69/RN-71: el pagado de la cuota va a la cuota del mes destino, no a las otras.
-    celdas = {"C1": "Pagos", "E1": "Pagado", "C2": "Heladera 2/6", "D2": 30000, "E2": 30000,
-              "C3": "Moto 2/6", "D3": 40000, "E3": 10000}
+    celdas = {
+        "C1": "Pagos",
+        "E1": "Pagado",
+        "C2": "Heladera 2/6",
+        "D2": 30000,
+        "E2": 30000,
+        "C3": "Moto 2/6",
+        "D3": 40000,
+        "E3": 10000,
+    }
     lista = revisar(base.con, xlsx(celdas))
     lista.cambiar_mes_destino(2026, 11)
     resultado = confirmar(lista)
@@ -602,7 +681,10 @@ def test_ca_55_4_primer_uso_crea_el_mes_con_sueldo_y_sin_cotizacion(base_vacia):
     assert mes["sueldo_usd_cent"] == 130000 and mes["cotizacion_cent"] is None
     assert resultado.sin_cotizacion is True
     assert resultado.sueldo_cent == 130000
-    assert resumen.calcular_resumen(base_vacia.con, resultado.mes_id).falta_cotizacion is True
+    assert (
+        resumen.calcular_resumen(base_vacia.con, resultado.mes_id).falta_cotizacion
+        is True
+    )
 
 
 def test_ca_55_4_primer_uso_sin_fila_de_sueldo_deja_el_sueldo_en_cero(base_vacia):
@@ -629,13 +711,25 @@ def test_ca_57_12_primer_uso_resultado_y_pantalla(base_vacia):
     ]
 
 
-def test_primer_uso_los_gastos_y_la_cuota_se_guardan_aunque_el_mes_no_tenga_cotizacion(base_vacia):
+def test_primer_uso_los_gastos_y_la_cuota_se_guardan_aunque_el_mes_no_tenga_cotizacion(
+    base_vacia,
+):
     # CA-57.12: el primer uso importa lo mismo que la base normal (Alquiler del Excel entra,
     # porque no existe ningún mes).
     resultado = confirmar(revisar(base_vacia.con))
-    nombres = [g["nombre"] for g in gastos.listar_gastos(base_vacia.con, resultado.mes_id)]
+    nombres = [
+        g["nombre"] for g in gastos.listar_gastos(base_vacia.con, resultado.mes_id)
+    ]
     assert sorted(nombres) == sorted(
-        ["Alquiler", "Servicios", "Internet", "psicologo", "Monotributo 66.020,12", "Gym", AVANT]
+        [
+            "Alquiler",
+            "Servicios",
+            "Internet",
+            "psicologo",
+            "Monotributo 66.020,12",
+            "Gym",
+            AVANT,
+        ]
     )
 
 
@@ -645,10 +739,12 @@ def test_primer_uso_en_un_mes_pasado_pone_la_cuota_en_el_destino(base_vacia):
     lista.cambiar_mes_destino(2025, 3)
     resultado = confirmar(lista)
     assert (resultado.anio, resultado.mes) == (2025, 3)
-    assert [g["nombre"] for g in gastos.listar_gastos(base_vacia.con, resultado.mes_id)] == [
-        "Heladera 2/6"
+    assert [
+        g["nombre"] for g in gastos.listar_gastos(base_vacia.con, resultado.mes_id)
+    ] == ["Heladera 2/6"]
+    assert [(m["anio"], m["mes"]) for m in meses.listar_meses(base_vacia.con)] == [
+        (2025, 3)
     ]
-    assert [(m["anio"], m["mes"]) for m in meses.listar_meses(base_vacia.con)] == [(2025, 3)]
 
 
 def test_ca_55_5_destino_propuesto_es_el_ultimo_mes_y_se_guarda_ahi(base):
@@ -674,9 +770,16 @@ def test_ca_56_4_segunda_importacion_todo_viene_ya_existe_y_destildado(base):
     confirmar(lista_con_sueldo(base.con))
     segunda = revisar(base.con)
     for nombre, fila_excel in [
-        ("Alquiler", 3), ("Servicios", 4), ("Internet", 5), ("psicologo", 7),
-        ("Monotributo 66.020,12", 12), (AVANT, 13), ("Gym", 15),
-        ("Prestamo MP", 22), ("Internet", 23), ("tacones chiqui baby", 27),
+        ("Alquiler", 3),
+        ("Servicios", 4),
+        ("Internet", 5),
+        ("psicologo", 7),
+        ("Monotributo 66.020,12", 12),
+        (AVANT, 13),
+        ("Gym", 15),
+        ("Prestamo MP", 22),
+        ("Internet", 23),
+        ("tacones chiqui baby", 27),
     ]:
         f = fila(segunda, nombre, fila_excel)
         assert f.ya_existe is not None, (nombre, fila_excel)
@@ -720,17 +823,24 @@ def test_o69_tildar_una_fila_ya_existe_de_me_deben_y_de_plan_cambia_la_nota(base
         "Sofía ya tiene un ítem sin cobrar con esta descripción. Viene destildada."
     ]
     # Plan terminado "Heladera 2/12" (sin cuota en octubre): nota de plan.
-    cuotas.crear_plan(base.con, "Heladera 2/12", base.varios, None, 3000000, 12, 2025, 1, hoy=HOY)
+    cuotas.crear_plan(
+        base.con, "Heladera 2/12", base.varios, None, 3000000, 12, 2025, 1, hoy=HOY
+    )
     lista = revisar(base.con, xlsx({"C1": "Heladera 2/12", "D1": 30000}))
     heladera = fila(lista, "Heladera 2/12")
     assert heladera.tipo == "cuota" and heladera.ya_existe == "plan"
-    assert lista.notas(heladera)[0] == "Ya existe un plan de cuotas con este nombre. Viene destildada."
+    assert (
+        lista.notas(heladera)[0]
+        == "Ya existe un plan de cuotas con este nombre. Viene destildada."
+    )
     lista.cambiar_tilde(heladera.indice, True)
     assert lista.notas(heladera)[0] == (
         "Ya existe un plan de cuotas con este nombre. Si la importás, queda repetida."
     )
     confirmar(lista)
-    planes = base.con.execute("SELECT nombre FROM planes_cuotas WHERE nombre = 'Heladera 2/12'")
+    planes = base.con.execute(
+        "SELECT nombre FROM planes_cuotas WHERE nombre = 'Heladera 2/12'"
+    )
     assert len(planes.fetchall()) == 2  # CA-56.7: quedan dos planes
 
 
@@ -768,8 +878,14 @@ def test_segunda_importacion_tildando_todo_duplica_los_datos(base):
 
 def test_cobrado_marca_el_item_como_cobrado_y_no_suma_al_total(base):
     # CA-51.6 (guardado): los ítems de Sofía cobrados no suman; el de Marsu sí.
-    celdas = {**celdas_planilla(), "F21": "Cobrado", "F22": 20000, "F23": "x", "F26": "Cobrado",
-              "F27": 3000}
+    celdas = {
+        **celdas_planilla(),
+        "F21": "Cobrado",
+        "F22": 20000,
+        "F23": "x",
+        "F26": "Cobrado",
+        "F27": 3000,
+    }
     lista = revisar(base.con, xlsx(celdas))
     assert fila(lista, "Prestamo MP").cobrado and fila(lista, "Internet", 23).cobrado
     confirmar(lista)
@@ -793,8 +909,16 @@ def test_cobrado_destildado_por_el_usuario_queda_no_cobrado(base):
 
 def test_pagado_en_un_gasto_unico_y_pagado_cero(base):
     # RN-69: pagado 0 -> sin pagos; en un gasto único también aplica.
-    celdas = {"C1": "Gasto", "E1": "Pagado", "C2": "Luz", "D2": 100, "E2": 0,
-              "C3": "Gas", "D3": 200, "E3": 50}
+    celdas = {
+        "C1": "Gasto",
+        "E1": "Pagado",
+        "C2": "Luz",
+        "D2": 100,
+        "E2": 0,
+        "C3": "Gas",
+        "D3": 200,
+        "E3": 50,
+    }
     lista = revisar(base.con, xlsx(celdas))
     lista.cambiar_tipo(fila(lista, "Gas").indice, "unico")
     confirmar(lista)
@@ -809,7 +933,9 @@ def test_el_pagado_de_una_fila_me_deben_no_crea_pagos(base):
     lista = revisar(base.con, xlsx(celdas))
     f = fila(lista, "Luz")
     lista.cambiar_tipo(f.indice, "me_deben")
-    lista.editar_fila(f.indice, "me_deben", "Luz", 10000, pagado_cent=5000, persona=base.sofia)
+    lista.editar_fila(
+        f.indice, "me_deben", "Luz", 10000, pagado_cent=5000, persona=base.sofia
+    )
     confirmar(lista)
     assert cantidad(base.con, "pagos") == 0
     assert cantidad(base.con, "items_me_deben") == 1
@@ -817,7 +943,13 @@ def test_el_pagado_de_una_fila_me_deben_no_crea_pagos(base):
 
 def test_pagado_igual_al_monto_con_centavos_queda_completo(base):
     # RN-69: P = M con centavos (66.020,12) -> pagado completo exacto.
-    celdas = {"C1": "Gasto", "E1": "Pagado", "C2": "Monotributo", "D2": 66020.12, "E2": 66020.12}
+    celdas = {
+        "C1": "Gasto",
+        "E1": "Pagado",
+        "C2": "Monotributo",
+        "D2": 66020.12,
+        "E2": 66020.12,
+    }
     confirmar(revisar(base.con, xlsx(celdas)))
     g = gasto_por_nombre(base.con, base.mes_id, "Monotributo")
     assert (g["monto_cent"], g["pagado_cent"]) == (6602012, 6602012)
@@ -827,12 +959,22 @@ def test_el_nombre_editado_y_el_monto_corregido_se_guardan(base):
     # CA-53.1: "Psicólogo" y 85.000 en lugar de "psicologo" y "Servicios" 82.000.
     lista = revisar(base.con)
     psico = fila(lista, "psicologo")
-    assert lista.editar_fila(psico.indice, "fijo", "Psicólogo", psico.monto_cent,
-                             pagado_cent=psico.pagado_cent) == {}
+    assert (
+        lista.editar_fila(
+            psico.indice,
+            "fijo",
+            "Psicólogo",
+            psico.monto_cent,
+            pagado_cent=psico.pagado_cent,
+        )
+        == {}
+    )
     serv = fila(lista, "Servicios")
     assert lista.editar_fila(serv.indice, "fijo", "Servicios", 8500000) == {}
     confirmar(lista)
-    assert gasto_por_nombre(base.con, base.mes_id, "Psicólogo")["pagado_cent"] == 6000000
+    assert (
+        gasto_por_nombre(base.con, base.mes_id, "Psicólogo")["pagado_cent"] == 6000000
+    )
     assert gasto_por_nombre(base.con, base.mes_id, "Servicios")["monto_cent"] == 8500000
 
 
@@ -842,18 +984,30 @@ def test_ca_53_2_fila_incompleta_completada_se_importa(base):
     obra = fila(lista, "Obra social")
     assert lista.editar_fila(obra.indice, "fijo", "Obra social", 4500000) == {}
     confirmar(lista)
-    assert gasto_por_nombre(base.con, base.mes_id, "Obra social")["monto_cent"] == 4500000
+    assert (
+        gasto_por_nombre(base.con, base.mes_id, "Obra social")["monto_cent"] == 4500000
+    )
 
 
 def test_ca_53_3_gym_como_cuota_2_de_6(base):
     # CA-53.3: plan "Gym" de 6 cuotas de 50.000 con primera cuota 2026-09; en octubre "2/6".
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
-    assert lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_actual=2,
-                             cuota_total=6) == {}
+    assert (
+        lista.editar_fila(
+            gym.indice, "cuota", "Gym", 5000000, cuota_actual=2, cuota_total=6
+        )
+        == {}
+    )
     confirmar(lista)
-    plan = base.con.execute("SELECT * FROM planes_cuotas WHERE nombre = 'Gym'").fetchone()
-    assert (plan["primer_anio"], plan["primer_mes"], plan["cantidad_cuotas"]) == (2026, 9, 6)
+    plan = base.con.execute(
+        "SELECT * FROM planes_cuotas WHERE nombre = 'Gym'"
+    ).fetchone()
+    assert (plan["primer_anio"], plan["primer_mes"], plan["cantidad_cuotas"]) == (
+        2026,
+        9,
+        6,
+    )
     assert cuotas.numero_de_cuota(plan, 2026, 10) == 2
 
 
@@ -862,10 +1016,16 @@ def test_ca_53_4_persona_nueva_juan_se_crea_con_su_item(base):
     lista = revisar(base.con)
     juan = lista.agregar_persona("Juan")
     serv = fila(lista, "Servicios")
-    assert lista.editar_fila(serv.indice, "me_deben", "Servicios", 8200000, persona=juan) == {}
+    assert (
+        lista.editar_fila(serv.indice, "me_deben", "Servicios", 8200000, persona=juan)
+        == {}
+    )
     confirmar(lista)
-    juan_id = [p["id"] for p in catalogos.listar(base.con, catalogos.PERSONAS)
-               if p["nombre"] == "Juan"]
+    juan_id = [
+        p["id"]
+        for p in catalogos.listar(base.con, catalogos.PERSONAS)
+        if p["nombre"] == "Juan"
+    ]
     assert len(juan_id) == 1
     assert me_deben.total_de(base.con, juan_id[0]) == 8200000
 
@@ -886,7 +1046,9 @@ def test_ca_57_11_persona_nueva_que_deja_de_usarse_no_se_crea(base):
     juan = lista.agregar_persona("Juan")
     serv = fila(lista, "Servicios")
     lista.editar_fila(serv.indice, "me_deben", "Servicios", 8200000, persona=juan)
-    lista.editar_fila(serv.indice, "fijo", "Servicios", 8200000, categoria=None, persona=juan)
+    lista.editar_fila(
+        serv.indice, "fijo", "Servicios", 8200000, categoria=None, persona=juan
+    )
     assert not any("Se crean también" in linea for linea in resumen_previo(lista))
     confirmar(lista)
     assert "Juan" not in _nombres(base.con, catalogos.PERSONAS)
@@ -903,14 +1065,19 @@ def test_ca_57_11_categoria_nueva_como_defecto_se_crea_y_se_usa(base):
         previo[-2]
     )
     confirmar(lista)
-    importado = [c for c in catalogos.listar(base.con, catalogos.CATEGORIAS)
-                 if c["nombre"] == "Importado"]
+    importado = [
+        c
+        for c in catalogos.listar(base.con, catalogos.CATEGORIAS)
+        if c["nombre"] == "Importado"
+    ]
     assert len(importado) == 1
     plan_cuota = gasto_por_nombre(base.con, base.mes_id, AVANT)
     assert plan_cuota["categoria"] == "Importado"
     assert gasto_por_nombre(base.con, base.mes_id, "Gym")["categoria"] == "Importado"
     # Alquiler (el que ya estaba) conserva Vivienda.
-    assert gasto_por_nombre(base.con, base.mes_id, "Alquiler")["categoria"] == "Vivienda"
+    assert (
+        gasto_por_nombre(base.con, base.mes_id, "Alquiler")["categoria"] == "Vivienda"
+    )
     plan = base.con.execute("SELECT categoria_id FROM planes_cuotas").fetchone()
     assert plan["categoria_id"] == importado[0]["id"]
 
@@ -932,13 +1099,23 @@ def test_categoria_nueva_usada_solo_por_una_cuota_se_crea(base):
     lista = revisar(base.con)
     nueva = lista.agregar_categoria("Electro")
     avant = fila(lista, AVANT)
-    lista.editar_fila(avant.indice, "cuota", AVANT, avant.monto_cent, categoria=nueva,
-                      cuota_actual=3, cuota_total=3)
+    lista.editar_fila(
+        avant.indice,
+        "cuota",
+        AVANT,
+        avant.monto_cent,
+        categoria=nueva,
+        cuota_actual=3,
+        cuota_total=3,
+    )
     confirmar(lista)
     assert "Electro" in _nombres(base.con, catalogos.CATEGORIAS)
-    assert base.con.execute(
-        "SELECT c.nombre FROM planes_cuotas p JOIN categorias c ON c.id = p.categoria_id"
-    ).fetchone()[0] == "Electro"
+    assert (
+        base.con.execute(
+            "SELECT c.nombre FROM planes_cuotas p JOIN categorias c ON c.id = p.categoria_id"
+        ).fetchone()[0]
+        == "Electro"
+    )
 
 
 def test_persona_y_categoria_nuevas_en_uso_en_el_resumen_previo(base):
@@ -948,7 +1125,10 @@ def test_persona_y_categoria_nuevas_en_uso_en_el_resumen_previo(base):
     juan = lista.agregar_persona("Juan")
     prestamo = fila(lista, "Prestamo MP")
     lista.editar_fila(prestamo.indice, "me_deben", "Prestamo MP", 2000000, persona=juan)
-    assert 'Se crean también: la categoría "Importado" y la persona "Juan".' in resumen_previo(lista)
+    assert (
+        'Se crean también: la categoría "Importado" y la persona "Juan".'
+        in resumen_previo(lista)
+    )
     confirmar(lista)
     assert "Juan" in _nombres(base.con, catalogos.PERSONAS)
     assert "Importado" in _nombres(base.con, catalogos.CATEGORIAS)
@@ -959,11 +1139,23 @@ def test_dos_categorias_y_dos_personas_nuevas_usadas(base):
     a, b = lista.agregar_categoria("Alfa"), lista.agregar_categoria("Beta")
     j, k = lista.agregar_persona("Juan"), lista.agregar_persona("Kira")
     lista.editar_fila(fila(lista, "Gym").indice, "fijo", "Gym", 5000000, categoria=a)
-    lista.editar_fila(fila(lista, "Servicios").indice, "fijo", "Servicios", 8200000, categoria=b)
-    lista.editar_fila(fila(lista, "Prestamo MP").indice, "me_deben", "Prestamo MP", 2000000, persona=j)
-    lista.editar_fila(fila(lista, "tacones chiqui baby").indice, "me_deben", "tacones chiqui baby",
-                      678500, persona=k)
-    assert 'Se crean también: la categoría "Alfa", la categoría "Beta", la persona "Juan" y la persona "Kira".' in resumen_previo(lista)
+    lista.editar_fila(
+        fila(lista, "Servicios").indice, "fijo", "Servicios", 8200000, categoria=b
+    )
+    lista.editar_fila(
+        fila(lista, "Prestamo MP").indice, "me_deben", "Prestamo MP", 2000000, persona=j
+    )
+    lista.editar_fila(
+        fila(lista, "tacones chiqui baby").indice,
+        "me_deben",
+        "tacones chiqui baby",
+        678500,
+        persona=k,
+    )
+    assert (
+        'Se crean también: la categoría "Alfa", la categoría "Beta", la persona "Juan" y la persona "Kira".'
+        in resumen_previo(lista)
+    )
     confirmar(lista)
     assert {"Alfa", "Beta"} <= set(_nombres(base.con, catalogos.CATEGORIAS))
     assert {"Juan", "Kira"} <= set(_nombres(base.con, catalogos.PERSONAS))
@@ -1037,8 +1229,9 @@ def _lista_completa_con_nuevos(con, destino=(2026, 11)):
     lista.cambiar_categoria_defecto(lista.agregar_categoria("Importado"))
     juan = lista.agregar_persona("Juan")
     prestamo = fila(lista, "Prestamo MP")
-    lista.editar_fila(prestamo.indice, "me_deben", "Prestamo MP", 2000000, persona=juan,
-                      cobrado=True)
+    lista.editar_fila(
+        prestamo.indice, "me_deben", "Prestamo MP", 2000000, persona=juan, cobrado=True
+    )
     return lista
 
 
@@ -1180,13 +1373,32 @@ def test_ca_57_4_fallo_en_primer_uso_no_deja_ni_el_primer_mes(base_vacia, monkey
 
 TRIGGERS = [
     pytest.param("meses", "INSERT", "NEW.mes = 11", id="al-crear-el-mes"),
-    pytest.param("categorias", "INSERT", "NEW.nombre = 'Importado'", id="al-crear-la-categoria"),
+    pytest.param(
+        "categorias", "INSERT", "NEW.nombre = 'Importado'", id="al-crear-la-categoria"
+    ),
     pytest.param("personas", "INSERT", "NEW.nombre = 'Juan'", id="al-crear-la-persona"),
-    pytest.param("gastos", "INSERT", "NEW.nombre = 'Gym' AND NEW.mes_id > 1", id="en-un-gasto-a-mitad"),
-    pytest.param("gastos", "INSERT", "NEW.tipo = 'cuota' AND NEW.mes_id = 1", id="en-la-cuota-copiada-al-mes-actual"),
-    pytest.param("pagos", "INSERT", "NEW.monto_cent = 6000000", id="en-el-pago-parcial"),
+    pytest.param(
+        "gastos",
+        "INSERT",
+        "NEW.nombre = 'Gym' AND NEW.mes_id > 1",
+        id="en-un-gasto-a-mitad",
+    ),
+    pytest.param(
+        "gastos",
+        "INSERT",
+        "NEW.tipo = 'cuota' AND NEW.mes_id = 1",
+        id="en-la-cuota-copiada-al-mes-actual",
+    ),
+    pytest.param(
+        "pagos", "INSERT", "NEW.monto_cent = 6000000", id="en-el-pago-parcial"
+    ),
     pytest.param("planes_cuotas", "INSERT", "1", id="al-crear-el-plan"),
-    pytest.param("items_me_deben", "INSERT", "NEW.descripcion = 'tacones chiqui baby'", id="en-el-ultimo-item"),
+    pytest.param(
+        "items_me_deben",
+        "INSERT",
+        "NEW.descripcion = 'tacones chiqui baby'",
+        id="en-el-ultimo-item",
+    ),
     pytest.param("items_me_deben", "UPDATE", "NEW.cobrado = 1", id="al-marcar-cobrado"),
 ]
 
@@ -1254,10 +1466,14 @@ def test_despues_de_un_fallo_la_conexion_sigue_sirviendo(base, monkeypatch):
     with pytest.raises(ErrorDeValidacion):
         confirmar(lista)
     assert base.con._nivel == 0
-    gastos.agregar_gasto(base.con, base.mes_id, "Despues del fallo", base.varios, 1000, "fijo")
+    gastos.agregar_gasto(
+        base.con, base.mes_id, "Despues del fallo", base.varios, 1000, "fijo"
+    )
     assert base.con.in_transaction is False
     base.con.rollback()  # si hubiera quedado algo sin guardar, esto lo borraría
-    assert "Despues del fallo" in [g["nombre"] for g in gastos.listar_gastos(base.con, base.mes_id)]
+    assert "Despues del fallo" in [
+        g["nombre"] for g in gastos.listar_gastos(base.con, base.mes_id)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -1326,7 +1542,9 @@ def test_ca_57_5_subir_el_monto_o_bajar_el_pagado_permite_confirmar(base):
     celdas = {"C1": "Gasto", "E1": "Pagado", "C2": "Luz", "D2": 10000, "E2": 12000}
     lista = revisar(base.con, xlsx(celdas))
     luz = fila(lista, "Luz")
-    assert lista.editar_fila(luz.indice, "fijo", "Luz", 1200000, pagado_cent=1200000) == {}
+    assert (
+        lista.editar_fila(luz.indice, "fijo", "Luz", 1200000, pagado_cent=1200000) == {}
+    )
     confirmar(lista)
     g = gasto_por_nombre(base.con, base.mes_id, "Luz")
     assert pagos.pendiente(base.con, g["id"]) == 0
@@ -1336,7 +1554,9 @@ def test_ca_57_5_pagado_bajado_deja_pendiente(base):
     celdas = {"C1": "Gasto", "E1": "Pagado", "C2": "Luz", "D2": 10000, "E2": 12000}
     lista = revisar(base.con, xlsx(celdas))
     luz = fila(lista, "Luz")
-    assert lista.editar_fila(luz.indice, "fijo", "Luz", 1000000, pagado_cent=400000) == {}
+    assert (
+        lista.editar_fila(luz.indice, "fijo", "Luz", 1000000, pagado_cent=400000) == {}
+    )
     confirmar(lista)
     g = gasto_por_nombre(base.con, base.mes_id, "Luz")
     assert pagos.pendiente(base.con, g["id"]) == 600000
@@ -1361,9 +1581,9 @@ def test_o67_categoria_archivada_elegida_en_editar_fila_no_se_acepta(base):
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
     antes = copy.deepcopy(gym)
-    assert lista.editar_fila(gym.indice, "fijo", "Gym", 5000000, categoria=archivada) == {
-        "categoria": "Elegí una categoría."
-    }
+    assert lista.editar_fila(
+        gym.indice, "fijo", "Gym", 5000000, categoria=archivada
+    ) == {"categoria": "Elegí una categoría."}
     assert fila(lista, "Gym") == antes
     assert lista.puede_confirmar() is True
 
@@ -1383,26 +1603,43 @@ def test_o67_categoria_nueva_ajena_a_la_revision_no_se_acepta(base):
 
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
-    assert lista.editar_fila(gym.indice, "fijo", "Gym", 5000000, categoria=Nueva("Fantasma")) == {
-        "categoria": "Elegí una categoría."
-    }
+    assert lista.editar_fila(
+        gym.indice, "fijo", "Gym", 5000000, categoria=Nueva("Fantasma")
+    ) == {"categoria": "Elegí una categoría."}
 
 
 def test_o67_categoria_activa_y_categoria_nueva_siguen_aceptandose(base):
     lista = revisar(base.con)
     nueva = lista.agregar_categoria("Importado")
-    assert lista.editar_fila(fila(lista, "Gym").indice, "fijo", "Gym", 5000000,
-                             categoria=base.servicios) == {}
-    assert lista.editar_fila(fila(lista, "Servicios").indice, "fijo", "Servicios", 8200000,
-                             categoria=nueva) == {}
+    assert (
+        lista.editar_fila(
+            fila(lista, "Gym").indice, "fijo", "Gym", 5000000, categoria=base.servicios
+        )
+        == {}
+    )
+    assert (
+        lista.editar_fila(
+            fila(lista, "Servicios").indice,
+            "fijo",
+            "Servicios",
+            8200000,
+            categoria=nueva,
+        )
+        == {}
+    )
 
 
-def test_o67_categoria_archivada_despues_de_elegirla_da_error_de_fila_y_no_guarda_nada(base):
+def test_o67_categoria_archivada_despues_de_elegirla_da_error_de_fila_y_no_guarda_nada(
+    base,
+):
     # O67: la categoría se archiva mientras dura la revisión: la fila pasa a "Elegí una
     # categoría.", el pie cuenta el error y confirmar lanza el texto del pie sin guardar.
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
-    assert lista.editar_fila(gym.indice, "fijo", "Gym", 5000000, categoria=base.salud) == {}
+    assert (
+        lista.editar_fila(gym.indice, "fijo", "Gym", 5000000, categoria=base.salud)
+        == {}
+    )
     _archivar_categoria(base.con, "Salud")
     assert lista.errores(gym) == ["Elegí una categoría."]
     assert lista.puede_confirmar() is False
@@ -1424,8 +1661,15 @@ def test_o67_categoria_archivada_en_una_cuota_no_se_acepta(base):
     archivada = _archivar_categoria(base.con, "Salud")
     lista = revisar(base.con)
     avant = fila(lista, AVANT)
-    assert lista.editar_fila(avant.indice, "cuota", AVANT, avant.monto_cent, categoria=archivada,
-                             cuota_actual=3, cuota_total=3) == {"categoria": "Elegí una categoría."}
+    assert lista.editar_fila(
+        avant.indice,
+        "cuota",
+        AVANT,
+        avant.monto_cent,
+        categoria=archivada,
+        cuota_actual=3,
+        cuota_total=3,
+    ) == {"categoria": "Elegí una categoría."}
 
 
 def test_o67_categoria_por_defecto_archivada_da_error_en_las_filas_que_la_usan(base):
@@ -1454,23 +1698,29 @@ def test_o67_categoria_archivada_en_una_fila_que_no_se_importa_no_molesta(base):
     lista.editar_fila(gym.indice, "fijo", "Gym", 5000000, categoria=archivada)
     lista.cambiar_tilde(gym.indice, False)
     confirmar(lista)
-    assert "Gym" not in [g["nombre"] for g in gastos.listar_gastos(base.con, base.mes_id)]
+    assert "Gym" not in [
+        g["nombre"] for g in gastos.listar_gastos(base.con, base.mes_id)
+    ]
 
 
 def test_o67_persona_archivada_elegida_en_editar_fila_no_se_acepta(base):
     with base.con:
-        base.con.execute("UPDATE personas SET archivado = 1 WHERE id = ?", (base.marsu,))
+        base.con.execute(
+            "UPDATE personas SET archivado = 1 WHERE id = ?", (base.marsu,)
+        )
     lista = revisar(base.con)
     tacones = fila(lista, "tacones chiqui baby")
-    assert lista.editar_fila(tacones.indice, "me_deben", "tacones chiqui baby", 678500,
-                             persona=base.marsu) == {"persona": "Elegí una persona."}
+    assert lista.editar_fila(
+        tacones.indice, "me_deben", "tacones chiqui baby", 678500, persona=base.marsu
+    ) == {"persona": "Elegí una persona."}
 
 
 def test_o67_persona_inexistente_elegida_en_editar_fila_no_se_acepta(base):
     lista = revisar(base.con)
     tacones = fila(lista, "tacones chiqui baby")
-    assert lista.editar_fila(tacones.indice, "me_deben", "tacones chiqui baby", 678500,
-                             persona=999999) == {"persona": "Elegí una persona."}
+    assert lista.editar_fila(
+        tacones.indice, "me_deben", "tacones chiqui baby", 678500, persona=999999
+    ) == {"persona": "Elegí una persona."}
 
 
 def test_persona_archivada_despues_de_armar_la_lista_da_error_de_fila(base):
@@ -1479,7 +1729,9 @@ def test_persona_archivada_despues_de_armar_la_lista_da_error_de_fila(base):
     # nada. Destildándola, el resto se importa.
     lista = revisar(base.con)
     with base.con:
-        base.con.execute("UPDATE personas SET archivado = 1 WHERE id = ?", (base.marsu,))
+        base.con.execute(
+            "UPDATE personas SET archivado = 1 WHERE id = ?", (base.marsu,)
+        )
     tacones = fila(lista, "tacones chiqui baby")
     assert lista.errores(tacones) == ["Elegí una persona."]
     antes = foto_de_la_base(base.con)
@@ -1551,7 +1803,9 @@ def test_confirmar_una_lista_ya_guardada_avisa_antes_que_el_pie(base):
     assert str(error.value) == "Esta importación ya se guardó."
 
 
-def test_si_el_guardado_falla_la_lista_no_queda_confirmada_y_se_puede_reintentar(base, monkeypatch):
+def test_si_el_guardado_falla_la_lista_no_queda_confirmada_y_se_puede_reintentar(
+    base, monkeypatch
+):
     # O76: confirmada solo pasa a True al terminar bien.
     lista = revisar(base.con)
     solo(lista, ("Servicios", 4), ("Prestamo MP", 22))
@@ -1646,10 +1900,15 @@ def test_bug_36_el_dialogo_de_edicion_no_acepta_el_plan_en_un_ano_invalido(base_
     lista = revisar(base_vacia.con, xlsx({"C1": "Casa 1/12", "D1": 1000}))
     lista.cambiar_mes_destino(1000, 6)
     casa = fila(lista, "Casa 1/12")
-    assert lista.editar_fila(casa.indice, "cuota", "Casa", 100000, cuota_actual=12,
-                             cuota_total=600) == {"cuota": ANIO_NO_VALIDO}
-    assert lista.editar_fila(casa.indice, "cuota", "Casa", 100000, cuota_actual=1,
-                             cuota_total=12) == {}
+    assert lista.editar_fila(
+        casa.indice, "cuota", "Casa", 100000, cuota_actual=12, cuota_total=600
+    ) == {"cuota": ANIO_NO_VALIDO}
+    assert (
+        lista.editar_fila(
+            casa.indice, "cuota", "Casa", 100000, cuota_actual=1, cuota_total=12
+        )
+        == {}
+    )
 
 
 def test_bug_36_una_fila_destildada_no_muestra_el_error(base_vacia):
@@ -1704,15 +1963,22 @@ def test_nombre_con_espacios_se_guarda_sin_espacios_de_mas(base):
 
 
 def test_monto_de_un_centavo_y_monto_grande_se_guardan(base):
-    lista = revisar(base.con, xlsx({"C1": "Chico", "D1": 0.01, "C2": "Grande", "D2": 999999999999}))
+    lista = revisar(
+        base.con, xlsx({"C1": "Chico", "D1": 0.01, "C2": "Grande", "D2": 999999999999})
+    )
     confirmar(lista)
     assert gasto_por_nombre(base.con, base.mes_id, "Chico")["monto_cent"] == 1
-    assert gasto_por_nombre(base.con, base.mes_id, "Grande")["monto_cent"] == 99999999999900
+    assert (
+        gasto_por_nombre(base.con, base.mes_id, "Grande")["monto_cent"]
+        == 99999999999900
+    )
 
 
 def test_gastos_con_el_mismo_nombre_repetido_en_el_archivo_se_guardan_los_dos(base):
     # CA-56.3: "Nafta" dos veces: quedan dos Nafta de 30.000.
-    lista = revisar(base.con, xlsx({"C1": "Nafta", "D1": 30000, "C2": "Nafta", "D2": 30000}))
+    lista = revisar(
+        base.con, xlsx({"C1": "Nafta", "D1": 30000, "C2": "Nafta", "D2": 30000})
+    )
     confirmar(lista)
     nombres = [g["nombre"] for g in gastos.listar_gastos(base.con, base.mes_id)]
     assert nombres.count("Nafta") == 2
@@ -1724,7 +1990,9 @@ def test_ca_56_1_alquiler_tildado_queda_repetido(base):
     alquiler = fila(lista, "Alquiler")
     assert lista.notas(alquiler) == ["Ya existe en Octubre 2026. Viene destildada."]
     lista.cambiar_tilde(alquiler.indice, True)
-    assert lista.notas(alquiler) == ["Ya existe en Octubre 2026. Si la importás, queda repetida."]
+    assert lista.notas(alquiler) == [
+        "Ya existe en Octubre 2026. Si la importás, queda repetida."
+    ]
     confirmar(lista)
     nombres = [g["nombre"] for g in gastos.listar_gastos(base.con, base.mes_id)]
     assert nombres.count("Alquiler") == 2
@@ -1741,18 +2009,28 @@ def test_ca_54_1_sin_tocar_la_categoria_quedan_en_varios_y_sin_medio(base):
     confirmar(revisar(base.con))
     totales = dict(gastos.totales_por_medio(base.con, base.mes_id))
     assert "Sin medio de pago" in totales
-    assert sum(totales.values()) == pagos.totales_del_mes(base.con, base.mes_id)["total"]
+    assert (
+        sum(totales.values()) == pagos.totales_del_mes(base.con, base.mes_id)["total"]
+    )
 
 
 def test_ca_54_2_categoria_propia_de_una_fila_sobrevive_al_cambio_de_defecto(base):
     # CA-54.2: Internet en Servicios; el resto toma la categoría por defecto nueva.
     lista = revisar(base.con)
     internet = fila(lista, "Internet", 5)
-    lista.editar_fila(internet.indice, "fijo", "Internet", 3870000, pagado_cent=3870000,
-                      categoria=base.servicios)
+    lista.editar_fila(
+        internet.indice,
+        "fijo",
+        "Internet",
+        3870000,
+        pagado_cent=3870000,
+        categoria=base.servicios,
+    )
     lista.cambiar_categoria_defecto(base.vivienda)
     confirmar(lista)
-    assert gasto_por_nombre(base.con, base.mes_id, "Internet")["categoria"] == "Servicios"
+    assert (
+        gasto_por_nombre(base.con, base.mes_id, "Internet")["categoria"] == "Servicios"
+    )
     assert gasto_por_nombre(base.con, base.mes_id, "Gym")["categoria"] == "Vivienda"
     assert gasto_por_nombre(base.con, base.mes_id, AVANT)["categoria"] == "Vivienda"
 
@@ -1761,10 +2039,12 @@ def test_la_fecha_de_hoy_de_la_lista_es_la_de_pagos_e_items(base):
     # La fecha sale de lista.hoy (no del reloj), así las pruebas y la pantalla coinciden.
     lista = revisar(base.con, hoy=date(2026, 10, 20))
     confirmar(lista)
-    assert {p["fecha"] for p in base.con.execute("SELECT fecha FROM pagos")} == {"2026-10-20"}
-    assert {i["fecha"] for i in base.con.execute("SELECT fecha FROM items_me_deben")} == {
+    assert {p["fecha"] for p in base.con.execute("SELECT fecha FROM pagos")} == {
         "2026-10-20"
     }
+    assert {
+        i["fecha"] for i in base.con.execute("SELECT fecha FROM items_me_deben")
+    } == {"2026-10-20"}
 
 
 # ---------------------------------------------------------------------------
@@ -1794,8 +2074,9 @@ def test_nombres_publicos_de_la_lista(base):
 
 
 def test_cuota_en_mes_devuelve_la_cuota_existente(base):
-    plan = cuotas.crear_plan(base.con, "Heladera", base.varios, None, 3000000, 12, 2026, 8,
-                             hoy=HOY)
+    plan = cuotas.crear_plan(
+        base.con, "Heladera", base.varios, None, 3000000, 12, 2026, 8, hoy=HOY
+    )
     existente = gasto_por_nombre(base.con, base.mes_id, "Heladera")["id"]
     assert cuotas.cuota_en_mes(base.con, plan, base.mes_id) == existente
     assert cantidad(base.con, "gastos") == 2  # Alquiler y la cuota: no crea otra.
@@ -1803,34 +2084,45 @@ def test_cuota_en_mes_devuelve_la_cuota_existente(base):
 
 def test_cuota_en_mes_crea_la_cuota_en_un_mes_pasado_si_el_plan_esta_activo(base):
     agosto = insertar_mes(base.con, 2026, 8)
-    plan = cuotas.crear_plan(base.con, "Heladera", base.varios, None, 3000000, 12, 2026, 8,
-                             hoy=HOY)
-    assert base.con.execute("SELECT COUNT(*) FROM gastos WHERE mes_id = ?", (agosto,)).fetchone()[0] == 0
+    plan = cuotas.crear_plan(
+        base.con, "Heladera", base.varios, None, 3000000, 12, 2026, 8, hoy=HOY
+    )
+    assert (
+        base.con.execute(
+            "SELECT COUNT(*) FROM gastos WHERE mes_id = ?", (agosto,)
+        ).fetchone()[0]
+        == 0
+    )
     gasto_id = cuotas.cuota_en_mes(base.con, plan, agosto)
     assert gastos.obtener_gasto(base.con, gasto_id)["mes_id"] == agosto
-    assert cuotas.cuota_en_mes(base.con, plan, agosto) == gasto_id  # segunda vez: la misma
+    assert (
+        cuotas.cuota_en_mes(base.con, plan, agosto) == gasto_id
+    )  # segunda vez: la misma
 
 
 def test_cuota_en_mes_devuelve_none_si_el_plan_no_tiene_cuota_ese_mes(base):
     julio = insertar_mes(base.con, 2026, 7)
-    plan = cuotas.crear_plan(base.con, "Heladera", base.varios, None, 3000000, 12, 2026, 8,
-                             hoy=HOY)
+    plan = cuotas.crear_plan(
+        base.con, "Heladera", base.varios, None, 3000000, 12, 2026, 8, hoy=HOY
+    )
     assert cuotas.cuota_en_mes(base.con, plan, julio) is None
 
 
 def test_cuota_en_mes_con_plan_o_mes_inexistente(base):
     with pytest.raises(ErrorDeValidacion):
         cuotas.cuota_en_mes(base.con, 999, base.mes_id)
-    plan = cuotas.crear_plan(base.con, "Heladera", base.varios, None, 3000000, 12, 2026, 8,
-                             hoy=HOY)
+    plan = cuotas.crear_plan(
+        base.con, "Heladera", base.varios, None, 3000000, 12, 2026, 8, hoy=HOY
+    )
     with pytest.raises(ErrorDeValidacion):
         cuotas.cuota_en_mes(base.con, plan, 999)
 
 
 def test_cuota_en_mes_no_crea_cuota_si_fue_omitida_a_mano(base):
     # RN-24: una cuota que el usuario borró a mano (omitida) no se vuelve a crear.
-    plan = cuotas.crear_plan(base.con, "Heladera", base.varios, None, 3000000, 12, 2026, 8,
-                             hoy=HOY)
+    plan = cuotas.crear_plan(
+        base.con, "Heladera", base.varios, None, 3000000, 12, 2026, 8, hoy=HOY
+    )
     cuota = gasto_por_nombre(base.con, base.mes_id, "Heladera")["id"]
     gastos.borrar_gasto(base.con, cuota)
     assert cuotas.cuota_en_mes(base.con, plan, base.mes_id) is None
@@ -1838,9 +2130,13 @@ def test_cuota_en_mes_no_crea_cuota_si_fue_omitida_a_mano(base):
 
 def test_maximo_de_cuotas(base):
     assert cuotas.MAXIMO_CUOTAS == 600
-    cuotas.crear_plan(base.con, "Casa", base.varios, None, 100000, 600, 2026, 10, hoy=HOY)
+    cuotas.crear_plan(
+        base.con, "Casa", base.varios, None, 100000, 600, 2026, 10, hoy=HOY
+    )
     with pytest.raises(ErrorDeValidacion) as error:
-        cuotas.crear_plan(base.con, "Casa2", base.varios, None, 100000, 601, 2026, 10, hoy=HOY)
+        cuotas.crear_plan(
+            base.con, "Casa2", base.varios, None, 100000, 601, 2026, 10, hoy=HOY
+        )
     assert str(error.value) == "La cantidad de cuotas es demasiado grande."
 
 
@@ -1852,8 +2148,16 @@ def test_maximo_de_cuotas(base):
 def test_o63_fila_vacia_cierra_el_pagado_y_el_numero_de_abajo_no_es_pagado(base):
     # O63: el "Pagado" vale hasta la primera fila vacía. El 7 de abajo es un número sin
     # nombre (no se importa) y la fila "Gas" no trae pagado.
-    celdas = {"C1": "Gasto", "E1": "Pagado", "C2": "Luz", "D2": 100, "E2": 40,
-              "C4": "Gas", "D4": 200, "E4": 7}
+    celdas = {
+        "C1": "Gasto",
+        "E1": "Pagado",
+        "C2": "Luz",
+        "D2": 100,
+        "E2": 40,
+        "C4": "Gas",
+        "D4": 200,
+        "E4": 7,
+    }
     lista = revisar(base.con, xlsx(celdas))
     assert fila(lista, "Luz").pagado_cent == 4000
     assert fila(lista, "Gas").pagado_cent is None
@@ -1900,7 +2204,9 @@ def test_texto_resultado_singulares_y_union():
 
 def test_texto_resultado_dos_partes_se_unen_con_y():
     frase, _ = texto_resultado(Resultado(1, 2026, 10, 2, 0, 0, 130000, False))
-    assert frase == "Se importaron: 2 gastos y el sueldo (US$ 1.300,00) en Octubre 2026."
+    assert (
+        frase == "Se importaron: 2 gastos y el sueldo (US$ 1.300,00) en Octubre 2026."
+    )
 
 
 def test_texto_resultado_sin_cotizacion_agrega_la_linea():
@@ -1914,7 +2220,9 @@ def test_texto_resultado_sin_cotizacion_agrega_la_linea():
 def test_texto_resultado_solo_sueldo_con_mes_sin_cotizacion():
     # El mes se creó sin cotización y solo se importó el sueldo: solo la línea de la cotización.
     r = Resultado(1, 2026, 10, 0, 0, 0, 130000, True)
-    assert texto_resultado(r)[1] == ["Cargá la cotización de Octubre 2026 en el Resumen."]
+    assert texto_resultado(r)[1] == [
+        "Cargá la cotización de Octubre 2026 en el Resumen."
+    ]
     assert r.pantalla == "resumen"
 
 
@@ -1935,7 +2243,8 @@ def test_cargar_primera_importacion_y_confirmar_da_lo_mismo_que_el_ayudante(base
     # deja lo mismo que confirmar() sobre una base con un mes: mismos nombres y montos.
     confirmar(lista_con_sueldo(base.con))
     de_confirmar = sorted(
-        (g["nombre"], g["monto_cent"]) for g in gastos.listar_gastos(base.con, base.mes_id)
+        (g["nombre"], g["monto_cent"])
+        for g in gastos.listar_gastos(base.con, base.mes_id)
     )
     from app.logica import base_datos
 
@@ -1945,10 +2254,16 @@ def test_cargar_primera_importacion_y_confirmar_da_lo_mismo_que_el_ayudante(base
         catalogos.crear(otra, catalogos.CATEGORIAS, "Varios")
         sofia = catalogos.crear(otra, catalogos.PERSONAS, "Sofía")
         marsu = catalogos.crear(otra, catalogos.PERSONAS, "Marsu")
-        gastos.agregar_gasto(otra, mes, "Alquiler", _ids_categorias(otra)["Vivienda"], 26000000,
-                             "fijo")
-        b = SimpleNamespace(con=otra, mes_id=mes, varios=_ids_categorias(otra)["Varios"],
-                            sofia=sofia, marsu=marsu)
+        gastos.agregar_gasto(
+            otra, mes, "Alquiler", _ids_categorias(otra)["Vivienda"], 26000000, "fijo"
+        )
+        b = SimpleNamespace(
+            con=otra,
+            mes_id=mes,
+            varios=_ids_categorias(otra)["Varios"],
+            sofia=sofia,
+            marsu=marsu,
+        )
         cargar_primera_importacion(b)
         del_ayudante = sorted(
             (g["nombre"], g["monto_cent"]) for g in gastos.listar_gastos(otra, mes)

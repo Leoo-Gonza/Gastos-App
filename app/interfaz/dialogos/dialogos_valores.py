@@ -136,7 +136,9 @@ class _BusquedaCotizacion:
         self.origen = ft.Row(
             [
                 ft.Icon(
-                    ft.Icons.INFO_OUTLINE, size=16, color=estilos.color(app.page, "info")
+                    ft.Icons.INFO_OUTLINE,
+                    size=16,
+                    color=estilos.color(app.page, "info"),
                 ),
                 self.texto_origen,
             ],
@@ -158,7 +160,10 @@ class _BusquedaCotizacion:
         )
         self.estado = texto_ayuda("Buscando la cotización…", visible=False)
         self.error = aviso_en_pantalla(
-            app.page, "negativo", ft.Icons.ERROR_OUTLINE, cotizacion_online.MENSAJE_ERROR
+            app.page,
+            "negativo",
+            ft.Icons.ERROR_OUTLINE,
+            cotizacion_online.MENSAJE_ERROR,
         )
         self.error.visible = False
         ayuda = (
@@ -260,7 +265,9 @@ def abrir_cotizacion(app, mes_id: int) -> None:
     actual = meses.mes_actual_calendario()
     busqueda = None
     if (mes["anio"], mes["mes"]) >= actual:
-        busqueda = _BusquedaCotizacion(app, campo, nombre, (mes["anio"], mes["mes"]) > actual)
+        busqueda = _BusquedaCotizacion(
+            app, campo, nombre, (mes["anio"], mes["mes"]) > actual
+        )
     dialogo = _dialogo_un_monto(
         app,
         f"Cotización de {nombre}",

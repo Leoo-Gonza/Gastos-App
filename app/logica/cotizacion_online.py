@@ -128,17 +128,15 @@ def validar_respuesta(dolar: str, estado: int, contenido: bytes) -> CotizacionBu
     fecha = _fecha_argentina(datos.get("fechaActualizacion"))
     # centavos < 1: negativa, 0, o algo como 0.004 que redondea a 0 (RN-06).
     # Más que el tope de la app no se podría guardar: también es error (BUG-39c).
-    if (
-        centavos is None
-        or not 1 <= centavos <= MONTO_MAXIMO_CENT
-        or fecha is None
-    ):
+    if centavos is None or not 1 <= centavos <= MONTO_MAXIMO_CENT or fecha is None:
         raise ErrorDeValidacion(MENSAJE_ERROR)
     nombre = _datos(dolar)[1]
     return CotizacionBuscada(centavos, f"Dólar {nombre} compra, {fecha} (DolarApi)")
 
 
-def buscar_cotizacion(dolar: str, tiempo_maximo: float = TIEMPO_MAXIMO) -> CotizacionBuscada:
+def buscar_cotizacion(
+    dolar: str, tiempo_maximo: float = TIEMPO_MAXIMO
+) -> CotizacionBuscada:
     """Pide la cotización del dólar elegido y la valida. Tarda: llamarla en otro hilo."""
     try:
         estado, contenido = pedir(url_de(dolar), tiempo_maximo)

@@ -30,6 +30,7 @@ def mensaje_sin_datos(nombre_hoja: str) -> str:
     """RN-60: la hoja no tiene ninguna celda con texto o número."""
     return f"No se encontraron datos en la hoja {nombre_hoja}."
 
+
 # Encabezados que marcan una columna de pagado o de cobrado (RN-64), ya normalizados.
 TITULOS_PAGADO = {"pagado", "pago", "pagos", "abonado"}
 TITULO_COBRADO = "cobrado"
@@ -219,7 +220,9 @@ def _detectar_filas(grilla: list[list[Celda]]) -> list[FilaDetectada]:
                     # RN-63 paso 3: número sin texto antes -> fila sin nombre.
                     # No "abre" la fila: los números siguientes no se le suman.
                     filas.append(
-                        FilaDetectada(numero_fila, numero_col, monto_cent=celda.centavos)
+                        FilaDetectada(
+                            numero_fila, numero_col, monto_cent=celda.centavos
+                        )
                     )
     for fila in filas:
         if fila.monto_cent is None:
@@ -256,7 +259,9 @@ def _asignar_bloques(
             if fila_vacia(numero_fila):
                 break
             debajo = [
-                nombres[(numero_fila, c)] for c in columnas if (numero_fila, c) in nombres
+                nombres[(numero_fila, c)]
+                for c in columnas
+                if (numero_fila, c) in nombres
             ]
             if any(f.es_titulo for f in debajo):
                 break  # El título siguiente en esa columna.
@@ -297,9 +302,7 @@ class LibroExcel:
             hoja.title
             for hoja in self._formulas.worksheets
             if any(
-                celda.value is not None
-                for fila in hoja.iter_rows()
-                for celda in fila
+                celda.value is not None for fila in hoja.iter_rows() for celda in fila
             )
         ]
 
@@ -353,7 +356,10 @@ class LibroExcel:
                 # None: cuentan como vacías (RN-61).
                 clasificada = clasificar(valor, celda.data_type)
                 # Excel guarda las funciones en inglés: =SUMA(...) queda "SUM(".
-                if con_formula.data_type == "f" and "SUM(" in str(con_formula.value).upper():
+                if (
+                    con_formula.data_type == "f"
+                    and "SUM(" in str(con_formula.value).upper()
+                ):
                     clasificada = replace(clasificada, es_suma=True)
                 renglon.append(clasificada)
             grilla.append(renglon)

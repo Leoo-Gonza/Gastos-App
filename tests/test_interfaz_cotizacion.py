@@ -112,7 +112,9 @@ def hay_busqueda(d):
 
 
 def btn_buscar(d):
-    [b] = [b for b in de_tipo(d, ft.OutlinedButton) if str(b.content).startswith("Buscar")]
+    [b] = [
+        b for b in de_tipo(d, ft.OutlinedButton) if str(b.content).startswith("Buscar")
+    ]
     return b
 
 
@@ -125,7 +127,10 @@ def fila_origen(d):
     [fila] = [
         r
         for r in de_tipo(d, ft.Row)
-        if any(isinstance(c, ft.Icon) and c.icon == ft.Icons.INFO_OUTLINE for c in r.controls)
+        if any(
+            isinstance(c, ft.Icon) and c.icon == ft.Icons.INFO_OUTLINE
+            for c in r.controls
+        )
     ]
     return fila
 
@@ -256,7 +261,10 @@ def test_ca_59_2_elegir_otro_dolar(mundo, fuente, dolar, boton_, casa, nombre):
     pestana = ajustes_cotizacion(mundo)
     pestana.opciones.value = dolar
     pestana.opciones.on_change(SimpleNamespace(control=pestana.opciones))
-    assert mundo.page.avisos()[-1] == f"Dólar para la cotización: {pestana.OPCIONES[dolar]}"
+    assert (
+        mundo.page.avisos()[-1]
+        == f"Dólar para la cotización: {pestana.OPCIONES[dolar]}"
+    )
     fila = mundo.con.execute(
         "SELECT valor FROM configuracion WHERE clave = 'dolar_cotizacion'"
     ).fetchone()
@@ -276,7 +284,9 @@ def test_aviso_dice_mep_con_su_etiqueta(mundo):
 
 def test_ca_59_3_el_dolar_elegido_sobrevive_a_cerrar_y_abrir(mundo, pagina):
     ajustes_cotizacion(mundo).elegir("mep")
-    nueva = Aplicacion(PaginaFalsa(), mundo.con)  # "volver a abrir la app" con la misma base
+    nueva = Aplicacion(
+        PaginaFalsa(), mundo.con
+    )  # "volver a abrir la app" con la misma base
     nueva.iniciar()
     ir(nueva, "Ajustes")
     assert nueva.pantalla("Ajustes").cotizacion.opciones.value == "mep"
@@ -296,7 +306,11 @@ def test_ca_59_3_valor_desconocido_en_la_base_muestra_blue(mundo):
 def test_ca_59_4_cambiar_el_dolar_no_cambia_cotizaciones_ni_busca(mundo, fuente):
     pestana = ajustes_cotizacion(mundo)
     pestana.elegir("mep")
-    assert (cot(mundo, mundo.ids.sep), cot(mundo, mundo.ids.oct), cot(mundo, mundo.ids.nov)) == (
+    assert (
+        cot(mundo, mundo.ids.sep),
+        cot(mundo, mundo.ids.oct),
+        cot(mundo, mundo.ids.nov),
+    ) == (
         160000,
         160000,
         None,
@@ -305,7 +319,9 @@ def test_ca_59_4_cambiar_el_dolar_no_cambia_cotizaciones_ni_busca(mundo, fuente)
     assert tareas_de_busqueda(mundo) == []
 
 
-def test_elegir_con_fallo_vuelve_a_la_opcion_guardada_y_avisa_el_error(mundo, monkeypatch):
+def test_elegir_con_fallo_vuelve_a_la_opcion_guardada_y_avisa_el_error(
+    mundo, monkeypatch
+):
     pestana = ajustes_cotizacion(mundo)
     pestana.elegir("oficial")
 
@@ -406,7 +422,9 @@ def test_cambio_de_anio_diciembre_2026_vs_enero_2027(mundo, monkeypatch):
 
 def test_mes_futuro_agrega_la_frase_de_cotizacion_de_hoy(mundo):
     d_nov = abrir(mundo, mundo.ids.nov)
-    assert AYUDA_BOTON + " Es la cotización de hoy, no la de Noviembre 2026." in textos(d_nov)
+    assert AYUDA_BOTON + " Es la cotización de hoy, no la de Noviembre 2026." in textos(
+        d_nov
+    )
     mundo.cerrar_dialogo(d_nov)
     d_oct = abrir(mundo, mundo.ids.oct)
     assert AYUDA_BOTON in textos(d_oct)
@@ -438,7 +456,10 @@ def test_estado_inicial_del_dialogo(mundo, fuente):
     assert campo(d).value == "1.600"
     assert campo(d).autofocus is True
     assert btn_buscar(d).icon == ft.Icons.CLOUD_DOWNLOAD_OUTLINED
-    assert btn_buscar(d).tooltip == "Busca el precio de compra de hoy en internet. No guarda nada."
+    assert (
+        btn_buscar(d).tooltip
+        == "Busca el precio de compra de hoy en internet. No guarda nada."
+    )
     assert fuente.pedidos == []
 
 
@@ -471,7 +492,9 @@ def test_ca_60_3_nunca_busca_sola(mundo, fuente):
     assert tareas_de_busqueda(mundo) == []
 
 
-def test_ca_60_3_mes_nuevo_sugiere_la_cotizacion_del_ultimo_mes_sin_boton(mundo, fuente):
+def test_ca_60_3_mes_nuevo_sugiere_la_cotizacion_del_ultimo_mes_sin_boton(
+    mundo, fuente
+):
     meses.editar_cotizacion(mundo.con, mundo.ids.nov, 170000)
     mundo.crear_mes_nuevo()
     nuevo = dialogo_arriba(mundo)
@@ -488,7 +511,8 @@ def test_ca_60_3_primer_uso_sin_boton(con, fuente):
     assert app.mes_id is None
     controles = recorrer(app.page.controls[-1])
     assert not any(
-        isinstance(c, ft.OutlinedButton) and str(c.content).startswith("Buscar") for c in controles
+        isinstance(c, ft.OutlinedButton) and str(c.content).startswith("Buscar")
+        for c in controles
     )
     assert not any(isinstance(c, ft.ProgressRing) for c in controles)
     assert fuente.pedidos == []
@@ -611,7 +635,9 @@ def test_ca_61_3_mes_sin_cotizacion(mundo):
     assert campo(d).value == "1.630,50"
     assert origen(d) == ORIGEN_BASE
     assert cot(mundo, mundo.ids.nov) is None
-    assert "Cargá la cotización" in textos(mundo.pantalla("Resumen").cuerpo)  # antes de guardar
+    assert "Cargá la cotización" in textos(
+        mundo.pantalla("Resumen").cuerpo
+    )  # antes de guardar
     clic(d, "Guardar")
     assert cot(mundo, mundo.ids.nov) == 163050
     resumen = mundo.pantalla("Resumen")
@@ -813,7 +839,9 @@ def test_ca_62_2_el_limite_es_de_10_segundos_en_la_interfaz():
 
     fuente_buscar = inspect.getsource(dialogos_valores._BusquedaCotizacion._buscar)
     assert "buscar_con_limite(self.app.con)" in fuente_buscar
-    param = inspect.signature(cotizacion_online.buscar_con_limite).parameters["tiempo_maximo"]
+    param = inspect.signature(cotizacion_online.buscar_con_limite).parameters[
+        "tiempo_maximo"
+    ]
     assert param.default == 10
 
 
@@ -1193,7 +1221,9 @@ def test_guardar_se_puede_tocar_otra_vez_tras_terminar(mundo, fuente):
     assert d.open is False
 
 
-def test_dialogo_cerrado_con_guardar_no_deja_busquedas_pendientes_que_escriban(mundo, fuente):
+def test_dialogo_cerrado_con_guardar_no_deja_busquedas_pendientes_que_escriban(
+    mundo, fuente
+):
     # Guardar está deshabilitado buscando, pero si el handler se llamara igual no guarda:
     # nada que descartar. Se verifica que no haya diálogo abierto tras Cancelar y espera.
     fuente.demora = 0.1
@@ -1227,7 +1257,9 @@ def test_ca_62_7_el_pedido_es_igual_con_mas_datos_cargados(mundo, fuente):
     mundo.cerrar_dialogo(dialogo_arriba(mundo))
     catalogos.crear(mundo.con, catalogos.PERSONAS, "Sofía")
     otros = id_por_nombre(mundo.con, catalogos.CATEGORIAS, "Otros")
-    gastos.agregar_gasto(mundo.con, mundo.ids.oct, "Nada secreto inventado", otros, 12345, "fijo")
+    gastos.agregar_gasto(
+        mundo.con, mundo.ids.oct, "Nada secreto inventado", otros, 12345, "fijo"
+    )
     fuente.pedidos.clear()
     abrir(mundo, mundo.ids.oct)
     buscar_y_esperar(mundo)
@@ -1305,7 +1337,9 @@ def test_enter_guarda_en_reposo_con_el_boton_presente(mundo):
 
 def test_aviso_de_gastos_en_dolares_se_mantiene_con_el_boton(mundo):
     otros = id_por_nombre(mundo.con, catalogos.CATEGORIAS, "Otros")
-    gastos.agregar_gasto(mundo.con, mundo.ids.oct, "Sub", otros, None, "fijo", None, "USD", 2000, 160000)
+    gastos.agregar_gasto(
+        mundo.con, mundo.ids.oct, "Sub", otros, None, "fijo", None, "USD", 2000, 160000
+    )
     d = abrir(mundo, mundo.ids.oct)
     assert (
         "Este mes tiene 1 gasto en dólares. Si querés actualizarlos, editalos uno por uno."
@@ -1323,4 +1357,6 @@ def test_hay_boton_guardar_y_cancelar_donde_se_espera(mundo):
 
 def test_la_ruedita_tiene_etiqueta_de_accesibilidad(mundo):
     # §3.6: ProgressRing(..., semantics_label="Buscando la cotización") para lectores de pantalla.
-    assert ruedita(abrir(mundo, mundo.ids.oct)).semantics_label == "Buscando la cotización"
+    assert (
+        ruedita(abrir(mundo, mundo.ids.oct)).semantics_label == "Buscando la cotización"
+    )

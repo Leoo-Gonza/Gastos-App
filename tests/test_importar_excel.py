@@ -53,9 +53,13 @@ def leer(contenido, hoja="Octubre"):
 def por_nombre(hoja, nombre, fila=None):
     """La fila detectada con ese nombre (y, si se indica, en esa fila del Excel)."""
     coincidencias = [
-        f for f in hoja.filas if f.nombre == nombre and (fila is None or f.fila_excel == fila)
+        f
+        for f in hoja.filas
+        if f.nombre == nombre and (fila is None or f.fila_excel == fila)
     ]
-    assert len(coincidencias) == 1, f"{nombre!r} (fila {fila}): {len(coincidencias)} filas"
+    assert len(coincidencias) == 1, (
+        f"{nombre!r} (fila {fila}): {len(coincidencias)} filas"
+    )
     return coincidencias[0]
 
 
@@ -71,7 +75,8 @@ def planilla():
 
 
 @pytest.mark.parametrize(
-    "nombre", ["gastos.xlsx", "GASTOS.XLSX", "Planilla 2026.XlSx", "a.b.xlsx", "ñandú.xlsx"]
+    "nombre",
+    ["gastos.xlsx", "GASTOS.XLSX", "Planilla 2026.XlSx", "a.b.xlsx", "ñandú.xlsx"],
 )
 def test_es_nombre_xlsx_acepta_xlsx(nombre):
     # RN-60: la extensión .xlsx se acepta sin importar mayúsculas.
@@ -81,8 +86,17 @@ def test_es_nombre_xlsx_acepta_xlsx(nombre):
 @pytest.mark.parametrize(
     "nombre",
     [
-        "gastos.xls", "gastos.xlsm", "gastos.xlsb", "gastos.csv", "gastos.ods",
-        "gastos.txt", "gastos.xlsx.txt", "gastos.xlsx ", "gastos", "", "gastos.xlsxx",
+        "gastos.xls",
+        "gastos.xlsm",
+        "gastos.xlsb",
+        "gastos.csv",
+        "gastos.ods",
+        "gastos.txt",
+        "gastos.xlsx.txt",
+        "gastos.xlsx ",
+        "gastos",
+        "",
+        "gastos.xlsxx",
     ],
 )
 def test_es_nombre_xlsx_rechaza_otras_extensiones(nombre):
@@ -117,10 +131,15 @@ def _zip_sin_excel():
         pytest.param(b"", id="bytes vacios"),
         pytest.param(b"Luz;1000\nGas;2000\n", id="csv renombrado"),
         pytest.param("Hola, esto es un texto\n".encode(), id="txt renombrado"),
-        pytest.param(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + bytes(512), id="xls viejo o con contrasena (OLE)"),
+        pytest.param(
+            b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + bytes(512),
+            id="xls viejo o con contrasena (OLE)",
+        ),
         pytest.param(b"PK\x03\x04", id="cabecera zip sola"),
         pytest.param(_xlsx_valido()[:100], id="xlsx cortado 100 bytes"),
-        pytest.param(_xlsx_valido()[: len(_xlsx_valido()) // 2], id="xlsx cortado a la mitad"),
+        pytest.param(
+            _xlsx_valido()[: len(_xlsx_valido()) // 2], id="xlsx cortado a la mitad"
+        ),
         pytest.param(_xlsx_valido()[:-30], id="xlsx sin el final"),
         pytest.param(_zip_sin_excel(), id="zip valido sin contenido de Excel"),
     ],
@@ -137,7 +156,12 @@ def test_abrir_libro_archivo_ilegible_da_el_mensaje(contenido):
 
 @pytest.mark.parametrize(
     "interno",
-    ["xl/worksheets/sheet1.xml", "xl/workbook.xml", "[Content_Types].xml", "xl/styles.xml"],
+    [
+        "xl/worksheets/sheet1.xml",
+        "xl/workbook.xml",
+        "[Content_Types].xml",
+        "xl/styles.xml",
+    ],
 )
 def test_abrir_libro_xlsx_danado_por_dentro_con_xml_roto(interno):
     # BUG-25: un .xlsx con un XML interno roto es un archivo dañado (RN-60), pero
@@ -222,13 +246,17 @@ def test_hojas_una_sola(planilla):
 
 def test_hojas_varias_en_orden_del_archivo():
     # CA-50.1: con una hoja "Septiembre" más, se ofrecen las dos, en el orden del archivo.
-    libro = armar_libro({"Octubre": celdas_planilla(), "Septiembre": {"C1": "Luz", "D1": 5}})
+    libro = armar_libro(
+        {"Octubre": celdas_planilla(), "Septiembre": {"C1": "Luz", "D1": 5}}
+    )
     assert abrir_libro(a_bytes(libro)).hojas() == ["Octubre", "Septiembre"]
 
 
 def test_leer_hoja_solo_trae_las_filas_de_la_hoja_elegida():
     # CA-50.1: se muestran solo las filas de la hoja elegida.
-    libro = armar_libro({"Octubre": celdas_planilla(), "Septiembre": {"C1": "Luz", "D1": 5}})
+    libro = armar_libro(
+        {"Octubre": celdas_planilla(), "Septiembre": {"C1": "Luz", "D1": 5}}
+    )
     abierto = abrir_libro(a_bytes(libro))
     septiembre = abierto.leer_hoja("Septiembre")
     assert resumen_filas(septiembre) == [(1, 3, "Luz", 500)]
@@ -389,10 +417,38 @@ def test_leer_numero_texto_formato_argentino(texto, esperado):
 @pytest.mark.parametrize(
     "texto",
     [
-        "82.5", "1.5000", "1.5", "12.34.567", "1000.000", "1.00", ".500", "1,",
-        ",5", "1,2,3", "1.000,5,5", "3/3", "US$ 20", "$$ 5", "--5", "-", "$", "",
-        "   ", "Monotributo 66.020,12", "abc", "12abc", "1e5", "1 000", "5%",
-        "$ -5.000", "+5.000", "1.000.00", "(5.000)", "20 USD", "NaN", "inf",
+        "82.5",
+        "1.5000",
+        "1.5",
+        "12.34.567",
+        "1000.000",
+        "1.00",
+        ".500",
+        "1,",
+        ",5",
+        "1,2,3",
+        "1.000,5,5",
+        "3/3",
+        "US$ 20",
+        "$$ 5",
+        "--5",
+        "-",
+        "$",
+        "",
+        "   ",
+        "Monotributo 66.020,12",
+        "abc",
+        "12abc",
+        "1e5",
+        "1 000",
+        "5%",
+        "$ -5.000",
+        "+5.000",
+        "1.000.00",
+        "(5.000)",
+        "20 USD",
+        "NaN",
+        "inf",
     ],
 )
 def test_leer_numero_texto_rechaza_lo_que_no_es_numero(texto):
@@ -436,7 +492,14 @@ def test_clasificar_textos_y_vacios():
 
 @pytest.mark.parametrize(
     "valor",
-    [True, False, datetime(2026, 10, 1), date(2026, 10, 1), hora(8, 0), timedelta(days=1)],
+    [
+        True,
+        False,
+        datetime(2026, 10, 1),
+        date(2026, 10, 1),
+        hora(8, 0),
+        timedelta(days=1),
+    ],
 )
 def test_clasificar_booleanos_y_fechas_son_vacios(valor):
     # RN-61: verdadero/falso, fechas y horas cuentan como vacías (True no es el número 1).
@@ -464,22 +527,42 @@ def test_clasificar_infinito_y_nan_no_rompen():
 def test_numeros_en_archivo_real():
     # CA-51.3 con archivo: texto "82.000", "$ 41.116,66", número 41116,66, 22093,666...
     celdas = {
-        "C1": "A", "D1": "82.000",
-        "C2": "B", "D2": "1.050.000",
-        "C3": "C", "D3": "66.020,12",
-        "C4": "D", "D4": "$ 41.116,66",
-        "C5": "E", "D5": "41116,66",
-        "C6": "F", "D6": 41116.66,
-        "C7": "G", "D7": 22093.666,
-        "C8": "H", "D8": "-5.000",
-        "C9": "I", "D9": -5000,
-        "C10": "J", "D10": 0,
-        "C11": "K", "D11": 10**12,
+        "C1": "A",
+        "D1": "82.000",
+        "C2": "B",
+        "D2": "1.050.000",
+        "C3": "C",
+        "D3": "66.020,12",
+        "C4": "D",
+        "D4": "$ 41.116,66",
+        "C5": "E",
+        "D5": "41116,66",
+        "C6": "F",
+        "D6": 41116.66,
+        "C7": "G",
+        "D7": 22093.666,
+        "C8": "H",
+        "D8": "-5.000",
+        "C9": "I",
+        "D9": -5000,
+        "C10": "J",
+        "D10": 0,
+        "C11": "K",
+        "D11": 10**12,
     }
     montos = {f.nombre: f.monto_cent for f in leer(xlsx(celdas)).filas}
     assert montos == {
-        "A": 8200000, "B": 105000000, "C": 6602012, "D": 4111666, "E": 4111666,
-        "F": 4111666, "G": 2209367, "H": -500000, "I": -500000, "J": 0, "K": 10**14,
+        "A": 8200000,
+        "B": 105000000,
+        "C": 6602012,
+        "D": 4111666,
+        "E": 4111666,
+        "F": 4111666,
+        "G": 2209367,
+        "H": -500000,
+        "I": -500000,
+        "J": 0,
+        "K": 10**14,
     }
 
 
@@ -554,7 +637,10 @@ def test_dos_numeros_texto_y_numero_pegados_sin_nombre():
     # RN-63 paso 3: dos números sueltos en una misma fila son dos filas sin nombre
     # (ninguno "abre" la fila).
     hoja = leer(xlsx({"B1": 10, "C1": 20}))
-    assert [(f.nombre, f.monto_cent) for f in hoja.filas] == [(None, 1000), (None, 2000)]
+    assert [(f.nombre, f.monto_cent) for f in hoja.filas] == [
+        (None, 1000),
+        (None, 2000),
+    ]
 
 
 def test_filas_del_excel_totalmente_vacias_no_generan_nada():
@@ -614,9 +700,9 @@ INCOMPLETAS = [
 def test_ca_51_1_lista_principal_exacta(planilla):
     # CA-51.1: 13 filas con nombre y monto, en orden, con monto, pagado y fila del Excel.
     completas = [f for f in planilla.filas if f.completa]
-    assert [(f.fila_excel, f.nombre, f.monto_cent, f.pagado_cent) for f in completas] == (
-        LISTA_PRINCIPAL
-    )
+    assert [
+        (f.fila_excel, f.nombre, f.monto_cent, f.pagado_cent) for f in completas
+    ] == (LISTA_PRINCIPAL)
 
 
 def test_ca_51_1_el_66021_no_aparece_en_ningun_lado(planilla):
@@ -631,7 +717,9 @@ def test_ca_51_2_filas_incompletas_exactas(planilla):
     # CA-51.2: las 16 filas incompletas, todas sin nombre o sin monto.
     incompletas = [f for f in planilla.filas if not f.completa]
     assert len(incompletas) == 16
-    assert [(f.fila_excel, f.columna, f.nombre, f.monto_cent) for f in incompletas] == INCOMPLETAS
+    assert [
+        (f.fila_excel, f.columna, f.nombre, f.monto_cent) for f in incompletas
+    ] == INCOMPLETAS
 
 
 def test_ca_51_2_las_sin_nombre_son_las_tres_de_numeros(planilla):
@@ -660,7 +748,9 @@ def test_planilla_sin_formulas_ni_avisos(planilla):
 def test_pagado_y_cobrado_solo_donde_corresponde(planilla):
     # CA-51.1 / CA-51.5: solo Internet (fila 5) y psicologo (fila 7) traen pagado;
     # sin columna "Cobrado" nadie trae cobrado.
-    con_pagado = {f.fila_excel: f.pagado_cent for f in planilla.filas if f.pagado_cent is not None}
+    con_pagado = {
+        f.fila_excel: f.pagado_cent for f in planilla.filas if f.pagado_cent is not None
+    }
     assert con_pagado == {5: 3870000, 7: 6000000}
     assert all(f.cobrado is None for f in planilla.filas)
 
@@ -672,7 +762,10 @@ def test_pagado_y_cobrado_solo_donde_corresponde(planilla):
 
 def test_ca_51_4_fila_oculta_aparece():
     # CA-51.4 / RN-60: una fila oculta con "Luz | 1000" se lee como cualquier otra.
-    contenido = xlsx({"C1": "Alquiler", "D1": 5, "C2": "Luz", "D2": 1000}, filas_ocultas={"Octubre": [2]})
+    contenido = xlsx(
+        {"C1": "Alquiler", "D1": 5, "C2": "Luz", "D2": 1000},
+        filas_ocultas={"Octubre": [2]},
+    )
     hoja = leer(contenido)
     assert resumen_filas(hoja) == [(1, 3, "Alquiler", 500), (2, 3, "Luz", 100000)]
     assert hoja.filas[1].completa
@@ -680,7 +773,9 @@ def test_ca_51_4_fila_oculta_aparece():
 
 def test_fila_oculta_en_la_planilla_no_cambia_el_resultado():
     # RN-60: ocultar filas de la planilla (incluso las 3 a 7) no cambia nada.
-    libro = armar_libro({"Octubre": celdas_planilla()}, filas_ocultas={"Octubre": [3, 4, 5, 6, 7, 12]})
+    libro = armar_libro(
+        {"Octubre": celdas_planilla()}, filas_ocultas={"Octubre": [3, 4, 5, 6, 7, 12]}
+    )
     oculta = leer(a_bytes(libro))
     normal = leer(planilla_prueba())
     assert resumen_filas(oculta) == resumen_filas(normal)
@@ -699,11 +794,24 @@ def test_columna_oculta_se_lee():
 
 
 def _pagados(hoja):
-    return {f.fila_excel: f.pagado_cent for f in hoja.filas if f.pagado_cent is not None}
+    return {
+        f.fila_excel: f.pagado_cent for f in hoja.filas if f.pagado_cent is not None
+    }
 
 
 @pytest.mark.parametrize(
-    "encabezado", ["Pago", "Pagos", "Abonado", "ABONADO", "pagado", "PAGADO", "  Pagado  ", "Págado", "Pagado   "]
+    "encabezado",
+    [
+        "Pago",
+        "Pagos",
+        "Abonado",
+        "ABONADO",
+        "pagado",
+        "PAGADO",
+        "  Pagado  ",
+        "Págado",
+        "Pagado   ",
+    ],
 )
 def test_ca_51_5_encabezados_de_pagado_reconocidos(encabezado):
     # CA-51.5 / RN-64 / RN-67: Pago, Pagos, Abonado (cualquier mayúscula, con espacios).
@@ -711,14 +819,18 @@ def test_ca_51_5_encabezados_de_pagado_reconocidos(encabezado):
     assert _pagados(hoja) == {5: 3870000, 7: 6000000}
 
 
-@pytest.mark.parametrize("encabezado", ["Pagué", "Pagado?", "Pagadoo", "Pago parcial", "Pag", "Importe"])
+@pytest.mark.parametrize(
+    "encabezado", ["Pagué", "Pagado?", "Pagadoo", "Pago parcial", "Pag", "Importe"]
+)
 def test_ca_51_5_encabezados_no_reconocidos_descartan_los_pagados(encabezado):
     # CA-51.5 / RN-64: otros encabezados no se reconocen: nadie trae pagado.
     hoja = leer(planilla_con({"E2": encabezado}))
     assert _pagados(hoja) == {}
     # Y los 38.700 y 60.000 se descartan: no aparecen como filas sin nombre.
     assert all(f.monto_cent not in (3870000, 6000000) or f.completa for f in hoja.filas)
-    assert not [f for f in hoja.filas if f.nombre is None and f.monto_cent in (3870000, 6000000)]
+    assert not [
+        f for f in hoja.filas if f.nombre is None and f.monto_cent in (3870000, 6000000)
+    ]
 
 
 def test_ca_51_5_encabezado_con_espacios_repetidos_en_el_medio():
@@ -821,7 +933,13 @@ def test_pagado_como_texto_numerico():
 
 
 def _con_cobrado(**extra):
-    cambios = {"F21": "Cobrado", "F22": 20000, "F23": "x", "F26": "Cobrado", "F27": 3000}
+    cambios = {
+        "F21": "Cobrado",
+        "F22": 20000,
+        "F23": "x",
+        "F26": "Cobrado",
+        "F27": 3000,
+    }
     cambios.update(extra)
     return cambios
 
@@ -834,7 +952,11 @@ def test_ca_51_6_cobrado_crudo_en_la_fila_correcta():
     assert por_nombre(hoja, "tacones chiqui baby").cobrado == 300000
     # Las demás filas completas no traen cobrado.
     conocidas = {22, 23, 27}
-    assert all(f.cobrado is None for f in hoja.filas if f.fila_excel not in conocidas | {21, 26})
+    assert all(
+        f.cobrado is None
+        for f in hoja.filas
+        if f.fila_excel not in conocidas | {21, 26}
+    )
 
 
 def test_ca_51_6_la_x_no_es_una_fila_y_los_cobrado_son_encabezados():
@@ -843,7 +965,10 @@ def test_ca_51_6_la_x_no_es_una_fila_y_los_cobrado_son_encabezados():
     hoja = leer(planilla_con(_con_cobrado()))
     assert all(f.nombre != "x" for f in hoja.filas)
     cobrados = [f for f in hoja.filas if f.nombre == "Cobrado"]
-    assert [(f.fila_excel, f.columna, f.completa) for f in cobrados] == [(21, 6, False), (26, 6, False)]
+    assert [(f.fila_excel, f.columna, f.completa) for f in cobrados] == [
+        (21, 6, False),
+        (26, 6, False),
+    ]
     # Los montos de las filas no cambian.
     assert por_nombre(hoja, "Prestamo MP").monto_cent == 2000000
     assert por_nombre(hoja, "Internet", 23).monto_cent == 1290000
@@ -908,7 +1033,14 @@ def test_cobrado_cero_se_guarda_como_cero():
 
 def test_cobrado_y_pagado_en_la_misma_fila_se_guardan_aparte():
     # Una fila con pagado (E) y cobrado (F) guarda cada uno en su campo.
-    celdas = {"E1": "Pagado", "F1": "Cobrado", "C2": "Luz", "D2": 100, "E2": 30, "F2": "si"}
+    celdas = {
+        "E1": "Pagado",
+        "F1": "Cobrado",
+        "C2": "Luz",
+        "D2": 100,
+        "E2": 30,
+        "F2": "si",
+    }
     luz = por_nombre(leer(xlsx(celdas)), "Luz")
     assert (luz.monto_cent, luz.pagado_cent, luz.cobrado) == (10000, 3000, "si")
 
@@ -919,7 +1051,9 @@ def test_cobrado_y_pagado_en_la_misma_fila_se_guardan_aparte():
 
 
 def _bloques(hoja):
-    return {(f.fila_excel, f.columna): f.bloque for f in hoja.filas if f.bloque is not None}
+    return {
+        (f.fila_excel, f.columna): f.bloque for f in hoja.filas if f.bloque is not None
+    }
 
 
 def test_ca_51_7_bloques_de_la_planilla(planilla):
@@ -941,8 +1075,19 @@ def test_ca_51_7_titulos_y_numeros_sin_nombre_no_tienen_bloque(planilla):
     # CA-51.7 / RN-65: los títulos y los números sin nombre (filas 9 y 19) no tienen bloque.
     titulos = [f for f in planilla.filas if f.es_titulo]
     assert sorted(f.nombre for f in titulos) == sorted(
-        ["Gasto del Mes", "Gastos", "Pagado", "total", "Falta por pagar", "Deudas",
-         "Monto", "Total deudas", "Sueldo", "Deudas sofia", "Marsu"]
+        [
+            "Gasto del Mes",
+            "Gastos",
+            "Pagado",
+            "total",
+            "Falta por pagar",
+            "Deudas",
+            "Monto",
+            "Total deudas",
+            "Sueldo",
+            "Deudas sofia",
+            "Marsu",
+        ]
     )
     assert all(f.bloque is None for f in titulos)
     assert all(f.bloque is None for f in planilla.filas if f.nombre is None)
@@ -980,7 +1125,11 @@ def test_ca_51_8_fila_nueva_con_concepto_e_importe_pegada_al_titulo():
     celdas = insertar_fila(celdas_planilla(), 21, {"D": "Concepto", "E": "Importe"})
     hoja = leer(xlsx(celdas))
     concepto = por_nombre(hoja, "Concepto")
-    assert (concepto.fila_excel, concepto.es_titulo, concepto.completa) == (22, False, False)
+    assert (concepto.fila_excel, concepto.es_titulo, concepto.completa) == (
+        22,
+        False,
+        False,
+    )
     assert concepto.bloque == "Deudas sofia"
     assert por_nombre(hoja, "Prestamo MP").bloque == "Deudas sofia"
     assert por_nombre(hoja, "Prestamo MP").fila_excel == 23
@@ -1021,8 +1170,14 @@ def test_ca_51_8_titulo_nuevo_prestamos_con_celda_de_arriba_vacia():
 def test_bloque_se_corta_en_el_titulo_siguiente_de_la_misma_columna():
     # RN-65: el bloque termina en el título siguiente de esa columna.
     celdas = {
-        "C1": "Casa", "C2": "Luz", "D2": 1, "C3": "Gas", "D3": 2,
-        "C4": "Auto", "C5": "Nafta", "D5": 3,
+        "C1": "Casa",
+        "C2": "Luz",
+        "D2": 1,
+        "C3": "Gas",
+        "D3": 2,
+        "C4": "Auto",
+        "C5": "Nafta",
+        "D5": 3,
     }
     hoja = leer(xlsx(celdas))
     assert por_nombre(hoja, "Luz").bloque == "Casa"
@@ -1034,8 +1189,12 @@ def test_bloque_se_corta_en_el_titulo_siguiente_de_la_misma_columna():
 def test_bloque_titulo_separado_por_fila_vacia_empieza_otro_bloque():
     # RN-65: el título con una celda vacía arriba empieza otro bloque.
     celdas = {
-        "C1": "Casa", "C2": "Luz", "D2": 1,
-        "C4": "Auto", "C5": "Nafta", "D5": 3,
+        "C1": "Casa",
+        "C2": "Luz",
+        "D2": 1,
+        "C4": "Auto",
+        "C5": "Nafta",
+        "D5": 3,
     }
     hoja = leer(xlsx(celdas))
     assert por_nombre(hoja, "Luz").bloque == "Casa"
@@ -1047,9 +1206,13 @@ def test_bloque_fila_del_excel_con_otra_columna_no_corta():
     # RN-65: una fila del Excel con contenido pero con la celda de la columna vacía no
     # corta el bloque; un título de otra columna tampoco.
     celdas = {
-        "C1": "Casa", "C2": "Luz", "D2": 1,
-        "E3": "Otro titulo", "F3": 99,
-        "C4": "Gas", "D4": 2,
+        "C1": "Casa",
+        "C2": "Luz",
+        "D2": 1,
+        "E3": "Otro titulo",
+        "F3": 99,
+        "C4": "Gas",
+        "D4": 2,
     }
     hoja = leer(xlsx(celdas))
     assert por_nombre(hoja, "Gas").bloque == "Casa"
@@ -1060,11 +1223,15 @@ def test_titulo_combinado_que_cubre_varias_columnas():
     # están en B o en C. Una fila con el nombre en C también pertenece al bloque.
     celdas = {
         "B1": "Deudas Juan",
-        "B2": "Uno", "C2": 100,
-        "C3": "Dos", "D3": 200,
+        "B2": "Uno",
+        "C2": 100,
+        "C3": "Dos",
+        "D3": 200,
     }
     sin_combinar = leer(xlsx(celdas))
-    assert por_nombre(sin_combinar, "Dos").bloque is None  # sin combinar: columna C no es del título
+    assert (
+        por_nombre(sin_combinar, "Dos").bloque is None
+    )  # sin combinar: columna C no es del título
     combinado = leer(xlsx(celdas, combinadas={"Octubre": ["B1:C1"]}))
     assert por_nombre(combinado, "Uno").bloque == "Deudas Juan"
     assert por_nombre(combinado, "Dos").bloque == "Deudas Juan"
@@ -1130,8 +1297,11 @@ def test_formulas_sin_valor_cuenta_varias_y_ejemplo_es_la_primera():
     # RN-61: "Hay N fórmulas sin valor calculado (ej. X)": N las cuenta y X es la primera
     # en orden de lectura (filas de arriba a abajo, columnas de izquierda a derecha).
     celdas = {
-        "C3": "Luz", "E3": "=1+1", "D3": "=100+200",
-        "C4": "Gas", "D4": "=SUM(1,2)",
+        "C3": "Luz",
+        "E3": "=1+1",
+        "D3": "=100+200",
+        "C4": "Gas",
+        "D4": "=SUM(1,2)",
         "F10": "=A1",
     }
     hoja = leer(xlsx(celdas))
@@ -1149,7 +1319,7 @@ def test_ejemplo_formula_columna_de_dos_letras():
 def test_formula_sin_valor_en_celda_de_nombre():
     # La fórmula sin valor cuenta como vacía también donde iría un nombre: el número que
     # sigue queda como fila sin nombre.
-    hoja = leer(xlsx({"C3": "=\"Luz\"", "D3": 100}))
+    hoja = leer(xlsx({"C3": '="Luz"', "D3": 100}))
     assert hoja.formulas_sin_valor == 1
     assert [(f.nombre, f.monto_cent) for f in hoja.filas] == [(None, 10000)]
 
@@ -1168,7 +1338,9 @@ def test_ca_58_4_formula_con_valor_guardado_numero():
 
 def test_formula_con_valor_guardado_cero_no_cuenta_como_sin_valor():
     # Una fórmula cuyo resultado guardado es 0 tiene valor: monto 0 y sin aviso.
-    contenido = con_valores_guardados(xlsx({"C3": "Luz", "D3": "=1-1"}), {"D3": ("n", "0")})
+    contenido = con_valores_guardados(
+        xlsx({"C3": "Luz", "D3": "=1-1"}), {"D3": ("n", "0")}
+    )
     hoja = leer(contenido)
     assert hoja.formulas_sin_valor == 0
     assert por_nombre(hoja, "Luz").monto_cent == 0
@@ -1195,7 +1367,9 @@ def test_formula_con_resultado_texto_numerico_se_lee_como_numero():
 def test_formula_con_resultado_error_cuenta_como_vacia_y_no_como_sin_valor():
     # RN-61: una fórmula que da #DIV/0! (con el error guardado) es vacía, y no cuenta como
     # "sin valor calculado": Excel sí la calculó.
-    contenido = con_valores_guardados(xlsx({"C3": "Luz", "D3": "=1/0"}), {"D3": ("e", "#DIV/0!")})
+    contenido = con_valores_guardados(
+        xlsx({"C3": "Luz", "D3": "=1/0"}), {"D3": ("e", "#DIV/0!")}
+    )
     hoja = leer(contenido)
     assert por_nombre(hoja, "Luz").monto_cent is None
     assert hoja.formulas_sin_valor == 0
@@ -1203,7 +1377,9 @@ def test_formula_con_resultado_error_cuenta_como_vacia_y_no_como_sin_valor():
 
 def test_formula_con_resultado_booleano_cuenta_como_vacia():
     # RN-61: un resultado verdadero/falso es vacío.
-    contenido = con_valores_guardados(xlsx({"C3": "Luz", "D3": "=1=1"}), {"D3": ("b", "1")})
+    contenido = con_valores_guardados(
+        xlsx({"C3": "Luz", "D3": "=1=1"}), {"D3": ("b", "1")}
+    )
     hoja = leer(contenido)
     assert por_nombre(hoja, "Luz").monto_cent is None
     assert hoja.formulas_sin_valor == 0
@@ -1285,8 +1461,19 @@ def test_normalizar_iguala_nombres_del_mismo_texto():
 
 def test_nombres_con_caracteres_raros():
     # Nombres con ñ, acentos, emoji y comillas se leen tal cual.
-    celdas = {"C1": "Ñandú ✓", "D1": 5, "C2": 'Gym "premium"', "D2": 6, "C3": "Café ☕", "D3": 7}
-    assert [f.nombre for f in leer(xlsx(celdas)).filas] == ["Ñandú ✓", 'Gym "premium"', "Café ☕"]
+    celdas = {
+        "C1": "Ñandú ✓",
+        "D1": 5,
+        "C2": 'Gym "premium"',
+        "D2": 6,
+        "C3": "Café ☕",
+        "D3": 7,
+    }
+    assert [f.nombre for f in leer(xlsx(celdas)).filas] == [
+        "Ñandú ✓",
+        'Gym "premium"',
+        "Café ☕",
+    ]
 
 
 def test_texto_largo_en_el_nombre():
@@ -1407,7 +1594,9 @@ def test_ronda31_hoja_con_formato_filas_ocultas_y_combinadas_a_la_vez():
     hoja.cell(40, 12).fill = PatternFill("solid", fgColor="00FF00")
     leida = leer(a_bytes(libro))
     assert [(f.nombre, f.monto_cent) for f in leida.filas] == [
-        ("Titulo", None), ("Luz", 500), ("Gas", None)
+        ("Titulo", None),
+        ("Luz", 500),
+        ("Gas", None),
     ]
     assert leida.formulas_sin_valor == 1 and leida.ejemplo_formula == "D3"
 
@@ -1434,13 +1623,28 @@ def test_ronda31_formulas_error_booleano_y_vacio_mezcladas_con_sin_valor():
     # BUG-26: error ("e"), booleano ("b"), texto vacío ("str") y número guardados no
     # cuentan; solo la fórmula sin valor (D8) cuenta.
     celdas = {
-        "C3": "A", "D3": "=1/0", "C4": "B", "D4": "=1=1", "C5": "C", "D5": '=""',
-        "C6": "D", "D6": "=1+1", "C7": "E", "D7": "=2+2", "C8": "F", "D8": "=3+3",
+        "C3": "A",
+        "D3": "=1/0",
+        "C4": "B",
+        "D4": "=1=1",
+        "C5": "C",
+        "D5": '=""',
+        "C6": "D",
+        "D6": "=1+1",
+        "C7": "E",
+        "D7": "=2+2",
+        "C8": "F",
+        "D8": "=3+3",
     }
     contenido = con_valores_guardados(
         xlsx(celdas),
-        {"D3": ("e", "#DIV/0!"), "D4": ("b", "1"), "D5": ("str", ""),
-         "D6": ("n", "2"), "D7": ("n", "0")},
+        {
+            "D3": ("e", "#DIV/0!"),
+            "D4": ("b", "1"),
+            "D5": ("str", ""),
+            "D6": ("n", "2"),
+            "D7": ("n", "0"),
+        },
     )
     hoja = leer(contenido)
     assert hoja.formulas_sin_valor == 1

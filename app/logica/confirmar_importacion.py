@@ -18,9 +18,7 @@ from app.logica.revision_importacion import (
 )
 
 MENSAJE_ERROR = "No se pudo importar. No se guardó ningún dato."
-AVISO_SIN_DESHACER = (
-    "Esta importación no se puede deshacer. Si algo sale mal, lo corregís a mano en la app."
-)
+AVISO_SIN_DESHACER = "Esta importación no se puede deshacer. Si algo sale mal, lo corregís a mano en la app."
 
 
 def _cantidad(n: int, singular: str, plural: str) -> str:
@@ -56,7 +54,9 @@ def resumen_previo(lista: ListaRevision) -> list[str]:
     if filas_gastos:
         total = sum(f.monto_cent for f in filas_gastos)
         pagado = sum(f.pagado_cent or 0 for f in filas_gastos)
-        linea = f"{_cantidad(len(filas_gastos), 'gasto', 'gastos')}: {formatear_ars(total)}"
+        linea = (
+            f"{_cantidad(len(filas_gastos), 'gasto', 'gastos')}: {formatear_ars(total)}"
+        )
         if pagado:
             linea += f" (pagado {formatear_ars(pagado)})"
         lineas.append(linea)
@@ -210,7 +210,9 @@ def _guardar(lista: ListaRevision) -> Resultado:
     # 4. Planes de cuotas (RN-71): primera cuota = mes destino − (n − 1) meses.
     filas_cuotas = _importan(lista, "cuota")
     for fila in filas_cuotas:
-        primer_anio, primer_mes = sumar_meses(lista.anio, lista.mes, -(fila.cuota_actual - 1))
+        primer_anio, primer_mes = sumar_meses(
+            lista.anio, lista.mes, -(fila.cuota_actual - 1)
+        )
         plan_id = cuotas.crear_plan(
             con,
             fila.nombre,
@@ -268,7 +270,9 @@ def texto_resultado(resultado: Resultado) -> tuple[str, list[str]]:
 
     completar = []
     if resultado.gastos or resultado.planes:
-        completar.append("Los gastos quedaron sin medio de pago. Podés ponérselo en Gastos.")
+        completar.append(
+            "Los gastos quedaron sin medio de pago. Podés ponérselo en Gastos."
+        )
     if resultado.gastos or resultado.items:
         completar.append("Si alguno es compartido, marcalo desde el gasto.")
     if resultado.sin_cotizacion:

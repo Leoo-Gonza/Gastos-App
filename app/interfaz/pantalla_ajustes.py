@@ -506,7 +506,7 @@ class PantallaAjustes:
                             ft.Tab(label="Cotización"),
                             ft.Tab(label="Apariencia"),
                             ft.Tab(label="Importar Excel"),
-                        ]
+                        ],
                     ),
                     ft.TabBarView(
                         expand=True, controls=[p.control for p in self._pestanas]

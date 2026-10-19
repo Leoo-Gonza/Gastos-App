@@ -226,9 +226,15 @@ class ListaRevision:
             pass  # RN-66 regla 1.
         elif nombra_personas:
             fila.tipo, fila.persona = "me_deben", persona
-        elif cuota and 1 <= int(cuota.group(1)) <= int(cuota.group(2)) <= cuotas.MAXIMO_CUOTAS:
+        elif (
+            cuota
+            and 1 <= int(cuota.group(1)) <= int(cuota.group(2)) <= cuotas.MAXIMO_CUOTAS
+        ):
             fila.tipo = "cuota"
-            fila.cuota_actual, fila.cuota_total = int(cuota.group(1)), int(cuota.group(2))
+            fila.cuota_actual, fila.cuota_total = (
+                int(cuota.group(1)),
+                int(cuota.group(2)),
+            )
         else:
             fila.tipo = "fijo"
         self._leer_cobrado(fila)
@@ -251,7 +257,7 @@ class ListaRevision:
                 return
             mostrado = valor
         fila.nota_cobrado = (
-            f'En la columna Cobrado dice "{mostrado}"; los ítems \'me deben\' no tienen '
+            f"En la columna Cobrado dice \"{mostrado}\"; los ítems 'me deben' no tienen "
             "cobro parcial, quedó como no cobrado."
         )
 
@@ -368,11 +374,14 @@ class ListaRevision:
         if ultimo is None:
             return []
         fijos = self.con.execute(
-            "SELECT nombre FROM gastos WHERE mes_id = ? AND tipo = 'fijo'", (ultimo["id"],)
+            "SELECT nombre FROM gastos WHERE mes_id = ? AND tipo = 'fijo'",
+            (ultimo["id"],),
         )
         planes = self.con.execute("SELECT * FROM planes_cuotas").fetchall()
         activos = [
-            p["nombre"] for p in planes if cuotas.activo_en(self.con, p, self.anio, self.mes)
+            p["nombre"]
+            for p in planes
+            if cuotas.activo_en(self.con, p, self.anio, self.mes)
         ]
         return [f["nombre"] for f in fijos] + activos
 
@@ -417,11 +426,15 @@ class ListaRevision:
                 vistos[clave] = vistos.get(clave, 0) + 1
         for fila in self.filas:
             clave = (grupo(fila), normalizar(fila.nombre or ""))
-            fila.repetida = bool(fila.nombre) and grupo(fila) is not None and vistos[clave] > 1
+            fila.repetida = (
+                bool(fila.nombre) and grupo(fila) is not None and vistos[clave] > 1
+            )
 
         # Aviso de posible gasto compartido (RN-72).
         gastos_que_se_importan = [
-            f.nombre for f in self.filas if f.se_importa and f.tipo in TIPOS_GASTO and f.nombre
+            f.nombre
+            for f in self.filas
+            if f.se_importa and f.tipo in TIPOS_GASTO and f.nombre
         ]
         for fila in self.filas:
             fila.aviso_compartido = (
@@ -514,7 +527,7 @@ class ListaRevision:
         return {}
 
     def restaurar_fila(self, indice: int) -> None:
-        """"Volver a lo detectado": la fila como la propuso la app."""
+        """ "Volver a lo detectado": la fila como la propuso la app."""
         nueva = self._fila_inicial(indice, self._fila(indice).origen)
         self.filas[indice] = nueva
         self._recalcular_marcas()
@@ -546,13 +559,17 @@ class ListaRevision:
         return limpio
 
     def agregar_categoria(self, nombre: str) -> Nueva:
-        nueva = Nueva(self._validar_nueva(catalogos.CATEGORIAS, nombre, self.categorias_nuevas))
+        nueva = Nueva(
+            self._validar_nueva(catalogos.CATEGORIAS, nombre, self.categorias_nuevas)
+        )
         self.categorias_nuevas.append(nueva)
         self.hubo_cambios = True
         return nueva
 
     def agregar_persona(self, nombre: str) -> Nueva:
-        nueva = Nueva(self._validar_nueva(catalogos.PERSONAS, nombre, self.personas_nuevas))
+        nueva = Nueva(
+            self._validar_nueva(catalogos.PERSONAS, nombre, self.personas_nuevas)
+        )
         self.personas_nuevas.append(nueva)
         self.hubo_cambios = True
         return nueva
@@ -636,7 +653,11 @@ class ListaRevision:
                 self._aplicar_tipo(fila, tipo)
             if categoria is not self.SIN_CAMBIO and fila.tipo in TIPOS_GASTO:
                 fila.categoria = categoria
-            if persona is not self.SIN_CAMBIO and persona is not None and fila.tipo == "me_deben":
+            if (
+                persona is not self.SIN_CAMBIO
+                and persona is not None
+                and fila.tipo == "me_deben"
+            ):
                 fila.persona = persona
         self.hubo_cambios = True
         self._recalcular_marcas()
@@ -701,13 +722,18 @@ class ListaRevision:
             if fila.pagado_cent < 0:
                 errores["pagado"] = "El pagado no puede ser negativo."
             elif fila.monto_cent is not None and fila.pagado_cent > fila.monto_cent:
-                pagado, monto = formatear_ars(fila.pagado_cent), formatear_ars(fila.monto_cent)
+                pagado, monto = (
+                    formatear_ars(fila.pagado_cent),
+                    formatear_ars(fila.monto_cent),
+                )
                 if pagado == monto:
                     # Redondeados a pesos se ven iguales: se muestran con centavos
                     # para que se entienda la diferencia (O70, RN-69).
                     pagado = "$ " + formatear_monto_para_editar(fila.pagado_cent)
                     monto = "$ " + formatear_monto_para_editar(fila.monto_cent)
-                errores["pagado"] = f"El pagado ({pagado}) es mayor que el monto ({monto})."
+                errores["pagado"] = (
+                    f"El pagado ({pagado}) es mayor que el monto ({monto})."
+                )
         if fila.tipo == "sueldo" and self.cantidad_sueldos() > 1:
             errores["sueldo"] = (
                 f"Marcaste {self.cantidad_sueldos()} filas como sueldo; dejá una sola."
@@ -779,14 +805,21 @@ class ListaRevision:
                 )
             elif fila.origen.monto_cent is not None and fila.origen.monto_cent <= 0:
                 notas.append(
-                    ("aviso", "Monto no válido. Si querés importarla, corregí el monto.")
+                    (
+                        "aviso",
+                        "Monto no válido. Si querés importarla, corregí el monto.",
+                    )
                 )
         if fila.ya_existe == "gasto":
             notas.append(
                 (
                     "aviso",
                     f"Ya existe en {self.nombre_mes_destino}. "
-                    + ("Si la importás, queda repetida." if fila.tildada else "Viene destildada."),
+                    + (
+                        "Si la importás, queda repetida."
+                        if fila.tildada
+                        else "Viene destildada."
+                    ),
                 )
             )
         elif fila.ya_existe == "plan":
@@ -794,7 +827,11 @@ class ListaRevision:
                 (
                     "aviso",
                     "Ya existe un plan de cuotas con este nombre. "
-                    + ("Si la importás, queda repetida." if fila.tildada else "Viene destildada."),
+                    + (
+                        "Si la importás, queda repetida."
+                        if fila.tildada
+                        else "Viene destildada."
+                    ),
                 )
             )
         elif fila.ya_existe == "me_deben":
@@ -803,7 +840,11 @@ class ListaRevision:
                 (
                     "aviso",
                     f"{persona} ya tiene un ítem sin cobrar con esta descripción. "
-                    + ("Si la importás, queda repetida." if fila.tildada else "Viene destildada."),
+                    + (
+                        "Si la importás, queda repetida."
+                        if fila.tildada
+                        else "Viene destildada."
+                    ),
                 )
             )
         if fila.repetida:
@@ -833,13 +874,17 @@ class ListaRevision:
             if actual is None or actual == fila.monto_cent:
                 notas.append(("info", f"Sueldo del mes: {nuevo}."))
             else:
-                notas.append(("info", f"Sueldo del mes: {formatear_usd(actual)} -> {nuevo}."))
+                notas.append(
+                    ("info", f"Sueldo del mes: {formatear_usd(actual)} -> {nuevo}.")
+                )
         return notas
 
     def nombre_persona(self, persona: int | Nueva | None) -> str:
         if isinstance(persona, Nueva):
             return persona.nombre
-        for p in catalogos.listar(self.con, catalogos.PERSONAS, incluir_archivados=True):
+        for p in catalogos.listar(
+            self.con, catalogos.PERSONAS, incluir_archivados=True
+        ):
             if p["id"] == persona:
                 return p["nombre"]
         return ""
@@ -880,13 +925,21 @@ class ListaRevision:
             partes.append("1 gasto" if c["gastos"] == 1 else f"{c['gastos']} gastos")
         if c["planes"]:
             partes.append(
-                "1 plan de cuotas" if c["planes"] == 1 else f"{c['planes']} planes de cuotas"
+                "1 plan de cuotas"
+                if c["planes"] == 1
+                else f"{c['planes']} planes de cuotas"
             )
         if c["me_deben"]:
             partes.append(
-                '1 ítem "me deben"' if c["me_deben"] == 1 else f'{c["me_deben"]} ítems "me deben"'
+                '1 ítem "me deben"'
+                if c["me_deben"] == 1
+                else f'{c["me_deben"]} ítems "me deben"'
             )
         if c["sueldo"]:
             partes.append("el sueldo")
-        verbo = "Se importa 1 fila" if c["filas"] == 1 else f"Se importan {c['filas']} filas"
+        verbo = (
+            "Se importa 1 fila"
+            if c["filas"] == 1
+            else f"Se importan {c['filas']} filas"
+        )
         return f"{verbo}: {unir_con_y(partes)}."

@@ -71,7 +71,9 @@ class SelectorConNueva:
                         ft.TextButton("Cancelar", on_click=lambda e: self.cerrar()),
                     ]
                 ),
-                texto_ayuda("Se crea al confirmar la importación. Si cancelás, no se crea."),
+                texto_ayuda(
+                    "Se crea al confirmar la importación. Si cancelás, no se crea."
+                ),
             ],
             spacing=4,
             visible=False,
@@ -83,7 +85,9 @@ class SelectorConNueva:
                         self.dropdown,
                         ft.IconButton(
                             ft.Icons.ADD,
-                            tooltip="Nueva categoría" if es_categoria else "Nueva persona",
+                            tooltip="Nueva categoría"
+                            if es_categoria
+                            else "Nueva persona",
                             on_click=lambda e: self.abrir(),
                         ),
                     ]
@@ -115,7 +119,9 @@ class SelectorConNueva:
                     "sin elegir",
                 )
             opciones.append(
-                ft.DropdownOption(key=_DEFECTO, text=f"Categoría por defecto ({nombre})")
+                ft.DropdownOption(
+                    key=_DEFECTO, text=f"Categoría por defecto ({nombre})"
+                )
             )
         opciones += [
             ft.DropdownOption(key=f"id:{c['id']}", text=c["nombre"])
@@ -197,9 +203,11 @@ def _leer_entero(campo: ft.TextField) -> int | None:
 
 
 class DialogoFilaImportacion:
-    """"Editar fila 12 del Excel" (§4.9). al_aceptar() se llama si cambió algo."""
+    """ "Editar fila 12 del Excel" (§4.9). al_aceptar() se llama si cambió algo."""
 
-    def __init__(self, app, lista: ListaRevision, indice: int, al_aceptar: Callable) -> None:
+    def __init__(
+        self, app, lista: ListaRevision, indice: int, al_aceptar: Callable
+    ) -> None:
         self.app = app
         self.lista = lista
         self.indice = indice
@@ -214,7 +222,10 @@ class DialogoFilaImportacion:
             on_select=lambda e: self._mostrar_segun_tipo(),
         )
         self.nombre = ft.TextField(
-            label="Nombre", value=fila.nombre or "", max_length=60, on_submit=self._aceptar
+            label="Nombre",
+            value=fila.nombre or "",
+            max_length=60,
+            on_submit=self._aceptar,
         )
         self.monto = campo_monto("Monto", "ARS", on_submit=self._aceptar)
         if fila.monto_cent is not None:
@@ -226,7 +237,9 @@ class DialogoFilaImportacion:
         self.bloque_pagado = ft.Column(
             [
                 self.pagado,
-                texto_ayuda("Lo que ya pagaste. Si es igual al monto, queda pagado completo."),
+                texto_ayuda(
+                    "Lo que ya pagaste. Si es igual al monto, queda pagado completo."
+                ),
             ],
             spacing=4,
         )
@@ -306,7 +319,9 @@ class DialogoFilaImportacion:
         mes = self.lista.nombre_mes_destino
         if existente is None:
             return f"{mes} todavía no existe."
-        return f"Hoy el sueldo de {mes} es {formatear_usd(existente['sueldo_usd_cent'])}."
+        return (
+            f"Hoy el sueldo de {mes} es {formatear_usd(existente['sueldo_usd_cent'])}."
+        )
 
     def _mostrar_segun_tipo(self, actualizar: bool = True) -> None:
         """Se muestran solo los campos del tipo elegido. Lo escrito en los demás
@@ -336,7 +351,13 @@ class DialogoFilaImportacion:
             self.app.page.update()
 
     def _limpiar_errores(self) -> None:
-        for campo in (self.nombre, self.monto, self.pagado, self.cuota_actual, self.cuota_total):
+        for campo in (
+            self.nombre,
+            self.monto,
+            self.pagado,
+            self.cuota_actual,
+            self.cuota_total,
+        ):
             campo.error = None
         self.categoria.dropdown.error_text = None
         self.persona.dropdown.error_text = None
@@ -361,7 +382,13 @@ class DialogoFilaImportacion:
                 self.cuota_total.error = errores["cuota"]
 
     def _enfocar_primer_error(self) -> None:
-        for campo in (self.nombre, self.monto, self.pagado, self.cuota_actual, self.cuota_total):
+        for campo in (
+            self.nombre,
+            self.monto,
+            self.pagado,
+            self.cuota_actual,
+            self.cuota_total,
+        ):
             if campo.error and campo.visible is not False:
                 self.app.enfocar(campo)
                 return
@@ -394,7 +421,9 @@ class DialogoFilaImportacion:
             return
         es_gasto, es_me_deben = tipo in TIPOS_GASTO, tipo == "me_deben"
         categoria = self.categoria.valor if es_gasto else None
-        persona = self.persona.valor if es_me_deben else self.lista.filas[self.indice].persona
+        persona = (
+            self.persona.valor if es_me_deben else self.lista.filas[self.indice].persona
+        )
         errores = self.lista.editar_fila(
             self.indice,
             tipo,
@@ -423,9 +452,11 @@ class DialogoFilaImportacion:
 
 
 class DialogoBloque:
-    """"Cambiar las filas de Deudas sofia" (§4.10)."""
+    """ "Cambiar las filas de Deudas sofia" (§4.10)."""
 
-    def __init__(self, app, lista: ListaRevision, titulo: str, al_aplicar: Callable) -> None:
+    def __init__(
+        self, app, lista: ListaRevision, titulo: str, al_aplicar: Callable
+    ) -> None:
         self.app = app
         self.lista = lista
         self.titulo = titulo
@@ -446,7 +477,10 @@ class DialogoBloque:
                 )
             )
         self.tipo = ft.Dropdown(
-            label="Tipo", value="", options=opciones, on_select=lambda e: self._mostrar()
+            label="Tipo",
+            value="",
+            options=opciones,
+            on_select=lambda e: self._mostrar(),
         )
         self.persona = SelectorConNueva(app, lista, catalogos.PERSONAS, "Persona")
         self.categoria = SelectorConNueva(
@@ -460,13 +494,20 @@ class DialogoBloque:
 
         self.dialogo = dialogo_formulario(
             f"Cambiar las filas de {titulo}",
-            [self.tipo, self.persona.control, self.categoria.control, texto_ayuda(ayuda)],
+            [
+                self.tipo,
+                self.persona.control,
+                self.categoria.control,
+                texto_ayuda(ayuda),
+            ],
             al_guardar=self._aplicar,
             al_cancelar=lambda e: app.cerrar_dialogo(self.dialogo),
             texto_guardar=f"Aplicar a {filas_texto}",
         )
         self.dialogo.content.width = 420
-        self.dialogo.data = lambda: self.categoria.cerrar() or self.persona.cerrar()  # O86
+        self.dialogo.data = lambda: (
+            self.categoria.cerrar() or self.persona.cerrar()
+        )  # O86
         self._mostrar(actualizar=False)
 
     def abrir(self) -> None:
@@ -483,12 +524,16 @@ class DialogoBloque:
         tipo = self.tipo.value or None
         self.persona.dropdown.error_text = None
         persona = self.persona.valor if self.persona.control.visible else SIN_ELEGIR
-        categoria = self.categoria.valor if self.categoria.control.visible else SIN_ELEGIR
+        categoria = (
+            self.categoria.valor if self.categoria.control.visible else SIN_ELEGIR
+        )
         try:
             self.lista.cambiar_bloque(
                 self.titulo,
                 tipo,
-                categoria=ListaRevision.SIN_CAMBIO if categoria is SIN_ELEGIR else categoria,
+                categoria=ListaRevision.SIN_CAMBIO
+                if categoria is SIN_ELEGIR
+                else categoria,
                 persona=ListaRevision.SIN_CAMBIO if persona is SIN_ELEGIR else persona,
             )
         except ErrorDeValidacion as error:

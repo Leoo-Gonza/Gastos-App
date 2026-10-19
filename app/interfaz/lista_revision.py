@@ -59,7 +59,9 @@ _ESTILO_NOTA = {
 _CLASES_AVISO = {"aviso", "repetida", "compartido"}
 
 
-def _celda(nombre: str, contenido: ft.Control, alinear=ft.Alignment.CENTER_LEFT) -> ft.Container:
+def _celda(
+    nombre: str, contenido: ft.Control, alinear=ft.Alignment.CENTER_LEFT
+) -> ft.Container:
     return ft.Container(width=_ANCHOS[nombre], content=contenido, alignment=alinear)
 
 
@@ -73,7 +75,9 @@ class FilaVista:
         page = vista.app.page
         numero = self.fila.origen.fila_excel
 
-        self.tilde = ft.Checkbox(on_change=lambda e: vista.cambiar_tilde(indice, e.control.value))
+        self.tilde = ft.Checkbox(
+            on_change=lambda e: vista.cambiar_tilde(indice, e.control.value)
+        )
         self.tipo = ft.Dropdown(
             dense=True,
             width=_ANCHOS["tipo"] - 8,
@@ -85,14 +89,19 @@ class FilaVista:
         self.notas = ft.Column(spacing=2)
         self.monto = ft.Text(size=estilos.TAM_TEXTO, text_align=ft.TextAlign.RIGHT)
         self.pagado = ft.Text(size=estilos.TAM_TEXTO, text_align=ft.TextAlign.RIGHT)
-        self.estado_pagado = ft.Text(size=estilos.TAM_AYUDA, text_align=ft.TextAlign.RIGHT)
+        self.estado_pagado = ft.Text(
+            size=estilos.TAM_AYUDA, text_align=ft.TextAlign.RIGHT
+        )
         self.cobrado = ft.Checkbox(
-            label="Cobrado", on_change=lambda e: vista.cambiar_cobrado(indice, e.control.value)
+            label="Cobrado",
+            on_change=lambda e: vista.cambiar_cobrado(indice, e.control.value),
         )
         self.categoria = ft.Text(size=estilos.TAM_TEXTO)
         self.cuota = ft.Text(size=estilos.TAM_TEXTO)
         self.lapiz = ft.IconButton(
-            ft.Icons.EDIT, tooltip=f"Editar fila {numero}", on_click=lambda e: vista.editar(indice)
+            ft.Icons.EDIT,
+            tooltip=f"Editar fila {numero}",
+            on_click=lambda e: vista.editar(indice),
         )
 
         self.control = ft.Container(
@@ -178,7 +187,10 @@ class FilaVista:
         con_pagado = fila.tipo in TIPOS_GASTO and bool(fila.pagado_cent)
         self.pagado.visible = self.estado_pagado.visible = con_pagado
         if con_pagado:
-            self.pagado.value, self.pagado.color = formatear_ars(fila.pagado_cent), secundario
+            self.pagado.value, self.pagado.color = (
+                formatear_ars(fila.pagado_cent),
+                secundario,
+            )
             if fila.monto_cent is not None and fila.pagado_cent == fila.monto_cent:
                 self.estado_pagado.value = "✓ Completo"
                 self.estado_pagado.color = estilos.color(page, "positivo")
@@ -229,14 +241,18 @@ class FilaVista:
         # también está el ícono y el texto del error).
         if errores:
             self.control.bgcolor = estilos.color(page, "negativo_suave")
-            self.control.border = ft.Border.only(left=ft.BorderSide(4, self._color_error))
+            self.control.border = ft.Border.only(
+                left=ft.BorderSide(4, self._color_error)
+            )
         else:
             self.control.bgcolor = None
             self.control.border = None
 
     def _nota(self, clase: str, texto: str) -> ft.Row:
         icono, rol = _ESTILO_NOTA[clase]
-        color = estilos.color(self.vista.app.page, rol) if rol else estilos.TEXTO_SECUNDARIO
+        color = (
+            estilos.color(self.vista.app.page, rol) if rol else estilos.TEXTO_SECUNDARIO
+        )
         return ft.Row(
             [
                 ft.Icon(icono, size=16, color=color),
@@ -247,7 +263,9 @@ class FilaVista:
         )
 
     def tiene_avisos(self) -> bool:
-        return any(c in _CLASES_AVISO for c, _ in self.vista.lista.notas_con_clase(self.fila))
+        return any(
+            c in _CLASES_AVISO for c, _ in self.vista.lista.notas_con_clase(self.fila)
+        )
 
     def tiene_errores(self) -> bool:
         return bool(self.vista.lista.errores(self.fila))
@@ -265,7 +283,13 @@ class FilaVista:
 class BloqueVista:
     """Un bloque del Excel (o "Filas incompletas") como grupo plegable."""
 
-    def __init__(self, vista: "VistaRevision", titulo: str, filas: list[FilaVista], incompletas: bool = False) -> None:
+    def __init__(
+        self,
+        vista: "VistaRevision",
+        titulo: str,
+        filas: list[FilaVista],
+        incompletas: bool = False,
+    ) -> None:
         self.vista = vista
         self.titulo = titulo
         self.filas = filas
@@ -391,7 +415,10 @@ class VistaRevision:
             self.mes = ft.Dropdown(
                 label="Mes",
                 value=str(lista.mes),
-                options=[ft.DropdownOption(key=str(n), text=t) for n, t in enumerate(MESES, 1)],
+                options=[
+                    ft.DropdownOption(key=str(n), text=t)
+                    for n, t in enumerate(MESES, 1)
+                ],
                 expand=True,
                 on_select=lambda e: self._cambiar_mes_primer_uso(),
             )
@@ -431,7 +458,9 @@ class VistaRevision:
                 content=ft.ResponsiveRow(
                     [
                         ft.Column(
-                            [control_mes, self.ayuda_mes], spacing=8, col={"sm": 12, "md": 6}
+                            [control_mes, self.ayuda_mes],
+                            spacing=8,
+                            col={"sm": 12, "md": 6},
                         ),
                         ft.Column(
                             [
@@ -453,7 +482,9 @@ class VistaRevision:
 
         # -- Filtro --
         self.selector_filtro = ft.SegmentedButton(
-            segments=[ft.Segment(value=v, label=ft.Text(t)) for v, t in _FILTROS.items()],
+            segments=[
+                ft.Segment(value=v, label=ft.Text(t)) for v, t in _FILTROS.items()
+            ],
             selected=["todas"],
             allow_empty_selection=False,
             on_change=lambda e: self.cambiar_filtro(e.control.selected[0]),
@@ -480,7 +511,9 @@ class VistaRevision:
             hoja.sin_filas_completas or self.bloque_incompletas.tiene_errores()
         ):
             self.bloque_incompletas.control.expanded = True
-        todos = self.bloques + ([self.bloque_incompletas] if self.bloque_incompletas else [])
+        todos = self.bloques + (
+            [self.bloque_incompletas] if self.bloque_incompletas else []
+        )
         self.sin_resultados = ft.Container(
             padding=32,
             alignment=ft.Alignment.CENTER,
@@ -488,7 +521,9 @@ class VistaRevision:
             content=ft.Column(
                 [
                     ft.Text("Ninguna fila coincide con este filtro."),
-                    ft.TextButton("Ver todas", on_click=lambda e: self.cambiar_filtro("todas")),
+                    ft.TextButton(
+                        "Ver todas", on_click=lambda e: self.cambiar_filtro("todas")
+                    ),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 tight=True,
@@ -504,10 +539,16 @@ class VistaRevision:
             content=ft.Row(
                 [
                     _celda("imp", self._titulo_columna("Imp."), ft.Alignment.CENTER),
-                    _celda("fila", self._titulo_columna("Fila"), ft.Alignment.CENTER_RIGHT),
+                    _celda(
+                        "fila", self._titulo_columna("Fila"), ft.Alignment.CENTER_RIGHT
+                    ),
                     _celda("tipo", self._titulo_columna("Tipo")),
                     ft.Container(expand=True, content=self._titulo_columna("Nombre")),
-                    _celda("monto", self._titulo_columna("Monto"), ft.Alignment.CENTER_RIGHT),
+                    _celda(
+                        "monto",
+                        self._titulo_columna("Monto"),
+                        ft.Alignment.CENTER_RIGHT,
+                    ),
                     _celda(
                         "pagado",
                         self._titulo_columna("Pagado / Cobrado"),
@@ -525,7 +566,9 @@ class VistaRevision:
         self.icono_pie = ft.Icon(ft.Icons.ERROR_OUTLINE, size=18, visible=False)
         self.texto_pie = ft.Text(expand=True)
         self.ir_al_error = ft.TextButton(
-            "Ir al primer error", visible=False, on_click=lambda e: self.ir_al_primer_error()
+            "Ir al primer error",
+            visible=False,
+            on_click=lambda e: self.ir_al_primer_error(),
         )
         self.boton_confirmar = ft.FilledButton(
             "Confirmar importación", on_click=lambda e: self.confirmar()
@@ -622,7 +665,9 @@ class VistaRevision:
         }
         for fila in self.filas:
             fila.actualizar()
-        todos = self.bloques + ([self.bloque_incompletas] if self.bloque_incompletas else [])
+        todos = self.bloques + (
+            [self.bloque_incompletas] if self.bloque_incompletas else []
+        )
         for bloque in todos:
             bloque.actualizar(self.filtro)
         self.sin_resultados.visible = not any(b.control.visible for b in todos)
@@ -635,7 +680,8 @@ class VistaRevision:
 
     def _actualizar_filtro(self) -> None:
         cantidades = {
-            filtro: sum(1 for f in self.filas if f.pasa_filtro(filtro)) for filtro in _FILTROS
+            filtro: sum(1 for f in self.filas if f.pasa_filtro(filtro))
+            for filtro in _FILTROS
         }
         for segmento in self.selector_filtro.segments:
             n = cantidades[segmento.value]
@@ -643,7 +689,9 @@ class VistaRevision:
             # "Con errores" se marca en cuanto hay alguno, para que no se pierda.
             if segmento.value == "errores":
                 segmento.icon = (
-                    ft.Icon(ft.Icons.ERROR_OUTLINE, color=self._color_negativo) if n else None
+                    ft.Icon(ft.Icons.ERROR_OUTLINE, color=self._color_negativo)
+                    if n
+                    else None
                 )
 
     def _actualizar_avisos_archivo(self) -> None:
@@ -735,7 +783,9 @@ class VistaRevision:
                 )
             aviso = lista.aviso_mes()
             if aviso:
-                lineas.append(aviso_en_pantalla(page, "pendiente", ft.Icons.WARNING_AMBER, aviso))
+                lineas.append(
+                    aviso_en_pantalla(page, "pendiente", ft.Icons.WARNING_AMBER, aviso)
+                )
         self.ayuda_mes.controls = lineas
 
     def _actualizar_categoria_defecto(self) -> None:
@@ -856,7 +906,9 @@ class VistaRevision:
             return
         if not fila.pasa_filtro(self.filtro):
             self.cambiar_filtro("todas")
-        todos = self.bloques + ([self.bloque_incompletas] if self.bloque_incompletas else [])
+        todos = self.bloques + (
+            [self.bloque_incompletas] if self.bloque_incompletas else []
+        )
         for bloque in todos:
             if fila in bloque.filas:
                 bloque.control.expanded = True
@@ -864,7 +916,9 @@ class VistaRevision:
 
         async def desplazar():
             # scroll_to es asíncrona en Flet 1.0: por eso va en una tarea.
-            await self.lista_filas.scroll_to(scroll_key=f"fila-{fila.indice}", duration=300)
+            await self.lista_filas.scroll_to(
+                scroll_key=f"fila-{fila.indice}", duration=300
+            )
 
         self.app.page.run_task(desplazar)
         self.app.enfocar(fila.lapiz)

@@ -330,7 +330,7 @@ class PantallaImportar:
     # ------------------------------------------------------------------
 
     def confirmar(self) -> None:
-        """"Confirmar importación" (o Ctrl+Enter): abre el resumen previo."""
+        """ "Confirmar importación" (o Ctrl+Enter): abre el resumen previo."""
         if self.vista is None or self.lista is None or self.app.hay_dialogo_abierto():
             return
         lineas = confirmar_importacion.resumen_previo(self.lista)
@@ -466,7 +466,11 @@ class PantallaImportar:
             self.cancelar()
             return
         es_mac = self.app.page.platform == ft.PagePlatform.MACOS
-        if (e.meta if es_mac else e.ctrl) and e.key == "Enter" and self.vista is not None:
+        if (
+            (e.meta if es_mac else e.ctrl)
+            and e.key == "Enter"
+            and self.vista is not None
+        ):
             self.vista.confirmar()
 
     def cancelar(self) -> None:
@@ -495,7 +499,7 @@ class PantallaImportar:
         )
 
     def cambiar_archivo(self) -> None:
-        """"Cambiar archivo u hoja" en la revisión: vuelve a elegir el archivo."""
+        """ "Cambiar archivo u hoja" en la revisión: vuelve a elegir el archivo."""
         if self.lista is None or not self.lista.hubo_cambios:
             self._mostrar_inicio()
             return

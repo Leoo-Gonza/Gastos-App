@@ -82,8 +82,12 @@ def base_sin_varios(con, mes_id):
     marsu = catalogos.crear(con, catalogos.PERSONAS, "Marsu")
     gastos.agregar_gasto(con, mes_id, "Alquiler", ids["Vivienda"], 26000000, "fijo")
     return SimpleNamespace(
-        con=con, mes_id=mes_id, vivienda=ids["Vivienda"], servicios=ids["Servicios"],
-        sofia=sofia, marsu=marsu,
+        con=con,
+        mes_id=mes_id,
+        vivienda=ids["Vivienda"],
+        servicios=ids["Servicios"],
+        sofia=sofia,
+        marsu=marsu,
     )
 
 
@@ -98,9 +102,12 @@ def fila(lista, nombre, fila_excel=None):
     hallazgos = [
         f
         for f in lista.filas
-        if f.nombre == nombre and (fila_excel is None or f.origen.fila_excel == fila_excel)
+        if f.nombre == nombre
+        and (fila_excel is None or f.origen.fila_excel == fila_excel)
     ]
-    assert len(hallazgos) == 1, f"{nombre!r} (fila {fila_excel}): {len(hallazgos)} filas"
+    assert len(hallazgos) == 1, (
+        f"{nombre!r} (fila {fila_excel}): {len(hallazgos)} filas"
+    )
     return hallazgos[0]
 
 
@@ -121,7 +128,10 @@ def foto_de_la_base(con):
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
         )
     ]
-    return {t: [tuple(r) for r in con.execute(f"SELECT * FROM {t} ORDER BY 1")] for t in tablas}
+    return {
+        t: [tuple(r) for r in con.execute(f"SELECT * FROM {t} ORDER BY 1")]
+        for t in tablas
+    }
 
 
 def cargar_primera_importacion(b):
@@ -135,7 +145,14 @@ def cargar_primera_importacion(b):
     ]:
         gastos.agregar_gasto(b.con, b.mes_id, nombre, b.varios, monto, "fijo")
     cuotas.crear_plan(
-        b.con, "Avant Service cuota 3/ 3 $41.116,66", b.varios, None, 4111666, 3, 2026, 8,
+        b.con,
+        "Avant Service cuota 3/ 3 $41.116,66",
+        b.varios,
+        None,
+        4111666,
+        3,
+        2026,
+        8,
         hoy=HOY,
     )
     for persona, descripcion, monto in [
@@ -193,7 +210,11 @@ def test_las_incompletas_dicen_falta_el_monto_o_falta_el_nombre(base):
     # CA-51.2: con nombre -> "Falta el monto. Se ignora."; sin nombre -> "Falta el nombre. Se ignora."
     lista = revisar(base.con)
     for f in lista.incompletas():
-        esperado = "Falta el nombre. Se ignora." if f.nombre is None else "Falta el monto. Se ignora."
+        esperado = (
+            "Falta el nombre. Se ignora."
+            if f.nombre is None
+            else "Falta el monto. Se ignora."
+        )
         assert lista.notas(f) == [esperado], f.nombre
 
 
@@ -222,7 +243,9 @@ def test_las_incompletas_pegadas_no_estan_dentro_del_bloque(base):
 def test_excel_sin_titulos_tiene_un_solo_bloque_filas_detectadas(base):
     # CA-51.7: sin ningún título -> un solo bloque "Filas detectadas".
     lista = revisar(base.con, xlsx({"C3": "Luz", "D3": 1000, "C4": "Gas", "D4": 2000}))
-    assert [(b.titulo, len(b.filas)) for b in lista.bloques()] == [("Filas detectadas", 2)]
+    assert [(b.titulo, len(b.filas)) for b in lista.bloques()] == [
+        ("Filas detectadas", 2)
+    ]
 
 
 def test_filas_sin_titulo_van_a_otras_filas_cuando_hay_otros_bloques(base):
@@ -245,7 +268,9 @@ def test_fila_pegada_al_titulo_no_cambia_la_persona_de_sofia(base):
     celdas = insertar_fila(celdas_planilla(), 21, {"D": "Concepto", "E": "Importe"})
     lista = revisar(base.con, xlsx(celdas))
     for nombre in ("Prestamo MP", "Internet"):
-        f = [x for x in lista.filas if x.nombre == nombre and x.bloque == "Deudas sofia"][0]
+        f = [
+            x for x in lista.filas if x.nombre == nombre and x.bloque == "Deudas sofia"
+        ][0]
         assert (f.tipo, f.persona) == ("me_deben", base.sofia)
     assert fila(lista, "Concepto").incompleta and fila(lista, "Importe").incompleta
 
@@ -262,7 +287,10 @@ def test_titulo_preestablecido_gasto_del_mes_no_tiene_aviso_ni_marca_en_servicio
 def test_tipos_propuestos_de_la_planilla_con_persona_y_cuota(base):
     # CA-52.1: "me deben" Sofía y Marsu; la cuota es 3 de 3.
     lista = revisar(base.con)
-    assert (fila(lista, "Prestamo MP").tipo, fila(lista, "Prestamo MP").persona) == ("me_deben", base.sofia)
+    assert (fila(lista, "Prestamo MP").tipo, fila(lista, "Prestamo MP").persona) == (
+        "me_deben",
+        base.sofia,
+    )
     assert fila(lista, "Internet", 23).persona == base.sofia
     assert fila(lista, "tacones chiqui baby").persona == base.marsu
     avant = fila(lista, "Avant Service cuota 3/ 3 $41.116,66")
@@ -335,7 +363,8 @@ def test_nombres_que_se_proponen_como_ignorar(base, nombre):
 
 
 @pytest.mark.parametrize(
-    "nombre", ["Subtotal", "Totales", "Tarjetas de Credito Visa", "Gastos fijos", "Falta pagar"]
+    "nombre",
+    ["Subtotal", "Totales", "Tarjetas de Credito Visa", "Gastos fijos", "Falta pagar"],
 )
 def test_nombres_parecidos_pero_no_iguales_no_se_ignoran(base, nombre):
     # RN-66: "total" es una palabra entera y los nombres fijos tienen que ser iguales.
@@ -349,12 +378,16 @@ def test_monto_cero_o_negativo_se_propone_ignorar_con_nota(base, monto):
     lista = revisar(base.con, xlsx({"C3": "Nada", "D3": monto}))
     f = lista.filas[0]
     assert f.tipo == "ignorar" and f.tildada is False
-    assert lista.notas(f) == ["Monto no válido. Si querés importarla, corregí el monto."]
+    assert lista.notas(f) == [
+        "Monto no válido. Si querés importarla, corregí el monto."
+    ]
 
 
 def test_descuento_y_nada_pasados_a_fijo_muestran_el_error_de_monto(base):
     # CA-57.7: sin corregir el monto -> "El monto tiene que ser mayor a 0." y no se confirma.
-    lista = revisar(base.con, xlsx({"C1": "Descuento", "D1": -5000, "C2": "Nada", "D2": 0}))
+    lista = revisar(
+        base.con, xlsx({"C1": "Descuento", "D1": -5000, "C2": "Nada", "D2": 0})
+    )
     for f in list(lista.filas):
         lista.cambiar_tipo(f.indice, "fijo")
         assert lista.errores(f) == ["El monto tiene que ser mayor a 0."]
@@ -396,7 +429,9 @@ def test_suma_dentro_de_otra_formula_y_en_minusculas(base):
 
 def test_sum_sin_valor_guardado_no_marca_la_celda_vacia_compartida(base):
     # Un SUM sin valor guardado deja la celda vacía y no ensucia la constante VACIA.
-    hoja = abrir_libro(xlsx({"C3": "Luz", "D3": "=SUM(D1:D2)", "D1": 1, "D2": 2})).leer_hoja("Octubre")
+    hoja = abrir_libro(
+        xlsx({"C3": "Luz", "D3": "=SUM(D1:D2)", "D1": 1, "D2": 2})
+    ).leer_hoja("Octubre")
     assert hoja.formulas_sin_valor == 1
     assert VACIA.es_suma is False
     luz = [f for f in hoja.filas if f.nombre == "Luz"][0]
@@ -441,7 +476,9 @@ def test_titulo_con_nombre_de_persona_dentro_de_otra_palabra_no_cuenta(base):
 
 def test_titulo_combinado_da_el_mismo_resultado_que_sin_combinar(base):
     # CA-52.4: "Deudas sofia" como celda combinada D21:E21.
-    libro = armar_libro({"Octubre": celdas_planilla()}, combinadas={"Octubre": ["D21:E21"]})
+    libro = armar_libro(
+        {"Octubre": celdas_planilla()}, combinadas={"Octubre": ["D21:E21"]}
+    )
     lista = revisar(base.con, a_bytes(libro))
     sin = revisar(base.con)
     tipos = lambda l: [(f.nombre, f.tipo, f.persona, f.tildada) for f in l.filas]  # noqa: E731
@@ -455,7 +492,7 @@ def test_titulo_combinado_da_el_mismo_resultado_que_sin_combinar(base):
 COBRADO = {"F21": "Cobrado", "F22": 20000, "F23": "x", "F26": "Cobrado", "F27": 3000}
 
 NOTA_3000 = (
-    'En la columna Cobrado dice "3.000"; los ítems \'me deben\' no tienen cobro parcial, '
+    "En la columna Cobrado dice \"3.000\"; los ítems 'me deben' no tienen cobro parcial, "
     "quedó como no cobrado."
 )
 
@@ -485,13 +522,16 @@ def test_cobrado_no_en_prestamo_viene_con_nota_y_internet_sigue_cobrado(base):
     prestamo, internet = fila(lista, "Prestamo MP"), fila(lista, "Internet", 23)
     assert prestamo.cobrado is False
     assert (
-        'En la columna Cobrado dice "no"; los ítems \'me deben\' no tienen cobro parcial, '
+        "En la columna Cobrado dice \"no\"; los ítems 'me deben' no tienen cobro parcial, "
         "quedó como no cobrado."
     ) in lista.notas(prestamo)
     assert internet.cobrado is True
 
 
-@pytest.mark.parametrize("texto", ["x", "X", " x ", "sí", "Sí", "SI", "si", "✓", "ok", "OK", "Cobrado", "COBRADO"])
+@pytest.mark.parametrize(
+    "texto",
+    ["x", "X", " x ", "sí", "Sí", "SI", "si", "✓", "ok", "OK", "Cobrado", "COBRADO"],
+)
 def test_textos_que_significan_cobrado(base, texto):
     # RN-64 / RN-67: sin mayúsculas ni acentos ni espacios de más.
     lista = revisar(base.con, planilla_con({"F21": "Cobrado", "F22": texto}))
@@ -499,13 +539,15 @@ def test_textos_que_significan_cobrado(base, texto):
 
 
 @pytest.mark.parametrize("texto", ["no", "No", "falta", "pendiente", "x x", "sí, casi"])
-def test_textos_que_no_significan_cobrado_dejan_la_nota_con_el_texto_tal_cual(base, texto):
+def test_textos_que_no_significan_cobrado_dejan_la_nota_con_el_texto_tal_cual(
+    base, texto
+):
     # RN-64: cualquier otro texto -> no cobrado y nota con el valor de la celda.
     lista = revisar(base.con, planilla_con({"F21": "Cobrado", "F22": texto}))
     f = fila(lista, "Prestamo MP")
     assert f.cobrado is False
     assert (
-        f'En la columna Cobrado dice "{texto}"; los ítems \'me deben\' no tienen cobro '
+        f"En la columna Cobrado dice \"{texto}\"; los ítems 'me deben' no tienen cobro "
         "parcial, quedó como no cobrado."
     ) in lista.notas(f)
 
@@ -519,14 +561,17 @@ def test_cobrado_cero_no_cobrado_y_sin_nota(base):
 
 
 @pytest.mark.parametrize(
-    "numero,mostrado", [(3000, "3.000"), (19999.99, "20.000"), (1500000, "1.500.000"), (-500, "-500")]
+    "numero,mostrado",
+    [(3000, "3.000"), (19999.99, "20.000"), (1500000, "1.500.000"), (-500, "-500")],
 )
-def test_cobrado_numero_distinto_se_muestra_con_el_formato_de_montos(base, numero, mostrado):
+def test_cobrado_numero_distinto_se_muestra_con_el_formato_de_montos(
+    base, numero, mostrado
+):
     # RN-64: V con el formato de RN-04 si es un número.
     lista = revisar(base.con, planilla_con({"F21": "Cobrado", "F22": numero}))
     nota = fila(lista, "Prestamo MP").nota_cobrado
     assert nota == (
-        f'En la columna Cobrado dice "{mostrado}"; los ítems \'me deben\' no tienen cobro '
+        f"En la columna Cobrado dice \"{mostrado}\"; los ítems 'me deben' no tienen cobro "
         "parcial, quedó como no cobrado."
     )
 
@@ -577,7 +622,12 @@ def test_editar_fila_con_cobrado_explicito_cambia_cobrado_y_quita_la_nota(base):
     lista = revisar(base.con, planilla_con(COBRADO))
     tacones = fila(lista, "tacones chiqui baby")
     errores = lista.editar_fila(
-        tacones.indice, "me_deben", "tacones chiqui baby", 678500, persona=base.marsu, cobrado=True
+        tacones.indice,
+        "me_deben",
+        "tacones chiqui baby",
+        678500,
+        persona=base.marsu,
+        cobrado=True,
     )
     assert errores == {}
     assert tacones.cobrado is True and tacones.nota_cobrado is None
@@ -588,7 +638,12 @@ def test_editar_fila_sin_tocar_cobrado_conserva_la_nota(base):
     lista = revisar(base.con, planilla_con(COBRADO))
     tacones = fila(lista, "tacones chiqui baby")
     lista.editar_fila(
-        tacones.indice, "me_deben", "tacones 2", 678500, persona=base.marsu, cobrado=None
+        tacones.indice,
+        "me_deben",
+        "tacones 2",
+        678500,
+        persona=base.marsu,
+        cobrado=None,
     )
     assert NOTA_3000 in lista.notas(tacones)
 
@@ -701,7 +756,9 @@ def test_cambiar_el_nombre_recalcula_la_marca_sin_tocar_el_tilde(base):
     # RN-74: renombrar "Alquiler" (ya existe, destildada) deja la marca y el tilde coherentes.
     lista = revisar(base.con)
     alquiler = fila(lista, "Alquiler")
-    errores = lista.editar_fila(alquiler.indice, "fijo", "Alquiler casa", 26000000, categoria=base.vivienda)
+    errores = lista.editar_fila(
+        alquiler.indice, "fijo", "Alquiler casa", 26000000, categoria=base.vivienda
+    )
     assert errores == {}
     assert alquiler.ya_existe is None
     assert alquiler.tildada is False  # el tilde no se toca
@@ -717,10 +774,14 @@ def test_cambiar_la_persona_recalcula_ya_existe_sin_tocar_el_tilde(base):
     lista = revisar(base.con)
     prestamo = fila(lista, "Prestamo MP")
     assert (prestamo.ya_existe, prestamo.tildada) == ("me_deben", False)
-    lista.editar_fila(prestamo.indice, "me_deben", "Prestamo MP", 2000000, persona=base.marsu)
+    lista.editar_fila(
+        prestamo.indice, "me_deben", "Prestamo MP", 2000000, persona=base.marsu
+    )
     assert (prestamo.ya_existe, prestamo.tildada) == (None, False)
     lista.cambiar_tilde(prestamo.indice, True)
-    lista.editar_fila(prestamo.indice, "me_deben", "Prestamo MP", 2000000, persona=base.sofia)
+    lista.editar_fila(
+        prestamo.indice, "me_deben", "Prestamo MP", 2000000, persona=base.sofia
+    )
     assert (prestamo.ya_existe, prestamo.tildada) == ("me_deben", True)
 
 
@@ -739,9 +800,15 @@ def test_editar_fila_desde_ignorar_tilda_y_hacia_ignorar_destilda(base):
     # RN-68: aceptar el diálogo cuenta como cambio de tipo (misma regla del tilde).
     lista = revisar(base.con)
     tarjetas = fila(lista, "Tarjetas de Credito")
-    assert lista.editar_fila(tarjetas.indice, "fijo", "Tarjetas de Credito", 58291700) == {}
+    assert (
+        lista.editar_fila(tarjetas.indice, "fijo", "Tarjetas de Credito", 58291700)
+        == {}
+    )
     assert tarjetas.tildada is True
-    assert lista.editar_fila(tarjetas.indice, "ignorar", "Tarjetas de Credito", 58291700) == {}
+    assert (
+        lista.editar_fila(tarjetas.indice, "ignorar", "Tarjetas de Credito", 58291700)
+        == {}
+    )
     assert tarjetas.tildada is False
 
 
@@ -753,7 +820,11 @@ def test_restaurar_fila_vuelve_a_lo_detectado(base):
     lista.cambiar_tilde(alquiler.indice, True)
     lista.restaurar_fila(alquiler.indice)
     nueva = lista.filas[alquiler.indice]
-    assert (nueva.nombre, nueva.monto_cent, nueva.tipo) == ("Alquiler", 26000000, "fijo")
+    assert (nueva.nombre, nueva.monto_cent, nueva.tipo) == (
+        "Alquiler",
+        26000000,
+        "fijo",
+    )
     assert (nueva.ya_existe, nueva.tildada, nueva.categoria) == ("gasto", False, None)
     assert nueva.indice == alquiler.indice
 
@@ -790,7 +861,9 @@ def test_destildar_y_tildar_bloque_deudas_sofia(base):
     # CA-52.8: 22 y 23 se destildan y se vuelven a tildar; 24 (Total, ignorar) no se toca.
     lista = revisar(base.con)
     prestamo, internet, total = (
-        fila(lista, "Prestamo MP"), fila(lista, "Internet", 23), fila(lista, "Total", 24)
+        fila(lista, "Prestamo MP"),
+        fila(lista, "Internet", 23),
+        fila(lista, "Total", 24),
     )
     lista.destildar_bloque("Deudas sofia")
     assert (prestamo.tildada, internet.tildada, total.tildada) == (False, False, False)
@@ -841,7 +914,10 @@ def test_cambiar_bloque_persona_marsu_en_titulo_sofia_y_marsu(base):
 
 @pytest.mark.parametrize(
     "tipo,mensaje",
-    [("cuota", "La cuota se elige fila por fila."), ("sueldo", "Solo una fila puede ser el sueldo.")],
+    [
+        ("cuota", "La cuota se elige fila por fila."),
+        ("sueldo", "Solo una fila puede ser el sueldo."),
+    ],
 )
 def test_cambiar_bloque_no_ofrece_cuota_ni_sueldo(base, tipo, mensaje):
     # RN-78: esos dos tipos no se pueden elegir para todo un bloque.
@@ -886,7 +962,11 @@ def test_cambiar_bloque_categoria_sin_cambiar_tipo_resiste_al_cambio_de_defecto(
     lista = revisar(base.con)
     lista.cambiar_bloque("Deudas", tipo=None, categoria=base.vivienda)
     lista.cambiar_categoria_defecto(base.servicios)
-    for nombre in ("Monotributo 66.020,12", "Avant Service cuota 3/ 3 $41.116,66", "Gym"):
+    for nombre in (
+        "Monotributo 66.020,12",
+        "Avant Service cuota 3/ 3 $41.116,66",
+        "Gym",
+    ):
         assert lista.categoria_de(fila(lista, nombre)) == base.vivienda, nombre
     for nombre in ("Deuda freezer", "Obra social"):
         f = fila(lista, nombre)
@@ -906,7 +986,11 @@ def test_cambiar_bloque_con_categoria_none_vuelve_a_seguir_el_defecto(base):
 def test_cambiar_bloque_a_ignorar_destilda_todo(base):
     lista = revisar(base.con)
     lista.cambiar_bloque("Deudas", tipo="ignorar")
-    for nombre in ("Monotributo 66.020,12", "Gym", "Avant Service cuota 3/ 3 $41.116,66"):
+    for nombre in (
+        "Monotributo 66.020,12",
+        "Gym",
+        "Avant Service cuota 3/ 3 $41.116,66",
+    ):
         f = fila(lista, nombre)
         assert (f.tipo, f.tildada) == ("ignorar", False)
 
@@ -933,11 +1017,18 @@ def test_cambiar_bloque_con_persona_nueva(base):
 def test_cambiar_bloque_categoria_solo_a_gastos_y_persona_solo_a_me_deben(base):
     # RN-78: con "No cambiar el tipo", la categoría va a gasto/cuota y la persona a "me deben".
     lista = revisar(base.con)
-    lista.cambiar_bloque("Deudas sofia", tipo=None, categoria=base.vivienda, persona=base.marsu)
+    lista.cambiar_bloque(
+        "Deudas sofia", tipo=None, categoria=base.vivienda, persona=base.marsu
+    )
     assert fila(lista, "Prestamo MP").persona == base.marsu
     assert fila(lista, "Prestamo MP").categoria is None
-    lista.cambiar_bloque("Deudas", tipo=None, categoria=base.vivienda, persona=base.marsu)
-    assert fila(lista, "Gym").persona is None and fila(lista, "Gym").categoria == base.vivienda
+    lista.cambiar_bloque(
+        "Deudas", tipo=None, categoria=base.vivienda, persona=base.marsu
+    )
+    assert (
+        fila(lista, "Gym").persona is None
+        and fila(lista, "Gym").categoria == base.vivienda
+    )
 
 
 def test_cambiar_bloque_recalcula_ya_existe_y_aviso(base):
@@ -960,7 +1051,12 @@ def test_editar_nombre_y_monto(base):
     # CA-53.1: "psicologo" -> "Psicólogo" y "Servicios" -> 85.000.
     lista = revisar(base.con)
     psico, servicios = fila(lista, "psicologo"), fila(lista, "Servicios")
-    assert lista.editar_fila(psico.indice, "fijo", "Psicólogo", 14000000, pagado_cent=6000000) == {}
+    assert (
+        lista.editar_fila(
+            psico.indice, "fijo", "Psicólogo", 14000000, pagado_cent=6000000
+        )
+        == {}
+    )
     assert lista.editar_fila(servicios.indice, "fijo", "Servicios", 8500000) == {}
     assert (psico.nombre, psico.pagado_cent) == ("Psicólogo", 6000000)
     assert servicios.monto_cent == 8500000
@@ -1010,7 +1106,12 @@ def test_editar_con_tipo_ignorar_se_acepta_aunque_haya_datos_malos(base):
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
     assert lista.editar_fila(gym.indice, "ignorar", "", None) == {}
-    assert (gym.tipo, gym.nombre, gym.monto_cent, gym.tildada) == ("ignorar", None, None, False)
+    assert (gym.tipo, gym.nombre, gym.monto_cent, gym.tildada) == (
+        "ignorar",
+        None,
+        None,
+        False,
+    )
 
 
 def test_editar_devuelve_un_error_por_campo(base):
@@ -1022,14 +1123,27 @@ def test_editar_devuelve_un_error_por_campo(base):
         "monto": "Falta el monto.",
     }
     lista.cambiar_categoria_defecto(None)
-    assert lista.editar_fila(f.indice, "fijo", "Gym", 100) == {"categoria": "Elegí una categoría."}
-    assert lista.editar_fila(f.indice, "me_deben", "Gym", 100) == {"persona": "Elegí una persona."}
+    assert lista.editar_fila(f.indice, "fijo", "Gym", 100) == {
+        "categoria": "Elegí una categoría."
+    }
+    assert lista.editar_fila(f.indice, "me_deben", "Gym", 100) == {
+        "persona": "Elegí una persona."
+    }
 
 
-@pytest.mark.parametrize("monto,esperado", [(0, "El monto tiene que ser mayor a 0."), (-100, "El monto tiene que ser mayor a 0."), (None, "Falta el monto.")])
+@pytest.mark.parametrize(
+    "monto,esperado",
+    [
+        (0, "El monto tiene que ser mayor a 0."),
+        (-100, "El monto tiene que ser mayor a 0."),
+        (None, "Falta el monto."),
+    ],
+)
 def test_editar_monto_invalido(base, monto, esperado):
     lista = revisar(base.con)
-    assert lista.editar_fila(fila(lista, "Gym").indice, "fijo", "Gym", monto) == {"monto": esperado}
+    assert lista.editar_fila(fila(lista, "Gym").indice, "fijo", "Gym", monto) == {
+        "monto": esperado
+    }
 
 
 def test_editar_nombre_se_guarda_sin_espacios_de_los_costados(base):
@@ -1061,7 +1175,12 @@ def test_gym_cuota_2_de_6_nota_primera_septiembre(base):
     # CA-53.3: cuota 2 de 6 en 2026-10 -> primera 2026-09, última 2027-02.
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
-    assert lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_actual=2, cuota_total=6) == {}
+    assert (
+        lista.editar_fila(
+            gym.indice, "cuota", "Gym", 5000000, cuota_actual=2, cuota_total=6
+        )
+        == {}
+    )
     assert lista.notas(gym) == [
         "Plan de 6 cuotas: primera Septiembre 2026, última Febrero 2027. "
         "Se agrega la cuota 2/6 en Octubre 2026."
@@ -1072,9 +1191,21 @@ def test_cuota_actual_fuera_de_rango(base):
     # CA-53.3: cuota 7 de 6 y cuota 0.
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
-    esperado = {"cuota": "La cuota actual tiene que estar entre 1 y la cantidad de cuotas."}
-    assert lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_actual=7, cuota_total=6) == esperado
-    assert lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_actual=0, cuota_total=6) == esperado
+    esperado = {
+        "cuota": "La cuota actual tiene que estar entre 1 y la cantidad de cuotas."
+    }
+    assert (
+        lista.editar_fila(
+            gym.indice, "cuota", "Gym", 5000000, cuota_actual=7, cuota_total=6
+        )
+        == esperado
+    )
+    assert (
+        lista.editar_fila(
+            gym.indice, "cuota", "Gym", 5000000, cuota_actual=0, cuota_total=6
+        )
+        == esperado
+    )
 
 
 @pytest.mark.parametrize("total", [0, -3])
@@ -1082,16 +1213,18 @@ def test_cantidad_de_cuotas_menor_a_1(base, total):
     # CA-53.3: cantidad 0 (o negativa).
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
-    assert lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_actual=1, cuota_total=total) == {
-        "cuota": "La cantidad de cuotas tiene que ser un número entero de 1 o más."
-    }
+    assert lista.editar_fila(
+        gym.indice, "cuota", "Gym", 5000000, cuota_actual=1, cuota_total=total
+    ) == {"cuota": "La cantidad de cuotas tiene que ser un número entero de 1 o más."}
 
 
 def test_cantidad_de_cuotas_con_decimales_es_un_error(base):
     # CA-53.3: "cantidad 0 o 2,5: error ... número entero de 1 o más".
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
-    errores = lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_actual=1, cuota_total=2.5)
+    errores = lista.editar_fila(
+        gym.indice, "cuota", "Gym", 5000000, cuota_actual=1, cuota_total=2.5
+    )
     assert errores == {
         "cuota": "La cantidad de cuotas tiene que ser un número entero de 1 o más."
     }
@@ -1111,8 +1244,14 @@ def test_cuota_con_solo_un_dato_pide_los_dos(base):
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
     esperado = {"cuota": "Indicá la cuota actual y la cantidad de cuotas."}
-    assert lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_actual=2) == esperado
-    assert lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_total=2) == esperado
+    assert (
+        lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_actual=2)
+        == esperado
+    )
+    assert (
+        lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_total=2)
+        == esperado
+    )
 
 
 def test_nota_de_la_cuota_se_recalcula_si_cambia_el_mes_destino(base):
@@ -1145,7 +1284,12 @@ def test_cambiar_servicios_a_me_deben_pide_persona_y_se_resuelve_con_una_nueva(b
     assert lista.errores(servicios) == ["Elegí una persona."]
     assert lista.puede_confirmar() is False
     juan = lista.agregar_persona("Juan")
-    assert lista.editar_fila(servicios.indice, "me_deben", "Servicios", 8200000, persona=juan) == {}
+    assert (
+        lista.editar_fila(
+            servicios.indice, "me_deben", "Servicios", 8200000, persona=juan
+        )
+        == {}
+    )
     assert servicios.persona == juan
     assert lista.errores(servicios) == []
     assert lista.puede_confirmar() is True
@@ -1163,7 +1307,11 @@ def test_editar_conserva_el_origen_y_el_bloque(base):
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
     lista.editar_fila(gym.indice, "unico", "Otro nombre", 100)
-    assert gym.bloque == "Deudas" and gym.origen.fila_excel == 15 and gym.origen.nombre == "Gym"
+    assert (
+        gym.bloque == "Deudas"
+        and gym.origen.fila_excel == 15
+        and gym.origen.nombre == "Gym"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1175,7 +1323,12 @@ def test_la_categoria_por_defecto_viene_varios(base):
     # CA-54.1.
     lista = revisar(base.con)
     assert lista.categoria_defecto == base.varios
-    for nombre in ("Servicios", "Internet", "Gym", "Avant Service cuota 3/ 3 $41.116,66"):
+    for nombre in (
+        "Servicios",
+        "Internet",
+        "Gym",
+        "Avant Service cuota 3/ 3 $41.116,66",
+    ):
         f = [x for x in lista.filas if x.nombre == nombre][0]
         assert lista.categoria_de(f) == base.varios
 
@@ -1185,11 +1338,21 @@ def test_categoria_distinta_en_una_fila_resiste_al_cambio_de_defecto(base):
     lista = revisar(base.con)
     internet = fila(lista, "Internet", 5)
     lista.editar_fila(
-        internet.indice, "fijo", "Internet", 3870000, pagado_cent=3870000, categoria=base.servicios
+        internet.indice,
+        "fijo",
+        "Internet",
+        3870000,
+        pagado_cent=3870000,
+        categoria=base.servicios,
     )
     lista.cambiar_categoria_defecto(base.vivienda)
     assert lista.categoria_de(internet) == base.servicios
-    for nombre in ("Servicios", "psicologo", "Gym", "Avant Service cuota 3/ 3 $41.116,66"):
+    for nombre in (
+        "Servicios",
+        "psicologo",
+        "Gym",
+        "Avant Service cuota 3/ 3 $41.116,66",
+    ):
         f = [x for x in lista.filas if x.nombre == nombre][0]
         assert lista.categoria_de(f) == base.vivienda, nombre
 
@@ -1209,7 +1372,9 @@ def test_sin_varios_no_hay_categoria_por_defecto_y_cada_gasto_da_error(base_sin_
     # CA-54.3.
     lista = revisar(base_sin_varios.con)
     assert lista.categoria_defecto is None
-    gastos_y_cuota = [f for f in lista.filas if f.tipo in ("fijo", "unico", "cuota") and f.tildada]
+    gastos_y_cuota = [
+        f for f in lista.filas if f.tipo in ("fijo", "unico", "cuota") and f.tildada
+    ]
     assert len(gastos_y_cuota) == 5 + 1
     for f in gastos_y_cuota:
         assert lista.errores(f) == ["Elegí una categoría."], f.nombre
@@ -1218,7 +1383,9 @@ def test_sin_varios_no_hay_categoria_por_defecto_y_cada_gasto_da_error(base_sin_
     assert lista.errores(fila(lista, "Prestamo MP")) == []
 
 
-def test_sin_varios_se_resuelve_creando_una_categoria_nueva_como_defecto(base_sin_varios):
+def test_sin_varios_se_resuelve_creando_una_categoria_nueva_como_defecto(
+    base_sin_varios,
+):
     # CA-54.3 / CA-57.11: la categoría "Importado" como defecto sale de la lista de "en uso".
     lista = revisar(base_sin_varios.con)
     importado = lista.agregar_categoria("Importado")
@@ -1233,7 +1400,9 @@ def test_categoria_nueva_creada_y_no_usada_no_queda_en_uso_ni_en_la_base(base):
     lista = revisar(base.con)
     lista.agregar_categoria("Importado")
     assert lista.nuevas_en_uso() == ([], [])
-    assert "Importado" not in [c["nombre"] for c in catalogos.listar(base.con, catalogos.CATEGORIAS)]
+    assert "Importado" not in [
+        c["nombre"] for c in catalogos.listar(base.con, catalogos.CATEGORIAS)
+    ]
 
 
 def test_categoria_nueva_elegida_solo_en_gym_y_gym_destildada_no_queda_en_uso(base):
@@ -1271,8 +1440,15 @@ def test_categoria_nueva_usada_por_una_cuota_queda_en_uso(base):
     lista = revisar(base.con)
     importado = lista.agregar_categoria("Importado")
     avant = fila(lista, "Avant Service cuota 3/ 3 $41.116,66")
-    lista.editar_fila(avant.indice, "cuota", avant.nombre, 4111666, categoria=importado,
-                      cuota_actual=3, cuota_total=3)
+    lista.editar_fila(
+        avant.indice,
+        "cuota",
+        avant.nombre,
+        4111666,
+        categoria=importado,
+        cuota_actual=3,
+        cuota_total=3,
+    )
     assert lista.nuevas_en_uso() == ([importado], [])
 
 
@@ -1290,7 +1466,9 @@ def test_persona_nueva_solo_si_alguna_fila_me_deben_que_se_importa_la_usa(base):
     lista.cambiar_tilde(servicios.indice, False)
     assert lista.nuevas_en_uso() == ([], [])
     lista.cambiar_tilde(servicios.indice, True)
-    lista.editar_fila(servicios.indice, "me_deben", "Servicios", 8200000, persona=base.marsu)
+    lista.editar_fila(
+        servicios.indice, "me_deben", "Servicios", 8200000, persona=base.marsu
+    )
     assert lista.nuevas_en_uso() == ([], [])
 
 
@@ -1300,7 +1478,10 @@ def test_persona_nueva_se_puede_elegir_en_otras_filas(base):
     juan = lista.agregar_persona("Juan")
     for nombre in ("Prestamo MP", "tacones chiqui baby"):
         f = fila(lista, nombre)
-        assert lista.editar_fila(f.indice, "me_deben", nombre, f.monto_cent, persona=juan) == {}
+        assert (
+            lista.editar_fila(f.indice, "me_deben", nombre, f.monto_cent, persona=juan)
+            == {}
+        )
     assert lista.nuevas_en_uso() == ([], [juan])
     assert lista.nombre_persona(juan) == "Juan"
 
@@ -1309,7 +1490,9 @@ def test_varias_nuevas_solo_devuelve_las_usadas_y_en_orden_de_alta(base):
     lista = revisar(base.con)
     a, b, c = (lista.agregar_categoria(n) for n in ("Aa", "Bb", "Cc"))
     lista.editar_fila(fila(lista, "Gym").indice, "fijo", "Gym", 5000000, categoria=c)
-    lista.editar_fila(fila(lista, "Servicios").indice, "fijo", "Servicios", 8200000, categoria=a)
+    lista.editar_fila(
+        fila(lista, "Servicios").indice, "fijo", "Servicios", 8200000, categoria=a
+    )
     assert lista.nuevas_en_uso()[0] == [a, c]
     assert b not in lista.nuevas_en_uso()[0]
 
@@ -1380,7 +1563,10 @@ def test_persona_ya_agregada_en_la_importacion(base):
     lista.agregar_persona("Juan")
     with pytest.raises(ErrorDeValidacion) as error:
         lista.agregar_persona("juan")
-    assert str(error.value) == 'Ya agregaste una persona llamada "Juan" en esta importación.'
+    assert (
+        str(error.value)
+        == 'Ya agregaste una persona llamada "Juan" en esta importación.'
+    )
     assert error.value.campo == "nombre"
     assert len(lista.personas_nuevas) == 1
 
@@ -1390,7 +1576,10 @@ def test_categoria_ya_agregada_en_la_importacion(base):
     lista.agregar_categoria("Importado")
     with pytest.raises(ErrorDeValidacion) as error:
         lista.agregar_categoria(" IMPORTADO ")
-    assert str(error.value) == 'Ya agregaste una categoría llamada "Importado" en esta importación.'
+    assert (
+        str(error.value)
+        == 'Ya agregaste una categoría llamada "Importado" en esta importación.'
+    )
 
 
 def test_una_categoria_y_una_persona_pueden_llamarse_igual(base):
@@ -1447,7 +1636,9 @@ def test_mes_destino_por_defecto_y_opciones(base):
     assert lista.mes_se_crea is False
 
 
-@pytest.mark.parametrize("anio,mes", [(2026, 9), (2026, 12), (2027, 10), (2025, 10), (2026, 0)])
+@pytest.mark.parametrize(
+    "anio,mes", [(2026, 9), (2026, 12), (2027, 10), (2025, 10), (2026, 0)]
+)
 def test_mes_destino_no_ofrecido_se_rechaza_y_no_cambia(base, anio, mes):
     # CA-55.1.
     lista = revisar(base.con)
@@ -1472,7 +1663,9 @@ def test_mes_actual_siguiente_al_ultimo_es_el_defecto(base):
     assert lista.mes_se_crea is True
 
 
-@pytest.mark.parametrize("hoy", [date(2026, 9, 30), date(2027, 1, 1), date(2026, 12, 1)])
+@pytest.mark.parametrize(
+    "hoy", [date(2026, 9, 30), date(2027, 1, 1), date(2026, 12, 1)]
+)
 def test_mes_actual_no_ofrecido_propone_el_ultimo_mes(base, hoy):
     # RN-73: si el mes actual ni existe ni se puede crear, se propone el último.
     lista = revisar(base.con, hoy=hoy)
@@ -1587,7 +1780,9 @@ def test_primer_uso_sueldo_sin_mes_anterior_no_tiene_flecha(con):
     assert lista.notas(suelto) == ["Sueldo del mes: US$ 1.300,00."]
 
 
-def test_primer_uso_ninguna_fila_viene_ya_existe_y_todas_las_que_se_importan_tildadas(con):
+def test_primer_uso_ninguna_fila_viene_ya_existe_y_todas_las_que_se_importan_tildadas(
+    con,
+):
     # RN-74: sin meses no hay gastos con los que comparar, ni siquiera "Alquiler".
     catalogos.crear(con, catalogos.CATEGORIAS, "Varios")
     lista = revisar(con)
@@ -1634,7 +1829,10 @@ def test_mensaje_al_pasar_a_2026_09_y_volver_a_2026_11(base):
     lista = revisar(base.con)
     alquiler = fila(lista, "Alquiler")
     assert (alquiler.ya_existe, alquiler.tildada) == ("gasto", False)
-    assert lista.cambiar_mes_destino(2026, 9) == "Cambiaste el mes: 1 fila se volvió a tildar."
+    assert (
+        lista.cambiar_mes_destino(2026, 9)
+        == "Cambiaste el mes: 1 fila se volvió a tildar."
+    )
     assert (alquiler.ya_existe, alquiler.tildada) == (None, True)
     assert lista.cambiar_mes_destino(2026, 11) == (
         'Cambiaste el mes: 1 fila pasó a "ya existe" y se destildó.'
@@ -1733,15 +1931,21 @@ def test_ya_existe_ignora_mayusculas_acentos_y_espacios(base):
 
 def test_ya_existe_compara_con_gastos_de_cualquier_tipo_y_cualquier_fila_de_gasto(base):
     # RN-74: pago único existente + fila "cuota" con el mismo nombre -> "ya existe".
-    gastos.agregar_gasto(base.con, base.mes_id, "Heladera 2/12", base.varios, 100, "unico")
+    gastos.agregar_gasto(
+        base.con, base.mes_id, "Heladera 2/12", base.varios, 100, "unico"
+    )
     lista = revisar(base.con, xlsx({"C1": "Heladera 2/12", "D1": 30000}))
     assert lista.filas[0].tipo == "cuota"
     assert lista.filas[0].ya_existe == "gasto"
 
 
 def test_ya_existe_no_confunde_nombres_parecidos(base):
-    gastos.agregar_gasto(base.con, base.mes_id, "Pesos checks", base.varios, 100, "fijo")
-    lista = revisar(base.con, xlsx({"C1": "Pesos check", "D1": 1000, "C2": "Alquileres", "D2": 5}))
+    gastos.agregar_gasto(
+        base.con, base.mes_id, "Pesos checks", base.varios, 100, "fijo"
+    )
+    lista = revisar(
+        base.con, xlsx({"C1": "Pesos check", "D1": 1000, "C2": "Alquileres", "D2": 5})
+    )
     assert [f.ya_existe for f in lista.filas] == [None, None]
 
 
@@ -1768,7 +1972,9 @@ def test_segunda_importacion_textos_de_las_notas(base):
     assert lista.notas(fila(lista, "tacones chiqui baby")) == [
         "Marsu ya tiene un ítem sin cobrar con esta descripción. Viene destildada."
     ]
-    assert lista.notas(fila(lista, "Gym")) == ["Ya existe en Octubre 2026. Viene destildada."]
+    assert lista.notas(fila(lista, "Gym")) == [
+        "Ya existe en Octubre 2026. Viene destildada."
+    ]
 
 
 def test_item_me_deben_cobrado_no_cuenta_como_ya_existe(base):
@@ -1787,7 +1993,9 @@ def test_item_me_deben_de_otra_persona_no_cuenta(base):
 
 def test_item_me_deben_compara_la_descripcion_sin_acentos_ni_mayusculas(base):
     me_deben.agregar_item(base.con, base.sofia, "PRÉSTAMO mp", 100, HOY)
-    lista = revisar(base.con, xlsx({"D21": "Deudas sofia", "D22": "prestamo MP", "E22": 5000}))
+    lista = revisar(
+        base.con, xlsx({"D21": "Deudas sofia", "D22": "prestamo MP", "E22": 5000})
+    )
     assert fila(lista, "prestamo MP").ya_existe == "me_deben"
 
 
@@ -1797,7 +2005,9 @@ def test_fila_me_deben_sin_persona_no_se_marca_ya_existe(base):
     servicios = fila(lista, "Servicios")
     lista.cambiar_tipo(servicios.indice, "me_deben")
     assert servicios.ya_existe is None
-    lista.editar_fila(servicios.indice, "me_deben", "Servicios", 8200000, persona=base.sofia)
+    lista.editar_fila(
+        servicios.indice, "me_deben", "Servicios", 8200000, persona=base.sofia
+    )
     assert servicios.ya_existe == "me_deben"
 
 
@@ -1812,7 +2022,9 @@ def test_fila_me_deben_con_persona_nueva_no_se_marca_ya_existe(base):
 def test_plan_de_cuotas_con_ese_nombre_marca_la_fila_cuota(base):
     # RN-74: "Ya existe un plan de cuotas con este nombre. Viene destildada." (plan terminado:
     # no tiene cuota en 2026-10, así que solo lo detecta la regla del plan).
-    cuotas.crear_plan(base.con, "Heladera 2/12", base.varios, None, 100000, 3, 2026, 1, hoy=HOY)
+    cuotas.crear_plan(
+        base.con, "Heladera 2/12", base.varios, None, 100000, 3, 2026, 1, hoy=HOY
+    )
     lista = revisar(base.con, xlsx({"C1": "Heladera 2/12", "D1": 30000}))
     f = lista.filas[0]
     assert (f.tipo, f.ya_existe, f.tildada) == ("cuota", "plan", False)
@@ -1823,7 +2035,9 @@ def test_plan_de_cuotas_con_ese_nombre_marca_la_fila_cuota(base):
 
 def test_plan_existente_no_marca_filas_que_no_son_cuota(base):
     # RN-74: la regla del plan es solo para filas de tipo cuota.
-    cuotas.crear_plan(base.con, "Heladera", base.varios, None, 100000, 3, 2026, 1, hoy=HOY)
+    cuotas.crear_plan(
+        base.con, "Heladera", base.varios, None, 100000, 3, 2026, 1, hoy=HOY
+    )
     lista = revisar(base.con, xlsx({"C1": "Heladera", "D1": 30000}))
     assert lista.filas[0].tipo == "fijo" and lista.filas[0].ya_existe is None
     lista.cambiar_tipo(lista.filas[0].indice, "cuota")
@@ -1832,7 +2046,9 @@ def test_plan_existente_no_marca_filas_que_no_son_cuota(base):
 
 def test_plan_terminado_igual_marca_ya_existe(base):
     # RN-74: "en cualquier estado" (acá, un plan que terminó antes del mes destino).
-    cuotas.crear_plan(base.con, "Heladera 2/12", base.varios, None, 100000, 3, 2026, 1, hoy=HOY)
+    cuotas.crear_plan(
+        base.con, "Heladera 2/12", base.varios, None, 100000, 3, 2026, 1, hoy=HOY
+    )
     lista = revisar(base.con, xlsx({"C1": "Heladera 2/12", "D1": 30000}))
     assert lista.filas[0].ya_existe == "plan"
 
@@ -1840,7 +2056,9 @@ def test_plan_terminado_igual_marca_ya_existe(base):
 def test_ya_existe_con_mes_que_se_va_a_crear_usa_fijos_del_ultimo_mes(base):
     # RN-74: destino 2026-11 (no existe): se comparan los fijos que se copiarían.
     gastos.agregar_gasto(base.con, base.mes_id, "Regalo", base.varios, 100, "unico")
-    lista = revisar(base.con, xlsx({"C1": "Alquiler", "D1": 5, "C2": "Regalo", "D2": 5}))
+    lista = revisar(
+        base.con, xlsx({"C1": "Alquiler", "D1": 5, "C2": "Regalo", "D2": 5})
+    )
     assert [f.ya_existe for f in lista.filas] == ["gasto", "gasto"]
     lista.cambiar_mes_destino(2026, 11)
     # El pago único no se copia al mes nuevo; el fijo sí.
@@ -1867,7 +2085,9 @@ def test_ya_existe_con_mes_a_crear_no_incluye_planes_ya_terminados(base):
     assert lista.filas[0].ya_existe == "plan"
 
 
-def test_ya_existe_con_mes_a_crear_cuando_no_hay_gastos_fijos_en_el_ultimo_mes(con, mes_id):
+def test_ya_existe_con_mes_a_crear_cuando_no_hay_gastos_fijos_en_el_ultimo_mes(
+    con, mes_id
+):
     # Sin ningún gasto en el último mes: nada es "ya existe" en el mes a crear.
     lista = revisar(con, xlsx({"C1": "Alquiler", "D1": 5}))
     lista.cambiar_mes_destino(2026, 11)
@@ -1876,7 +2096,9 @@ def test_ya_existe_con_mes_a_crear_cuando_no_hay_gastos_fijos_en_el_ultimo_mes(c
 
 def test_repetida_en_el_archivo_nafta_dos_veces(base):
     # CA-56.3.
-    lista = revisar(base.con, xlsx({"C1": "Nafta", "D1": 30000, "C2": "Nafta", "D2": 30000}))
+    lista = revisar(
+        base.con, xlsx({"C1": "Nafta", "D1": 30000, "C2": "Nafta", "D2": 30000})
+    )
     for f in lista.filas:
         assert f.repetida is True and f.tildada is True
         assert lista.notas(f) == [
@@ -1886,7 +2108,9 @@ def test_repetida_en_el_archivo_nafta_dos_veces(base):
 
 
 def test_repetida_en_el_archivo_ignora_mayusculas_y_espacios(base):
-    lista = revisar(base.con, xlsx({"C1": "Nafta", "D1": 100, "C2": "  NAFTA ", "D2": 100}))
+    lista = revisar(
+        base.con, xlsx({"C1": "Nafta", "D1": 100, "C2": "  NAFTA ", "D2": 100})
+    )
     assert all(f.repetida for f in lista.filas)
 
 
@@ -1900,7 +2124,12 @@ def test_internet_gasto_y_me_deben_no_son_repetidas(base):
 
 def test_repetida_entre_gastos_de_distinto_tipo(base):
     # RN-74: fijo, pago único y cuota son el mismo grupo.
-    lista = revisar(base.con, xlsx({"C1": "Luz", "D1": 100, "C2": "Luz", "D2": 100, "C3": "Luz 1/3", "D3": 1}))
+    lista = revisar(
+        base.con,
+        xlsx(
+            {"C1": "Luz", "D1": 100, "C2": "Luz", "D2": 100, "C3": "Luz 1/3", "D3": 1}
+        ),
+    )
     lista.cambiar_tipo(lista.filas[1].indice, "unico")
     assert lista.filas[0].repetida and lista.filas[1].repetida
     assert lista.filas[2].repetida is False  # el nombre "Luz 1/3" es otro
@@ -1909,21 +2138,39 @@ def test_repetida_entre_gastos_de_distinto_tipo(base):
 def test_repetida_pesos_check_de_sofia_y_marsu_no_son_repetidas(base):
     # RN-74: "me deben" de personas distintas.
     celdas = {
-        "D21": "Deudas sofia", "D22": "Pesos Check", "E22": 100,
-        "D26": "Marsu", "D27": "Pesos Check", "E27": 100,
+        "D21": "Deudas sofia",
+        "D22": "Pesos Check",
+        "E22": 100,
+        "D26": "Marsu",
+        "D27": "Pesos Check",
+        "E27": 100,
     }
     lista = revisar(base.con, xlsx(celdas))
-    assert [f.repetida for f in lista.filas if f.nombre == "Pesos Check"] == [False, False]
+    assert [f.repetida for f in lista.filas if f.nombre == "Pesos Check"] == [
+        False,
+        False,
+    ]
 
 
 def test_repetida_me_deben_de_la_misma_persona(base):
-    celdas = {"D21": "Deudas sofia", "D22": "Pesos Check", "E22": 100, "D23": "pesos check", "E23": 100}
+    celdas = {
+        "D21": "Deudas sofia",
+        "D22": "Pesos Check",
+        "E22": 100,
+        "D23": "pesos check",
+        "E23": 100,
+    }
     lista = revisar(base.con, xlsx(celdas))
-    assert [f.repetida for f in lista.filas if f.nombre.lower() == "pesos check"] == [True, True]
+    assert [f.repetida for f in lista.filas if f.nombre.lower() == "pesos check"] == [
+        True,
+        True,
+    ]
 
 
 def test_repetida_deja_de_serlo_si_una_pasa_a_ignorar(base):
-    lista = revisar(base.con, xlsx({"C1": "Nafta", "D1": 100, "C2": "Nafta", "D2": 100}))
+    lista = revisar(
+        base.con, xlsx({"C1": "Nafta", "D1": 100, "C2": "Nafta", "D2": 100})
+    )
     lista.cambiar_tipo(lista.filas[0].indice, "ignorar")
     assert [f.repetida for f in lista.filas] == [False, False]
 
@@ -1950,7 +2197,11 @@ def test_internet_de_sofia_muestra_el_aviso_y_las_demas_no(base):
     lista = revisar(base.con)
     internet = fila(lista, "Internet", 23)
     assert AVISO in lista.notas(internet)
-    assert (internet.tipo, internet.persona, internet.tildada) == ("me_deben", base.sofia, True)
+    assert (internet.tipo, internet.persona, internet.tildada) == (
+        "me_deben",
+        base.sofia,
+        True,
+    )
     assert lista.puede_confirmar() is True
     assert lista.notas(fila(lista, "Prestamo MP")) == []
     assert lista.notas(fila(lista, "tacones chiqui baby")) == []
@@ -1980,7 +2231,9 @@ def test_el_aviso_vuelve_si_el_mes_tiene_un_gasto_internet(base):
 
 def test_servicios_luz_gas_muestra_el_aviso_por_servicios(base):
     # CA-56.6: nueva fila "Servicios Luz Gas | 35500" en el bloque de Sofía.
-    celdas = insertar_fila(celdas_planilla(), 23, {"D": "Servicios Luz Gas", "E": 35500})
+    celdas = insertar_fila(
+        celdas_planilla(), 23, {"D": "Servicios Luz Gas", "E": 35500}
+    )
     lista = revisar(base.con, xlsx(celdas))
     nueva = fila(lista, "Servicios Luz Gas")
     assert (nueva.tipo, nueva.persona) == ("me_deben", base.sofia)
@@ -1999,7 +2252,9 @@ def test_pesos_check_no_coincide_con_pesos_checks_en_el_archivo(base):
 
 def test_pesos_check_no_coincide_con_pesos_checks_en_el_mes(base):
     # CA-56.6: solo "Pesos checks" en el mes -> sin aviso.
-    gastos.agregar_gasto(base.con, base.mes_id, "Pesos checks", base.varios, 100, "fijo")
+    gastos.agregar_gasto(
+        base.con, base.mes_id, "Pesos checks", base.varios, 100, "fijo"
+    )
     celdas = insertar_fila(celdas_planilla(), 23, {"D": "Pesos Check", "E": 142406})
     lista = revisar(base.con, xlsx(celdas))
     assert fila(lista, "Pesos Check").aviso_compartido is False
@@ -2007,7 +2262,9 @@ def test_pesos_check_no_coincide_con_pesos_checks_en_el_mes(base):
 
 def test_el_aviso_cuenta_gastos_del_mes_destino_de_cualquier_tipo(base):
     # RN-72: "un gasto del mes destino" (los que ya tiene).
-    gastos.agregar_gasto(base.con, base.mes_id, "Prestamo MP personal", base.varios, 100, "unico")
+    gastos.agregar_gasto(
+        base.con, base.mes_id, "Prestamo MP personal", base.varios, 100, "unico"
+    )
     lista = revisar(base.con)
     assert fila(lista, "Prestamo MP").aviso_compartido is True
 
@@ -2015,12 +2272,22 @@ def test_el_aviso_cuenta_gastos_del_mes_destino_de_cualquier_tipo(base):
 def test_el_aviso_en_un_mes_a_crear_usa_fijos_copiados_y_cuotas_activas(base):
     # RN-72: si el mes se va a crear, "los que va a tener al crearse" (RN-09).
     gastos.agregar_gasto(base.con, base.mes_id, "Prestamo MP", base.varios, 100, "fijo")
-    gastos.agregar_gasto(base.con, base.mes_id, "Unico Marsu", base.varios, 100, "unico")
-    cuotas.crear_plan(base.con, "tacones plan", base.varios, None, 100, 6, 2026, 9, hoy=HOY)
+    gastos.agregar_gasto(
+        base.con, base.mes_id, "Unico Marsu", base.varios, 100, "unico"
+    )
+    cuotas.crear_plan(
+        base.con, "tacones plan", base.varios, None, 100, 6, 2026, 9, hoy=HOY
+    )
     celdas = {**celdas_planilla(), "C30": "Unico Marsu", "D30": 5}
     lista = revisar(base.con, xlsx(celdas))
     lista.cambiar_tipo(fila(lista, "Unico Marsu").indice, "me_deben")
-    lista.editar_fila(fila(lista, "Unico Marsu").indice, "me_deben", "Unico Marsu", 500, persona=base.marsu)
+    lista.editar_fila(
+        fila(lista, "Unico Marsu").indice,
+        "me_deben",
+        "Unico Marsu",
+        500,
+        persona=base.marsu,
+    )
     # Destino 2026-11: "Prestamo MP" (fijo) se copia -> aviso; "Unico Marsu" (único) no se copia.
     # "tacones chiqui baby" no coincide con "tacones plan" (la cuota sí se genera).
     lista.cambiar_mes_destino(2026, 11)
@@ -2028,13 +2295,27 @@ def test_el_aviso_en_un_mes_a_crear_usa_fijos_copiados_y_cuotas_activas(base):
     assert fila(lista, "tacones chiqui baby").aviso_compartido is False
     lista.cambiar_tipo(fila(lista, "Unico Marsu").indice, "ignorar")
     lista.cambiar_tipo(fila(lista, "Unico Marsu").indice, "me_deben")
-    lista.editar_fila(fila(lista, "Unico Marsu").indice, "me_deben", "tacones", 500, persona=base.marsu)
-    assert fila(lista, "tacones", 30).aviso_compartido is True  # coincide con el plan "tacones plan"
+    lista.editar_fila(
+        fila(lista, "Unico Marsu").indice,
+        "me_deben",
+        "tacones",
+        500,
+        persona=base.marsu,
+    )
+    assert (
+        fila(lista, "tacones", 30).aviso_compartido is True
+    )  # coincide con el plan "tacones plan"
 
 
 def test_la_fila_me_deben_no_avisa_contra_otra_fila_me_deben_ni_ignorada(base):
     # RN-72: solo contra gastos fijos, únicos y cuotas tildados.
-    celdas = {"D21": "Deudas sofia", "D22": "Gas", "E22": 100, "D23": "Gas natural", "E23": 100}
+    celdas = {
+        "D21": "Deudas sofia",
+        "D22": "Gas",
+        "E22": 100,
+        "D23": "Gas natural",
+        "E23": 100,
+    }
     lista = revisar(base.con, xlsx(celdas))
     assert not any(f.aviso_compartido for f in lista.filas)
     # Una "ignorar" con el mismo nombre tampoco.
@@ -2046,9 +2327,13 @@ def test_el_aviso_se_recalcula_al_cambiar_el_nombre(base):
     # RN-72: "Se recalcula cuando cambian nombres".
     lista = revisar(base.con)
     prestamo = fila(lista, "Prestamo MP")
-    lista.editar_fila(prestamo.indice, "me_deben", "internet banda", 2000000, persona=base.sofia)
+    lista.editar_fila(
+        prestamo.indice, "me_deben", "internet banda", 2000000, persona=base.sofia
+    )
     assert prestamo.aviso_compartido is True
-    lista.editar_fila(prestamo.indice, "me_deben", "Prestamo", 2000000, persona=base.sofia)
+    lista.editar_fila(
+        prestamo.indice, "me_deben", "Prestamo", 2000000, persona=base.sofia
+    )
     assert prestamo.aviso_compartido is False
 
 
@@ -2082,14 +2367,23 @@ def test_coinciden_regla_de_palabras_enteras(a, b, esperado):
 # Pagado (RN-69, CA-57.5)
 # ---------------------------------------------------------------------------
 
-LUZ = {"C1": "Gasto", "D1": "Monto", "E1": "Pagado", "C2": "Luz", "D2": 10000, "E2": 12000}
+LUZ = {
+    "C1": "Gasto",
+    "D1": "Monto",
+    "E1": "Pagado",
+    "C2": "Luz",
+    "D2": 10000,
+    "E2": 12000,
+}
 
 
 def test_pagado_mayor_que_el_monto_es_un_error_y_no_se_confirma(base):
     # CA-57.5.
     lista = revisar(base.con, xlsx(LUZ))
     luz = fila(lista, "Luz")
-    assert lista.errores(luz) == ["El pagado ($ 12.000) es mayor que el monto ($ 10.000)."]
+    assert lista.errores(luz) == [
+        "El pagado ($ 12.000) es mayor que el monto ($ 10.000)."
+    ]
     assert lista.puede_confirmar() is False
 
 
@@ -2097,7 +2391,9 @@ def test_subir_el_monto_a_12000_resuelve_el_error(base):
     # CA-57.5.
     lista = revisar(base.con, xlsx(LUZ))
     luz = fila(lista, "Luz")
-    assert lista.editar_fila(luz.indice, "fijo", "Luz", 1200000, pagado_cent=1200000) == {}
+    assert (
+        lista.editar_fila(luz.indice, "fijo", "Luz", 1200000, pagado_cent=1200000) == {}
+    )
     assert lista.errores(luz) == [] and lista.puede_confirmar() is True
 
 
@@ -2105,7 +2401,9 @@ def test_bajar_el_pagado_a_4000_resuelve_el_error(base):
     # CA-57.5: pendiente 6.000.
     lista = revisar(base.con, xlsx(LUZ))
     luz = fila(lista, "Luz")
-    assert lista.editar_fila(luz.indice, "fijo", "Luz", 1000000, pagado_cent=400000) == {}
+    assert (
+        lista.editar_fila(luz.indice, "fijo", "Luz", 1000000, pagado_cent=400000) == {}
+    )
     assert lista.puede_confirmar() is True
 
 
@@ -2113,9 +2411,9 @@ def test_el_dialogo_no_acepta_pagado_mayor_que_el_monto(base):
     # RN-68: los errores del diálogo incluyen el pagado.
     lista = revisar(base.con, xlsx(LUZ))
     luz = fila(lista, "Luz")
-    assert lista.editar_fila(luz.indice, "fijo", "Luz", 1000000, pagado_cent=1200000) == {
-        "pagado": "El pagado ($ 12.000) es mayor que el monto ($ 10.000)."
-    }
+    assert lista.editar_fila(
+        luz.indice, "fijo", "Luz", 1000000, pagado_cent=1200000
+    ) == {"pagado": "El pagado ($ 12.000) es mayor que el monto ($ 10.000)."}
 
 
 def test_pagado_negativo_es_un_error(base):
@@ -2256,7 +2554,13 @@ def test_pie_con_sueldo_y_todo_lo_demas(base):
     # CA-57.9: el texto exacto del pie.
     lista = revisar(base.con)
     lista.cambiar_tipo(sin_nombre(lista, 19).indice, "sueldo")
-    assert lista.conteo() == {"filas": 10, "gastos": 5, "planes": 1, "me_deben": 3, "sueldo": 1}
+    assert lista.conteo() == {
+        "filas": 10,
+        "gastos": 5,
+        "planes": 1,
+        "me_deben": 3,
+        "sueldo": 1,
+    }
     assert lista.estado_pie() == (
         'Se importan 10 filas: 5 gastos, 1 plan de cuotas, 3 ítems "me deben" y el sueldo.'
     )
@@ -2306,7 +2610,13 @@ def test_pie_sin_filas_para_importar_todo_ignorado(base):
         lista.cambiar_tipo(f.indice, "ignorar")
     assert lista.estado_pie() == "No hay filas para importar."
     assert lista.puede_confirmar() is False
-    assert lista.conteo() == {"filas": 0, "gastos": 0, "planes": 0, "me_deben": 0, "sueldo": 0}
+    assert lista.conteo() == {
+        "filas": 0,
+        "gastos": 0,
+        "planes": 0,
+        "me_deben": 0,
+        "sueldo": 0,
+    }
 
 
 def test_pie_de_un_excel_sin_filas_completas(base):
@@ -2434,7 +2744,10 @@ def test_o61_monto_enorme_en_pagado_da_error_de_pagado_mayor(base):
 
 def test_o62_numero_en_pagado_de_una_fila_sin_monto_se_descarta(base):
     # RN-63/64 (O62): "Luz" sin monto y un 3 bajo "Pagado": el pagado se descarta.
-    lista = revisar(base.con, xlsx({"C1": "Gasto", "D1": "Monto", "E1": "Pagado", "C2": "Luz", "E2": 3}))
+    lista = revisar(
+        base.con,
+        xlsx({"C1": "Gasto", "D1": "Monto", "E1": "Pagado", "C2": "Luz", "E2": 3}),
+    )
     luz = fila(lista, "Luz")
     assert luz.monto_cent is None and luz.pagado_cent is None
     assert luz.tipo == "ignorar" and luz.incompleta
@@ -2442,7 +2755,10 @@ def test_o62_numero_en_pagado_de_una_fila_sin_monto_se_descarta(base):
     lista.cambiar_tipo(luz.indice, "fijo")
     assert lista.errores(luz) == ["Falta el monto."]
     # Al completar el monto no aparece ningun error de pagado (CA-51.5).
-    assert lista.editar_fila(luz.indice, "fijo", "Luz", 100, pagado_cent=luz.pagado_cent) == {}
+    assert (
+        lista.editar_fila(luz.indice, "fijo", "Luz", 100, pagado_cent=luz.pagado_cent)
+        == {}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2481,8 +2797,12 @@ def test_consultar_no_marca_cambios(base):
 ACCIONES = {
     "cambiar_tipo": lambda l, b: l.cambiar_tipo(fila(l, "Gym").indice, "unico"),
     "cambiar_tilde": lambda l, b: l.cambiar_tilde(fila(l, "Gym").indice, False),
-    "cambiar_cobrado": lambda l, b: l.cambiar_cobrado(fila(l, "Prestamo MP").indice, True),
-    "editar_fila": lambda l, b: l.editar_fila(fila(l, "Gym").indice, "fijo", "Gimnasio", 100),
+    "cambiar_cobrado": lambda l, b: l.cambiar_cobrado(
+        fila(l, "Prestamo MP").indice, True
+    ),
+    "editar_fila": lambda l, b: l.editar_fila(
+        fila(l, "Gym").indice, "fijo", "Gimnasio", 100
+    ),
     "restaurar_fila": lambda l, b: l.restaurar_fila(fila(l, "Gym").indice),
     "agregar_categoria": lambda l, b: l.agregar_categoria("Importado"),
     "agregar_persona": lambda l, b: l.agregar_persona("Juan"),
@@ -2547,7 +2867,9 @@ def test_la_revision_no_escribe_en_la_base(base):
     lista.cambiar_categoria_defecto(Nueva("Importado"))
     lista.cambiar_bloque("Deudas sofia", tipo="unico", categoria=base.servicios)
     lista.tildar_bloque("Gasto del Mes")
-    lista.editar_fila(fila(lista, "Gym").indice, "cuota", "Gym", 100, cuota_actual=1, cuota_total=2)
+    lista.editar_fila(
+        fila(lista, "Gym").indice, "cuota", "Gym", 100, cuota_actual=1, cuota_total=2
+    )
     lista.restaurar_fila(fila(lista, "Gym").indice)
     lista.estado_pie()
     assert foto_de_la_base(base.con) == antes
@@ -2598,7 +2920,9 @@ def test_cuota_con_mas_de_600_cuotas_da_error_en_la_revision(base):
     # recién aparece al guardar y tira abajo toda la importación (todo o nada, RN-76).
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
-    errores = lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_actual=1, cuota_total=601)
+    errores = lista.editar_fila(
+        gym.indice, "cuota", "Gym", 5000000, cuota_actual=1, cuota_total=601
+    )
     assert errores != {}
 
 
@@ -2637,8 +2961,17 @@ def hoja_completa(contenido):
     hoja = abrir_libro(contenido).leer_hoja("Octubre")
     return (
         [
-            (f.fila_excel, f.columna, f.nombre, f.monto_cent, f.pagado_cent, f.cobrado,
-             f.bloque, f.es_titulo, f.monto_es_suma)
+            (
+                f.fila_excel,
+                f.columna,
+                f.nombre,
+                f.monto_cent,
+                f.pagado_cent,
+                f.cobrado,
+                f.bloque,
+                f.es_titulo,
+                f.monto_es_suma,
+            )
             for f in hoja.filas
         ],
         hoja.formulas_sin_valor,
@@ -2660,7 +2993,9 @@ def test_o58_relleno_lejano_en_cualquier_columna_es_rapido(celda):
 @pytest.mark.parametrize("celda", ["T100000", "A100000", "Z50", "T20"])
 def test_o58_el_relleno_lejano_no_cambia_ningun_resultado(celda):
     # O58: la planilla de prueba lee igual con y sin formato lejos.
-    assert hoja_completa(con_relleno(celdas_planilla(), celda)) == hoja_completa(planilla_prueba())
+    assert hoja_completa(con_relleno(celdas_planilla(), celda)) == hoja_completa(
+        planilla_prueba()
+    )
 
 
 def test_o58_hoja_vacia_con_formato_lejos_es_rapida():
@@ -2678,7 +3013,11 @@ def test_o58_hoja_vacia_con_formato_lejos_es_rapida():
 
 def test_o58_hoja_completamente_vacia():
     hoja = abrir_libro(xlsx({})).leer_hoja("Octubre")
-    assert hoja.filas == [] and hoja.formulas_sin_valor == 0 and hoja.ejemplo_formula is None
+    assert (
+        hoja.filas == []
+        and hoja.formulas_sin_valor == 0
+        and hoja.ejemplo_formula is None
+    )
 
 
 def test_o58_formula_sin_valor_mas_alla_de_los_datos_se_cuenta():
@@ -2693,7 +3032,9 @@ def test_o58_formula_sin_valor_en_una_fila_debajo_y_en_una_columna_a_la_derecha(
     contenido = xlsx({"C3": "Luz", "D3": 1000, "C400": "=A1", "AA3": "=2*3"})
     hoja = abrir_libro(contenido).leer_hoja("Octubre")
     assert hoja.formulas_sin_valor == 2
-    assert hoja.ejemplo_formula == "AA3"  # la primera en orden de lectura (filas primero)
+    assert (
+        hoja.ejemplo_formula == "AA3"
+    )  # la primera en orden de lectura (filas primero)
 
 
 def test_o58_hoja_de_solo_formulas_sin_valor():
@@ -2728,14 +3069,22 @@ def test_o58_combinadas_que_se_extienden_mas_alla_de_los_datos():
 
 def test_o58_combinada_vertical_con_filas_debajo_del_ultimo_dato():
     # Una combinada en una columna sin datos (G1:G40) llega más abajo que el último valor.
-    libro = armar_libro({"Octubre": celdas_planilla()}, combinadas={"Octubre": ["G1:G40"]})
+    libro = armar_libro(
+        {"Octubre": celdas_planilla()}, combinadas={"Octubre": ["G1:G40"]}
+    )
     assert hoja_completa(a_bytes(libro)) == hoja_completa(planilla_prueba())
 
 
 def test_o58_celdas_con_valor_que_cuentan_como_vacias_mas_alla_de_los_datos():
     # Una fecha, un espacio y un error de Excel lejos agrandan la grilla pero no crean filas.
     contenido = xlsx(
-        {"C3": "Luz", "D3": 1000, "M80": date(2026, 1, 1), "N90": "   ", "O95": "#DIV/0!"}
+        {
+            "C3": "Luz",
+            "D3": 1000,
+            "M80": date(2026, 1, 1),
+            "N90": "   ",
+            "O95": "#DIV/0!",
+        }
     )
     hoja = abrir_libro(contenido).leer_hoja("Octubre")
     assert resumen_filas(hoja) == [(3, 3, "Luz", 100000)]
@@ -2745,12 +3094,21 @@ def test_o58_bloque_se_corta_igual_con_contenido_vacio_debajo():
     # El bloque de "Gasto" termina en la primera fila totalmente vacía, aunque más abajo
     # haya celdas que cuentan como vacías (fecha) o formato.
     contenido = con_relleno(
-        {"C1": "Gasto", "C2": "Luz", "D2": 5, "C4": "Gas", "D4": 6, "Z60": date(2026, 1, 1)},
+        {
+            "C1": "Gasto",
+            "C2": "Luz",
+            "D2": 5,
+            "C4": "Gas",
+            "D4": 6,
+            "Z60": date(2026, 1, 1),
+        },
         "T100",
     )
     hoja = abrir_libro(contenido).leer_hoja("Octubre")
     assert [(f.nombre, f.bloque) for f in hoja.filas] == [
-        ("Gasto", None), ("Luz", "Gasto"), ("Gas", None)
+        ("Gasto", None),
+        ("Luz", "Gasto"),
+        ("Gas", None),
     ]
 
 
@@ -2759,7 +3117,15 @@ def test_o58_lista_de_revision_igual_con_y_sin_relleno(base):
     con_formato = revisar(base.con, con_relleno(celdas_planilla(), "T100000"))
     sin_formato = revisar(base.con)
     resumir = lambda l: [  # noqa: E731
-        (f.nombre, f.monto_cent, f.pagado_cent, f.tipo, f.tildada, f.ya_existe, f.bloque)
+        (
+            f.nombre,
+            f.monto_cent,
+            f.pagado_cent,
+            f.tipo,
+            f.tildada,
+            f.ya_existe,
+            f.bloque,
+        )
         for f in l.filas
     ]
     assert resumir(con_formato) == resumir(sin_formato)
@@ -2773,12 +3139,16 @@ def test_o58_lista_de_revision_igual_con_y_sin_relleno(base):
 DEMASIADO = {"cuota": "La cantidad de cuotas es demasiado grande."}
 
 
-@pytest.mark.parametrize("total,hay_error", [(599, False), (600, False), (601, True), (10**9, True)])
+@pytest.mark.parametrize(
+    "total,hay_error", [(599, False), (600, False), (601, True), (10**9, True)]
+)
 def test_cantidad_de_cuotas_borde_600_y_601(base, total, hay_error):
     # RN-29 / BUG-33: hasta 600 cuotas se acepta; más, con el mismo texto de crear_plan.
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
-    errores = lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_actual=1, cuota_total=total)
+    errores = lista.editar_fila(
+        gym.indice, "cuota", "Gym", 5000000, cuota_actual=1, cuota_total=total
+    )
     assert errores == ({} if not hay_error else DEMASIADO)
 
 
@@ -2795,7 +3165,12 @@ def test_cuota_actual_invalida_con_cantidad_mayor_a_600(base, n):
 
 @pytest.mark.parametrize(
     "nombre,tipo",
-    [("Algo 600/600", "cuota"), ("Algo 1/600", "cuota"), ("Algo 1/601", "fijo"), ("Algo 601/601", "fijo")],
+    [
+        ("Algo 600/600", "cuota"),
+        ("Algo 1/600", "cuota"),
+        ("Algo 1/601", "fijo"),
+        ("Algo 601/601", "fijo"),
+    ],
 )
 def test_n_sobre_N_en_el_nombre_con_N_en_el_borde_de_600(base, nombre, tipo):
     # BUG-33: "n/N" con N > 600 no se propone como cuota.
@@ -2813,19 +3188,35 @@ def test_nombre_con_numeros_gigantes_queda_fijo_sin_colgarse(base):
 
 
 @pytest.mark.parametrize("actual,total", [(1.5, 3), (1, 2.5), (2.0, 3), (True, 3)])
-def test_cuota_actual_o_cantidad_no_enteras_dan_error_y_no_hay_nota(base, actual, total):
+def test_cuota_actual_o_cantidad_no_enteras_dan_error_y_no_hay_nota(
+    base, actual, total
+):
     # BUG-30: ambos tienen que ser enteros (un bool no vale).
     lista = revisar(base.con)
     gym = fila(lista, "Gym")
-    errores = lista.editar_fila(gym.indice, "cuota", "Gym", 5000000, cuota_actual=actual, cuota_total=total)
+    errores = lista.editar_fila(
+        gym.indice, "cuota", "Gym", 5000000, cuota_actual=actual, cuota_total=total
+    )
     assert "cuota" in errores
 
 
 @pytest.mark.parametrize(
     "hoy,actual,total,primera,ultima",
     [
-        (date(2026, 2, 10), 15, 24, "Diciembre 2024", "Noviembre 2026"),  # hacia atrás, cruza años
-        (date(2026, 10, 14), 1, 24, "Octubre 2026", "Septiembre 2028"),  # hacia adelante
+        (
+            date(2026, 2, 10),
+            15,
+            24,
+            "Diciembre 2024",
+            "Noviembre 2026",
+        ),  # hacia atrás, cruza años
+        (
+            date(2026, 10, 14),
+            1,
+            24,
+            "Octubre 2026",
+            "Septiembre 2028",
+        ),  # hacia adelante
         (date(2026, 1, 5), 2, 3, "Diciembre 2025", "Febrero 2026"),
         (date(2026, 12, 5), 1, 2, "Diciembre 2026", "Enero 2027"),
         (date(2026, 10, 14), 600, 600, "Noviembre 1976", "Octubre 2026"),
@@ -2863,4 +3254,7 @@ def test_cambiar_mes_en_primer_uso_con_cuota_larga_cruza_anios(con):
     # La nota se recalcula al cambiar el mes, también hacia atrás de varios años.
     lista = revisar(con, xlsx({"C1": "Pago 15/24", "D1": 1000}))
     lista.cambiar_mes_destino(2026, 2)
-    assert "primera Diciembre 2024, última Noviembre 2026" in lista.notas(lista.filas[0])[0]
+    assert (
+        "primera Diciembre 2024, última Noviembre 2026"
+        in lista.notas(lista.filas[0])[0]
+    )

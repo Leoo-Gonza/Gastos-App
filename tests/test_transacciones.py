@@ -56,7 +56,13 @@ def operaciones_reales(con, mes_id):
     medio = catalogos.crear(con, catalogos.MEDIOS_PAGO, "Visa Inventada")
     persona = catalogos.crear(con, catalogos.PERSONAS, "Sofía Inventada")
     gid = gastos.agregar_gasto(
-        con, mes_id, "Alquiler", otros, 5000000, "unico", medio,
+        con,
+        mes_id,
+        "Alquiler",
+        otros,
+        5000000,
+        "unico",
+        medio,
         partes=[(persona, None)],
     )
     pagos.registrar_pago(con, gid, 100000, HOY)

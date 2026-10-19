@@ -73,7 +73,11 @@ def solo_prestamo_y_sueldo(p):
     """CA-57.10: solo "Prestamo MP" y la fila 19 como sueldo."""
     con_sueldo(p)
     for f in p.vista.filas:
-        if f.tilde.value and f.fila.nombre != "Prestamo MP" and f.fila.origen.fila_excel != 19:
+        if (
+            f.tilde.value
+            and f.fila.nombre != "Prestamo MP"
+            and f.fila.origen.fila_excel != 19
+        ):
             tildar(f, False)
 
 
@@ -86,7 +90,11 @@ def a_noviembre_con_juan(p):
     d, dlg = abrir_fila(p, f)
     dlg.tipo.value = "me_deben"
     dlg.tipo.on_select(evento(dlg.tipo))
-    [mas] = [b for b in de_tipo(dlg.persona.control, ft.IconButton) if b.tooltip == "Nueva persona"]
+    [mas] = [
+        b
+        for b in de_tipo(dlg.persona.control, ft.IconButton)
+        if b.tooltip == "Nueva persona"
+    ]
     mas.on_click(None)
     dlg.persona.nombre.value = "Juan"
     dlg.persona.agregar()
@@ -161,7 +169,10 @@ def test_resumen_previo_aviso_de_sin_deshacer_es_info(app_rev):
     p = abrir(app_rev)
     d = abrir_resumen(p)
     assert not any(t.startswith("•  Esta importación") for t in textos(d.content))
-    assert any(isinstance(c, ft.Icon) and c.icon == ft.Icons.INFO_OUTLINE for c in de_tipo(d.content, ft.Icon))
+    assert any(
+        isinstance(c, ft.Icon) and c.icon == ft.Icons.INFO_OUTLINE
+        for c in de_tipo(d.content, ft.Icon)
+    )
 
 
 def test_volver_a_la_revision_cierra_el_resumen_sin_cambiar_nada(app_rev, base):
@@ -251,7 +262,9 @@ def test_ca_57_1_importar_guarda_lo_esperado(app_rev, base):
     assert me_deben.total_de(con, base.marsu) == 678500
     assert cantidad(con, "planes_cuotas") == 1
     assert cantidad(con, "pagos") == 2
-    assert {x["fecha"] for x in con.execute("SELECT fecha FROM pagos")} == {"2026-10-14"}
+    assert {x["fecha"] for x in con.execute("SELECT fecha FROM pagos")} == {
+        "2026-10-14"
+    }
     assert sorted(nombres(con, "personas")) == ["Marsu", "Sofía"]  # No se crea ninguna.
     assert p.lista.confirmada is True
     assert con.in_transaction is False
@@ -331,7 +344,9 @@ def test_resultado_solo_sueldo_no_muestra_para_completar(app_rev):
         if f.tilde.value and f.fila.origen.fila_excel != 19:
             tildar(f, False)
     d = importar_de_verdad(p)
-    assert textos(d.content) == ["Se importaron: el sueldo (US$ 1.300,00) en Octubre 2026."]
+    assert textos(d.content) == [
+        "Se importaron: el sueldo (US$ 1.300,00) en Octubre 2026."
+    ]
     clic(d, "Ver Octubre 2026")
     assert nombre_visible(app_rev) == "Resumen"
 
@@ -342,14 +357,19 @@ def test_importar_a_un_mes_nuevo_desde_ajustes_ver_muestra_ese_mes(app_rev, base
     p.vista.mes.value = "2026-11"
     p.vista.mes.on_select(evento(p.vista.mes))
     d = abrir_resumen(p)
-    assert textos(d.content)[0] == "Se va a crear Noviembre 2026 y cargar ahí los datos."
+    assert (
+        textos(d.content)[0] == "Se va a crear Noviembre 2026 y cargar ahí los datos."
+    )
     clic(d, "Importar")
     ejecutar_tareas(app_rev)
     d = dialogo_arriba(app_rev)
     clic(d, "Ver Noviembre 2026")
     assert mes_seleccionado(app_rev) == "Noviembre 2026"
     assert nombre_visible(app_rev) == "Gastos"
-    assert [(m["anio"], m["mes"]) for m in base.con.execute("SELECT * FROM meses ORDER BY 2,3")] == [
+    assert [
+        (m["anio"], m["mes"])
+        for m in base.con.execute("SELECT * FROM meses ORDER BY 2,3")
+    ] == [
         (2026, 10),
         (2026, 11),
     ]
@@ -367,7 +387,11 @@ def test_ca_57_11_persona_nueva_sin_uso_no_se_menciona_ni_se_crea(app_rev, base)
     d, dlg = abrir_fila(p, f)
     dlg.tipo.value = "me_deben"
     dlg.tipo.on_select(evento(dlg.tipo))
-    [mas] = [b for b in de_tipo(dlg.persona.control, ft.IconButton) if b.tooltip == "Nueva persona"]
+    [mas] = [
+        b
+        for b in de_tipo(dlg.persona.control, ft.IconButton)
+        if b.tooltip == "Nueva persona"
+    ]
     mas.on_click(None)
     dlg.persona.nombre.value = "Juan"
     dlg.persona.agregar()
@@ -401,7 +425,9 @@ def test_ca_57_11_categoria_por_defecto_nueva_se_menciona_y_se_crea(app_rev, bas
     assert len(filas) == 3 and {f[1] for f in filas} == {"Importado"}
 
 
-def test_ca_57_11_categoria_nueva_solo_en_gym_y_gym_destildado_no_se_crea(app_rev, base):
+def test_ca_57_11_categoria_nueva_solo_en_gym_y_gym_destildado_no_se_crea(
+    app_rev, base
+):
     # "Importado" elegida solo en Gym; si Gym se destilda, no se crea.
     p = abrir(app_rev)
     f = fv(p, "Gym")
@@ -431,14 +457,20 @@ def test_ca_57_12_primer_uso_resumen_resultado_y_ver(app_primer_uso):
     p = abrir_primer_uso(app)
     d = abrir_resumen(p)
     contenido = textos(d.content)
-    assert contenido[0] == "Se va a crear Octubre 2026, sin cotización, y cargar ahí los datos."
-    assert "•  Sin sueldo: el sueldo de Octubre 2026 queda en US$ 0,00." in contenido or (
-        "Sin sueldo: el sueldo de Octubre 2026 queda en US$ 0,00." in contenido
+    assert (
+        contenido[0]
+        == "Se va a crear Octubre 2026, sin cotización, y cargar ahí los datos."
+    )
+    assert (
+        "•  Sin sueldo: el sueldo de Octubre 2026 queda en US$ 0,00." in contenido
+        or ("Sin sueldo: el sueldo de Octubre 2026 queda en US$ 0,00." in contenido)
     )
     clic(d, "Importar")
     ejecutar_tareas(app)
     d = dialogo_arriba(app)
-    assert "Cargá la cotización de Octubre 2026 en el Resumen." in "\n".join(textos(d.content))
+    assert "Cargá la cotización de Octubre 2026 en el Resumen." in "\n".join(
+        textos(d.content)
+    )
     assert cantidad(con, "meses") == 1
     clic(d, "Ver Octubre 2026")
     assert app._importacion is None
@@ -548,7 +580,9 @@ def falla_en_el_segundo_item(monkeypatch):
     return llamadas
 
 
-def test_ca_57_4_error_al_guardar_no_deja_nada_y_muestra_el_dialogo(app_rev, base, monkeypatch):
+def test_ca_57_4_error_al_guardar_no_deja_nada_y_muestra_el_dialogo(
+    app_rev, base, monkeypatch
+):
     # CA-57.4: destino 2026-11 + Juan; el guardado falla a mitad. La base queda idéntica
     # (no existe 2026-11, ni Juan, ni gastos nuevos) y se ve "No se pudo importar".
     p = abrir(app_rev)
@@ -566,7 +600,11 @@ def test_ca_57_4_error_al_guardar_no_deja_nada_y_muestra_el_dialogo(app_rev, bas
     assert app_rev._dialogos == [d]  # El resumen previo se cerró.
     assert d.title.value == "No se pudo importar"
     contenido = textos(d.content)
-    assert contenido[0] == MENSAJE_ERROR == "No se pudo importar. No se guardó ningún dato."
+    assert (
+        contenido[0]
+        == MENSAJE_ERROR
+        == "No se pudo importar. No se guardó ningún dato."
+    )
     # El detalle técnico es el de la causa real, no el mensaje genérico.
     assert any("falla inventada a mitad del guardado" in t for t in contenido[1:])
     assert hay_boton(d, "Volver a la revisión")
@@ -575,7 +613,9 @@ def test_ca_57_4_error_al_guardar_no_deja_nada_y_muestra_el_dialogo(app_rev, bas
     assert p.lista.confirmada is False
 
 
-def test_ca_57_4_la_revision_se_conserva_y_se_puede_reintentar(app_rev, base, monkeypatch):
+def test_ca_57_4_la_revision_se_conserva_y_se_puede_reintentar(
+    app_rev, base, monkeypatch
+):
     # CA-57.4: con "Volver a la revisión" la lista está igual (tipos, tildes, Juan y destino)
     # y, arreglado el problema, se puede volver a confirmar y se guarda todo una vez.
     p = abrir(app_rev)
@@ -590,7 +630,9 @@ def test_ca_57_4_la_revision_se_conserva_y_se_puede_reintentar(app_rev, base, mo
     clic(dialogo_arriba(app_rev), "Volver a la revisión")
     assert not app_rev.hay_dialogo_abierto()
     assert app_rev._importacion is p and p.lista is lista and p.vista is vista
-    assert [(f.tipo, f.se_importa, f.nombre, f.monto_cent) for f in lista.filas] == filas_antes
+    assert [
+        (f.tipo, f.se_importa, f.nombre, f.monto_cent) for f in lista.filas
+    ] == filas_antes
     assert (lista.anio, lista.mes) == destino == (2026, 11)
     assert lista.personas_nuevas == [Nueva("Juan")]
     assert p.vista.mes.value == "2026-11"
@@ -603,7 +645,9 @@ def test_ca_57_4_la_revision_se_conserva_y_se_puede_reintentar(app_rev, base, mo
     assert "Importación terminada" in textos(d.title)
     assert "Juan" in nombres(base.con, "personas")
     assert cantidad(base.con, "meses") == 2
-    assert cantidad(base.con, "items_me_deben") == 4  # Servicios (Juan) + los 3 de siempre.
+    assert (
+        cantidad(base.con, "items_me_deben") == 4
+    )  # Servicios (Juan) + los 3 de siempre.
     assert cantidad(base.con, "planes_cuotas") == 1
 
 
@@ -622,7 +666,9 @@ def test_error_al_guardar_esc_cierra_el_error_y_queda_la_revision(app_rev, monke
     assert app_rev._importacion is None
 
 
-def test_error_en_la_base_real_hace_rollback_de_todo_incluido_el_mes_nuevo(app_rev, base, monkeypatch):
+def test_error_en_la_base_real_hace_rollback_de_todo_incluido_el_mes_nuevo(
+    app_rev, base, monkeypatch
+):
     # Falla al crear el plan de cuotas (después de los gastos y el mes): rollback completo.
     from app.logica import cuotas
 
@@ -688,7 +734,9 @@ def test_importar_dos_veces_seguidas_desde_ajustes(app_rev, base):
 # ---------------------------------------------------------------------------
 
 
-def test_ca_57_3_cancelar_con_cambios_pregunta_y_seguir_revisando_no_pierde_nada(app_rev, base):
+def test_ca_57_3_cancelar_con_cambios_pregunta_y_seguir_revisando_no_pierde_nada(
+    app_rev, base
+):
     p = abrir(app_rev)
     a_noviembre_con_juan(p)
     clic(p.vista.control, "Cancelar")
@@ -705,7 +753,9 @@ def test_ca_57_3_cancelar_con_cambios_pregunta_y_seguir_revisando_no_pierde_nada
     assert p.lista.personas_nuevas == [Nueva("Juan")]
 
 
-def test_ca_57_3_descartar_vuelve_a_la_pestana_importar_de_ajustes_sin_guardar(app_rev, base):
+def test_ca_57_3_descartar_vuelve_a_la_pestana_importar_de_ajustes_sin_guardar(
+    app_rev, base
+):
     antes = foto(base.con)
     p = abrir(app_rev)
     a_noviembre_con_juan(p)
@@ -749,7 +799,9 @@ def test_cancelar_con_categoria_nueva_la_nombra(app_rev):
     ]
 
 
-def test_cancelar_sin_cambios_sale_directo_aunque_se_haya_abierto_y_cerrado_el_resumen(app_rev):
+def test_cancelar_sin_cambios_sale_directo_aunque_se_haya_abierto_y_cerrado_el_resumen(
+    app_rev,
+):
     # Abrir el resumen y volver no cuenta como un cambio del usuario.
     p = abrir(app_rev)
     clic(abrir_resumen(p), "Volver a la revisión")
@@ -767,7 +819,9 @@ def test_cancelar_sin_cambios_en_primer_uso_vuelve_al_formulario(app_primer_uso)
     assert app.page.title == "Gastos – Bienvenido"
 
 
-def test_cancelar_con_cambios_en_primer_uso_descarta_y_vuelve_al_formulario(app_primer_uso):
+def test_cancelar_con_cambios_en_primer_uso_descarta_y_vuelve_al_formulario(
+    app_primer_uso,
+):
     app = app_primer_uso
     antes = foto(app.con)
     p = abrir_primer_uso(app)
@@ -861,21 +915,37 @@ def test_mostrar_importado_con_pantalla_desconocida_falla_claro(app_rev):
         app_rev.mostrar_importado(app_rev.mes_id, "Inexistente")
 
 
-def test_importar_un_excel_con_unico_gasto_y_pagado_parcial_de_punta_a_punta(app_rev, base):
+def test_importar_un_excel_con_unico_gasto_y_pagado_parcial_de_punta_a_punta(
+    app_rev, base
+):
     # CA-57.5: "Luz | 10000 | 4000" bajo un encabezado "Pagado": queda pendiente 6.000.
     from tests.test_interfaz_revision import leer
 
     p = abrir(app_rev)
     clic(p.vista.control, "Cambiar archivo u hoja")
-    leer(p, "luz.xlsx", xlsx({"C1": "Gasto", "D1": "Monto", "E1": "Pagado",
-                              "C2": "Luz", "D2": 10000, "E2": 4000}))
+    leer(
+        p,
+        "luz.xlsx",
+        xlsx(
+            {
+                "C1": "Gasto",
+                "D1": "Monto",
+                "E1": "Pagado",
+                "C2": "Luz",
+                "D2": 10000,
+                "E2": 4000,
+            }
+        ),
+    )
     d = importar_de_verdad(p)
     assert textos(d.content)[0] == "Se importaron: 1 gasto en Octubre 2026."
     luz = base.con.execute("SELECT id FROM gastos WHERE nombre = 'Luz'").fetchone()[0]
     assert pagos.pendiente(base.con, luz) == 600000
 
 
-def test_primer_uso_error_al_guardar_no_crea_el_mes_y_se_puede_cancelar(app_primer_uso, monkeypatch):
+def test_primer_uso_error_al_guardar_no_crea_el_mes_y_se_puede_cancelar(
+    app_primer_uso, monkeypatch
+):
     # Primer uso + fallo a mitad: no queda ni el mes ni nada; la revisión sigue y, sin
     # cambios del usuario, Cancelar vuelve a la bienvenida.
     app = app_primer_uso

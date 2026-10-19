@@ -24,7 +24,11 @@ from app.logica.cotizacion_online import (
 )
 from app.logica.errores import ErrorDeValidacion
 
-BASE = {"compra": 1630.5, "venta": 1660, "fechaActualizacion": "2026-10-18T17:05:00.000Z"}
+BASE = {
+    "compra": 1630.5,
+    "venta": 1660,
+    "fechaActualizacion": "2026-10-18T17:05:00.000Z",
+}
 
 
 def cuerpo(**cambios):
@@ -89,7 +93,8 @@ def test_guardar_y_leer_el_dolar(con, dolar):
 def test_valor_desconocido_en_la_base_se_toma_como_blue(con, valor):
     # CA-59.3: dolar_cotizacion = xyz -> Blue (también mayúsculas y el nombre de la fuente).
     con.execute(
-        "INSERT INTO configuracion (clave, valor) VALUES ('dolar_cotizacion', ?)", (valor,)
+        "INSERT INTO configuracion (clave, valor) VALUES ('dolar_cotizacion', ?)",
+        (valor,),
     )
     assert configuracion.obtener_dolar(con) == "blue"
     assert texto_boton(configuracion.obtener_dolar(con)) == "Buscar dólar blue"
@@ -146,7 +151,8 @@ def test_respuesta_base_usa_la_compra_no_la_venta():
 
 
 @pytest.mark.parametrize(
-    ("dolar", "nombre"), [("mep", "MEP"), ("oficial", "oficial"), ("cripto", "cripto"), ("blue", "blue")]
+    ("dolar", "nombre"),
+    [("mep", "MEP"), ("oficial", "oficial"), ("cripto", "cripto"), ("blue", "blue")],
 )
 def test_origen_con_el_nombre_del_dolar(dolar, nombre):
     # CA-59.2: el origen lleva el nombre del dólar elegido.
@@ -176,7 +182,22 @@ def test_compra_a_centavos(compra, centavos):
 
 @pytest.mark.parametrize(
     "compra",
-    [0, -5, None, "abc", "1630.5", True, False, 0.004, 0.0, -0.0, [], {}, [1630.5], -1630.5],
+    [
+        0,
+        -5,
+        None,
+        "abc",
+        "1630.5",
+        True,
+        False,
+        0.004,
+        0.0,
+        -0.0,
+        [],
+        {},
+        [1630.5],
+        -1630.5,
+    ],
 )
 def test_ca_62_3_compra_invalida(compra):
     # CA-62.3: cada una es un error con el mismo mensaje.
@@ -222,7 +243,9 @@ def test_contenido_que_no_es_un_objeto_json(contenido):
     assert str(e.value) == MENSAJE_ERROR
 
 
-@pytest.mark.parametrize("estado", [500, 404, 201, 204, 301, 302, 403, 429, 503, 0, 199, 400])
+@pytest.mark.parametrize(
+    "estado", [500, 404, 201, 204, 301, 302, 403, 429, 503, 0, 199, 400]
+)
 def test_ca_62_3_estado_distinto_de_200(estado):
     # CA-62.3: solo 200 sirve, aunque el contenido sea perfecto.
     with pytest.raises(ErrorDeValidacion):
@@ -258,7 +281,10 @@ def test_ca_62_4_fecha_no_valida(fecha):
     [
         ("2026-10-18T02:30:00Z", "17/10/2026 23:30"),  # CA-61.6: cambia el día
         ("2026-10-18T14:05:00-03:00", "18/10/2026 14:05"),
-        ("2026-10-18T17:05:59Z", "18/10/2026 14:05"),  # segundos descartados, no redondeados
+        (
+            "2026-10-18T17:05:59Z",
+            "18/10/2026 14:05",
+        ),  # segundos descartados, no redondeados
         ("2026-10-18T17:05:59.999Z", "18/10/2026 14:05"),
         ("2026-10-18T17:05:00.000Z", "18/10/2026 14:05"),
         ("2026-10-18T17:05:00+00:00", "18/10/2026 14:05"),
@@ -267,7 +293,10 @@ def test_ca_62_4_fecha_no_valida(fecha):
         ("2026-10-18T03:00:00Z", "18/10/2026 00:00"),  # medianoche exacta en Argentina
         ("2026-10-18T02:59:59Z", "17/10/2026 23:59"),
         ("2026-01-01T00:00:00Z", "31/12/2025 21:00"),  # cruza el año
-        ("2026-03-01T01:00:00Z", "28/02/2026 22:00"),  # cruza el mes (2026 no es bisiesto)
+        (
+            "2026-03-01T01:00:00Z",
+            "28/02/2026 22:00",
+        ),  # cruza el mes (2026 no es bisiesto)
         ("2024-03-01T01:00:00Z", "29/02/2024 22:00"),  # año bisiesto
         ("2026-10-18T00:05:00Z", "17/10/2026 21:05"),
         ("2026-07-15T12:00:00Z", "15/07/2026 09:00"),  # invierno: igual UTC-3 fijo
@@ -284,7 +313,9 @@ def test_la_hora_de_la_computadora_no_influye(monkeypatch):
     # CA-61.6: se muestra la hora de la fuente aunque la computadora diga otra cosa.
     import time as modulo_time
 
-    monkeypatch.setattr(modulo_time, "time", lambda: 1_792_353_600.0)  # 2026-10-18 20:00 UTC
+    monkeypatch.setattr(
+        modulo_time, "time", lambda: 1_792_353_600.0
+    )  # 2026-10-18 20:00 UTC
     r = validar_respuesta("blue", 200, cuerpo())
     assert "18/10/2026 14:05" in r.origen
 
@@ -316,7 +347,9 @@ def test_fecha_extrema_no_rompe_con_un_error_tecnico():
     # Borde: una fecha en el año 1 no se puede pasar a UTC-3. Tiene que ser el mismo error
     # de siempre y no un OverflowError que el diálogo trataría como "error inesperado".
     with pytest.raises(ErrorDeValidacion):
-        validar_respuesta("blue", 200, cuerpo(fechaActualizacion="0001-01-01T00:00:00Z"))
+        validar_respuesta(
+            "blue", 200, cuerpo(fechaActualizacion="0001-01-01T00:00:00Z")
+        )
 
 
 def test_json_muy_anidado_no_rompe_con_un_error_tecnico():
@@ -367,7 +400,8 @@ def test_ca_62_1_cualquier_falla_del_pedido_es_el_mismo_error(monkeypatch, error
 
 def test_mensaje_de_error_exacto():
     assert (
-        MENSAJE_ERROR == "No se pudo obtener la cotización. Revisá tu conexión o cargala a mano."
+        MENSAJE_ERROR
+        == "No se pudo obtener la cotización. Revisá tu conexión o cargala a mano."
     )
 
 
@@ -393,7 +427,9 @@ def test_el_limite_por_defecto_es_10_segundos(con, fuente):
     assert fuente.pedidos[0][1] == 10
 
 
-def test_ca_62_2_sin_respuesta_a_tiempo_es_error_y_no_espera_a_la_fuente(con, monkeypatch):
+def test_ca_62_2_sin_respuesta_a_tiempo_es_error_y_no_espera_a_la_fuente(
+    con, monkeypatch
+):
     # CA-62.2 (escala 0,2 s en vez de 10 s): la fuente tarda 1 s; el error llega al
     # vencer el límite, sin esperar la respuesta tardía.
     monkeypatch.setattr(cotizacion_online, "pedir", Fuente(demora=1.0))
@@ -508,13 +544,17 @@ def test_ca_62_7_el_pedido_no_depende_de_la_base(con, urlopen_falso, mes_id):
     llamadas, _ = urlopen_falso
     antes = None
     asyncio.run(_buscar_y_ignorar(con))
-    antes = [(p.full_url, p.get_method(), p.data, dict(p.headers)) for p, _, _ in llamadas]
+    antes = [
+        (p.full_url, p.get_method(), p.data, dict(p.headers)) for p, _, _ in llamadas
+    ]
     otros = con.execute("SELECT id FROM categorias LIMIT 1").fetchone()["id"]
     gastos.agregar_gasto(con, mes_id, "Alquiler inventado", otros, 260000, "fijo")
     catalogos.crear(con, catalogos.PERSONAS, "Sofía")
     llamadas.clear()
     asyncio.run(_buscar_y_ignorar(con))
-    despues = [(p.full_url, p.get_method(), p.data, dict(p.headers)) for p, _, _ in llamadas]
+    despues = [
+        (p.full_url, p.get_method(), p.data, dict(p.headers)) for p, _, _ in llamadas
+    ]
     assert len(antes) == len(despues) == 1
     assert antes == despues
 

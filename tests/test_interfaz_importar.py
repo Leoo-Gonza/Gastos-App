@@ -157,8 +157,14 @@ def _en_profundidad(control):
         if campo.name.startswith("_") or campo.name == "parent":
             continue
         valor = getattr(control, campo.name, None)
-        hijos = [valor] if isinstance(valor, ft.BaseControl) else (
-            [v for v in valor if isinstance(v, ft.BaseControl)] if isinstance(valor, list) else []
+        hijos = (
+            [valor]
+            if isinstance(valor, ft.BaseControl)
+            else (
+                [v for v in valor if isinstance(v, ft.BaseControl)]
+                if isinstance(valor, list)
+                else []
+            )
         )
         for hijo in hijos:
             salida.extend(_en_profundidad(hijo))
@@ -274,8 +280,13 @@ def test_pantalla_inicial_textos(app_vacia, pagina):
     # §3.11: textos del paso 1, tarjeta de 520 y botón "Elegir archivo..." con foco.
     p = abrir_desde_primer_uso(app_vacia, pagina)
     t = textos(pagina.controls[0])
-    assert "Elegí un archivo .xlsx. Antes de guardar nada vas a poder revisar todo." in t
-    assert "El archivo solo se lee: no se modifica, no se copia y no se guarda en la app." in t
+    assert (
+        "Elegí un archivo .xlsx. Antes de guardar nada vas a poder revisar todo." in t
+    )
+    assert (
+        "El archivo solo se lee: no se modifica, no se copia y no se guarda en la app."
+        in t
+    )
     assert boton(p.tarjeta, "Elegir archivo...").autofocus
     assert hay_boton(p.tarjeta, "Cancelar")
     assert de_tipo(pagina.controls[0], ft.Card)[0].width == 520
@@ -557,12 +568,22 @@ def test_esc_durante_la_lectura_no_cancela(app_vacia, pagina, monkeypatch):
 
 @pytest.mark.parametrize(
     "nombre",
-    ["notas.txt", "datos.csv", "viejo.xls", "macro.xlsm", "hoja.ods", "sin_extension", "xlsx"],
+    [
+        "notas.txt",
+        "datos.csv",
+        "viejo.xls",
+        "macro.xlsm",
+        "hoja.ods",
+        "sin_extension",
+        "xlsx",
+    ],
 )
 def test_extension_no_xlsx_da_aviso(app_vacia, pagina, nombre):
     # CA-58.1: .txt, .csv, .xls, etc. por nombre -> texto exacto y "Elegir otro archivo".
     p = abrir_desde_primer_uso(app_vacia, pagina)
-    leer(p, nombre, planilla_prueba())  # aunque el contenido fuera válido, el nombre manda
+    leer(
+        p, nombre, planilla_prueba()
+    )  # aunque el contenido fuera válido, el nombre manda
     assert INVALIDO in tarjeta(p)
     assert hay_boton(p.tarjeta, "Elegir otro archivo")
     assert not hay_boton(p.tarjeta, "Revisar filas")
@@ -608,7 +629,9 @@ def test_xlsx_vacio_0_bytes(app_vacia, pagina):
 def test_xlsx_con_hoja_interna_danada(app_vacia, pagina):
     # Zip válido pero con la hoja rota por dentro: aviso, no diálogo de error técnico.
     p = abrir_desde_primer_uso(app_vacia, pagina)
-    roto = reemplazar_en_zip(planilla_prueba(), "xl/worksheets/sheet1.xml", b"<no es xml")
+    roto = reemplazar_en_zip(
+        planilla_prueba(), "xl/worksheets/sheet1.xml", b"<no es xml"
+    )
     leer(p, "roto.xlsx", roto)
     assert INVALIDO in tarjeta(p)
     assert app_vacia._dialogos == []
@@ -867,7 +890,8 @@ def test_hoja_elegida_sin_datos_entre_varias_avisa_debajo(app_vacia, pagina):
     controles = p.tarjeta.controls
     i_grupo = controles.index(p.selector_hojas)
     assert any(
-        "No se encontraron datos" in " ".join(textos(c)) for c in controles[i_grupo + 1 :]
+        "No se encontraron datos" in " ".join(textos(c))
+        for c in controles[i_grupo + 1 :]
     )
 
 
@@ -1056,7 +1080,9 @@ def test_la_logica_no_importa_la_interfaz():
             else:
                 continue
             for n in nombres:
-                assert not n.startswith("app.interfaz"), f"{archivo_py.name} importa {n}"
+                assert not n.startswith("app.interfaz"), (
+                    f"{archivo_py.name} importa {n}"
+                )
                 assert n.split(".")[0] != "flet", f"{archivo_py.name} importa {n}"
 
 

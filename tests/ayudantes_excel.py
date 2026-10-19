@@ -19,29 +19,50 @@ def celdas_planilla():
     """
     return {
         "C1": "Gasto del Mes",
-        "D2": "Gastos", "E2": "Pagado",
-        "C3": "Alquiler", "D3": 260000,
-        "C4": "Servicios", "D4": "82.000",  # texto
-        "C5": "Internet", "D5": 38700, "E5": 38700,
-        "C6": "Tarjetas de Credito", "D6": 582917,
-        "C7": "psicologo", "D7": 140000, "E7": 60000,
-        "D8": "total", "E8": "Falta por pagar",
-        "D9": 1103617, "E9": 1004917,
-        "C11": "Deudas", "D11": "Monto", "E11": "Total deudas",
-        "C12": "Monotributo 66.020,12", "D12": "66.020,12", "E12": 66021,  # D12 texto
-        "C13": "Avant Service cuota 3/ 3 $41.116,66", "D13": 41116.66,
+        "D2": "Gastos",
+        "E2": "Pagado",
+        "C3": "Alquiler",
+        "D3": 260000,
+        "C4": "Servicios",
+        "D4": "82.000",  # texto
+        "C5": "Internet",
+        "D5": 38700,
+        "E5": 38700,
+        "C6": "Tarjetas de Credito",
+        "D6": 582917,
+        "C7": "psicologo",
+        "D7": 140000,
+        "E7": 60000,
+        "D8": "total",
+        "E8": "Falta por pagar",
+        "D9": 1103617,
+        "E9": 1004917,
+        "C11": "Deudas",
+        "D11": "Monto",
+        "E11": "Total deudas",
+        "C12": "Monotributo 66.020,12",
+        "D12": "66.020,12",
+        "E12": 66021,  # D12 texto
+        "C13": "Avant Service cuota 3/ 3 $41.116,66",
+        "D13": 41116.66,
         "C14": "Deuda freezer",
-        "C15": "Gym", "D15": 50000,
+        "C15": "Gym",
+        "D15": 50000,
         "C16": "Obra social",
         "B18": "Sueldo",
         "B19": 1300,
         "D21": "Deudas sofia",
-        "D22": "Prestamo MP", "E22": 20000,
-        "D23": "Internet", "E23": 12900,
-        "D24": "Total", "E24": 32900,
+        "D22": "Prestamo MP",
+        "E22": 20000,
+        "D23": "Internet",
+        "E23": 12900,
+        "D24": "Total",
+        "E24": 32900,
         "D26": "Marsu",
-        "D27": "tacones chiqui baby", "E27": 6785,
-        "D28": "Total", "E28": 6785,
+        "D27": "tacones chiqui baby",
+        "E27": 6785,
+        "D28": "Total",
+        "E28": 6785,
     }
 
 
@@ -147,7 +168,9 @@ def reemplazar_en_zip(contenido, nombre_interno, nuevo):
     salida = io.BytesIO()
     with zipfile.ZipFile(salida, "w", zipfile.ZIP_DEFLATED) as destino:
         for nombre in origen.namelist():
-            destino.writestr(nombre, nuevo if nombre == nombre_interno else origen.read(nombre))
+            destino.writestr(
+                nombre, nuevo if nombre == nombre_interno else origen.read(nombre)
+            )
     return salida.getvalue()
 
 
