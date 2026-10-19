@@ -207,13 +207,13 @@ def test_primer_uso_esc_vuelve_al_formulario(app_vacia, pagina):
 
 
 def test_ajustes_tiene_pestana_importar_ultima(app):
-    # CA-49.2 / §3.10: sexta pestaña y última, con el texto y el botón.
+    # CA-49.2 / §3.10: última pestaña (la séptima desde el paso 9b), con el texto y el botón.
     ir(app, "Ajustes")
     ajustes = app.pantalla("Ajustes")
     etiquetas = [t.label for t in ajustes.pestanas.content.controls[0].tabs]
-    assert len(etiquetas) == 6
+    assert len(etiquetas) == 7
     assert etiquetas[-1] == "Importar Excel"
-    assert ajustes.indice_de(ajustes.importar) == 5
+    assert ajustes.indice_de(ajustes.importar) == 6
     assert (
         "Traé gastos, cuotas, lo que te deben y el sueldo desde una planilla .xlsx."
         in textos(ajustes.importar.control)

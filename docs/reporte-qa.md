@@ -1277,3 +1277,70 @@ Ninguno nuevo en este paso.
 - El fallo del guardado es simulado con `monkeypatch`; un fallo real de disco (base bloqueada, disco lleno) solo se puede probar a mano.
 - Ruff no se puede correr en este equipo (WinError 4551): hay líneas largas en las pruebas nuevas.
 - Con el 8e termina la importación (8a a 8e). Pendiente recomendado: una pasada manual completa con `planilla-prueba.xlsx` desde Ajustes y desde el primer uso.
+
+
+## Ronda 39 (2026-10-18): paso 9 (9a lógica + 9b interfaz), cotización automática (Módulo L)
+
+### Qué se probó
+Dos archivos nuevos, sin internet (se reemplaza `cotizacion_online.pedir` o `urllib.request.urlopen`), con datos inventados y sin leer `datos-privados/`:
+- `tests/test_cotizacion_online.py` (148 pruebas): dólar elegido (por defecto, valores desconocidos, guardar inválido), textos y URL por dólar, validación de la respuesta, redondeo, hora de Argentina, el pedido real (`Request` armado por `pedir`), `buscar_cotizacion` y `buscar_con_limite` con asyncio de verdad.
+- `tests/test_interfaz_cotizacion.py` (104 pruebas): página falsa; la búsqueda (`page.run_task(self._buscar)`) se ejecuta de verdad con `asyncio.run` (hilo + `wait_for`). Base de los CA (hoy = 2026-10, existen 2026-09, 2026-10 y 2026-11 sin cotización). Los tiempos se escalan (3 s -> 0,3 s; 10 s -> 0,2 s).
+
+Pruebas viejas adaptadas por las 7 pestañas, sin relajar lo que verifican: `test_pestanas_y_titulo`, `test_ajustes_tiene_pestana_importar_ultima` (6 -> 7 pestañas, Importar en el índice 6), `test_elegir_tema_mantiene_la_pestana_apariencia`, `test_bug23_*` (Apariencia: índice 4 -> 5) y `test_indice_de_cada_pestana` (ahora compara las 7: 0 a 6).
+
+| Criterio | Qué se verificó | Resultado |
+|---|---|---|
+| CA-59.1 | Ajustes: Blue elegido, 4 radios exactos (Blue, MEP, Oficial, Cripto), sin compra/venta; el botón "Buscar dólar blue" y el pedido a `.../dolares/blue` | Pasa |
+| CA-59.2 | MEP/Oficial/Cripto: texto del botón, pedido a `bolsa`/`oficial`/`cripto`, origen con el nombre, fila `dolar_cotizacion` en la base, aviso "Dólar para la cotización: MEP" | Pasa |
+| CA-59.3 | Reabrir la app (otra `Aplicacion` sobre la misma base) sigue en MEP; `xyz`, vacío, "MEP", "bolsa" en la base -> Blue | Pasa |
+| CA-59.4 | Cambiar el dólar: cotizaciones 160000 / 160000 / sin cotización, cero pedidos y cero tareas de búsqueda; cambiar de pestaña tampoco pide nada | Pasa |
+| CA-59.5 | Se usa la compra (1.630,50), no la venta (1.660) | Pasa |
+| CA-60.1, CA-25.5 | Botón en 2026-10 y 2026-11; en 2026-09 ni botón, ni ruedita, ni ayuda, ni error (el diálogo queda igual que antes) y se guarda 1.650 a mano | Pasa |
+| CA-60.2 | Con mes actual 2026-11: 2026-10 sin botón, 2026-11 con botón. Borde: con 2027-01 como actual, 2026-11 sin botón (se compara año y mes) | Pasa |
+| CA-60.3 | Cambiar de mes, abrir/cerrar el diálogo, cambiar el dólar, "Mes nuevo" y crear 2026-12: cero pedidos. "Mes nuevo" sin botón y sugiere la cotización del último mes; primer uso, gasto en USD y cambio realizado sin botón. Ctrl+K, lápiz de la barra y "Cargar cotización" abren el mismo diálogo | Pasa |
+| CA-61.1 | Campo "1.630,50" + origen; mientras el diálogo sigue abierto la base sigue en `160000`, la barra en $ 1.600, USD a cambiar 896,64 y ahorro 303,36; sin SnackBar. Guardar: `163050`, "$ 1.630,50", 879,86 y 320,14 | Pasa |
+| CA-61.2 | Cancelar y Esc después de buscar: `160000`; al reabrir "1.600" y sin origen | Pasa |
+| CA-61.3 | 2026-11: campo vacío -> "1.630,50" + origen; Guardar `163050` y desaparece "Cargá la cotización"; Cancelar lo deja sin cotización | Pasa |
+| CA-61.4, CA-61.9 | 1630 -> "1.630" / `163000`; 1630.555 -> "1.630,56" / `163056`; 1630.554 -> "1.630,55" | Pasa |
+| CA-61.5 | Editar a mano oculta el origen y escribir lo mismo no lo trae; Guardar guarda `163050`; volver a tocar el botón lo restablece. Borde: `on_blur` no lo borra; la búsqueda no dispara su propio `on_change` | Pasa |
+| CA-61.6 | Origen "17/10/2026 23:30", "18/10/2026 14:05" (x2), con la computadora en otra hora | Pasa |
+| CA-61.7 | Al clic (antes de que salga el pedido): ruedita + "Buscando la cotización…", botón (mismo texto) y Guardar deshabilitados, campo `read_only` (no `disabled`), Cancelar disponible. Durante la espera: Enter, el handler de Guardar y 2 o 3 clics más no hacen nada (un solo pedido, una sola tarea). Al llegar la respuesta (acierto o error) todo se rehabilita | Pasa |
+| CA-61.8 | Cancelar y Esc mientras busca: el diálogo se cierra en el acto; al llegar la respuesta (válida, error o falla inesperada) no cambia la base, no hay SnackBar, ni diálogo nuevo, ni pedido de foco; al reabrir, "1.600", sin origen ni ruedita. Borde: cerrar y reabrir mientras busca (mismo mes u otro mes): la respuesta vieja no toca al diálogo nuevo ni apaga su ruedita | Pasa |
+| CA-62.1 | Sin conexión: mensaje exacto, campo "1.600", sin origen, botón habilitado, foco al botón, sin SnackBar, sin detalles técnicos; Guardar deja `160000` | Pasa |
+| CA-62.2 | Límite real con `asyncio.wait_for` (0,2 s): error al vencer, sin esperar la fuente; una respuesta base tardía (0,6 s) se descarta. La interfaz usa el valor por defecto de 10 s (se inspecciona la firma y que `_buscar` no lo cambie) | Pasa (escalado) |
+| CA-62.3 | `compra` 0, -5, ausente, null, "abc", "1630.5", true, 0.004; contenido HTML, `[]`, vacío; estados 500 y 404. Además false, listas, objetos, NaN/Infinity/1e999, BOM, no UTF-8, estados 201/204/301/403/429/503 | Pasa |
+| CA-62.4 | Sin fecha, "ayer", sin huso, vacía, número, solo fecha, mes 13, 30 de febrero, hora 25 | Pasa |
+| CA-62.5 | Sin `venta`, con "abc", null, lista, true: válida | Pasa |
+| CA-62.6 | Acierto y luego error: mensaje + "1.630,50" con el mismo origen; editar a mano oculta ambos. El error se oculta al empezar otra búsqueda | Pasa |
+| CA-62.7 | Una sola llamada a la fuente, a la URL exacta, sin `?`. `pedir()` armado con `urlopen` falso: `GET`, `data=None`, solo el encabezado `Accept`, `timeout` correcto. Igual con más gastos y personas cargados | Pasa |
+| Otros | `HTTPError` -> `(código, b"")`; `URLError`/`TimeoutError` -> mismo error; `buscar_con_limite` no traba el bucle (el hilo trabaja mientras otras tareas corren); error inesperado cierra el diálogo y abre el aviso; si falla el guardado del dólar el radio vuelve a lo guardado y avisa; 7 pestañas, TabBar `scrollable`, orden vertical del diálogo (§3.6); frase "Es la cotización de hoy, no la de Noviembre 2026." solo en meses futuros; sueldo sigue sin botón | Pasa |
+
+### Resultado
+- Suite completa con `pytest --cov=app`: 3.244 pasan, 5 xfail (los bugs de abajo, con `strict=True`), 1 omitida (archivo real de Excel), 0 fallan. Cobertura de `app/` 98 %; `cotizacion_online.py`, `configuracion.py` y `aplicacion.py` 100 %; `dialogos_valores.py` 99 % (línea 73, previa a este paso) y `pantalla_ajustes.py` 99 % (líneas 302-303, previas).
+- Antes de adaptar las pruebas viejas fallaban 8 por el cambio de pestañas (esperado).
+
+### Bugs (abiertos, el código de la app no se tocó)
+Los tres son de baja probabilidad (la fuente real hoy no manda esos valores), pero rompen la regla "todo lo raro es el mismo mensaje de error, sin detalles técnicos" (RN-87).
+- **BUG-39a (baja): una fecha extrema rompe con `OverflowError`.** Reproducir: `validar_respuesta("blue", 200, b'{"compra": 1630.5, "fechaActualizacion": "0001-01-01T00:00:00Z"}')`. Pasar el año 1 a UTC-3 desborda el rango de `datetime` y `OverflowError` no se atrapa (`_fecha_argentina` solo cubre `ValueError`). En la pantalla se cerraría el diálogo con el aviso de error inesperado en vez de mostrar el mensaje de siempre. Causa probable: en `_fecha_argentina` falta atrapar `OverflowError` alrededor de `astimezone`. Prueba: `test_fecha_extrema_no_rompe_con_un_error_tecnico` (xfail).
+- **BUG-39b (baja): un JSON muy anidado rompe con `RecursionError`.** Reproducir: `validar_respuesta("blue", 200, b"[" * 100000)`. `json.loads` lanza `RecursionError`, que no es `ValueError`. Causa probable: el `except ValueError` de `validar_respuesta` (o el `try` de `buscar_cotizacion`, que hoy solo envuelve a `pedir`) debería incluir `RecursionError` o ser más amplio. Prueba: `test_json_muy_anidado_no_rompe_con_un_error_tecnico` (xfail).
+- **BUG-39c (baja): no se valida el tope de la app.** Reproducir: `validar_respuesta("blue", 200, <JSON con "compra": 1e13>)` devuelve 1.000.000.000.000.000 centavos. El campo se completa con un valor que la app no acepta (el máximo es 999.999.999.999,99) y recién al tocar Guardar aparece "La cotización es demasiado grande."; se vería un origen de DolarApi sobre un valor imposible. (`10**30` sí da error, pero por casualidad: la precisión de 28 dígitos de `Decimal`.) Causa probable: falta un control del tope (por ejemplo `formato.validar_centavos`) en `validar_respuesta`. Prueba: `test_compra_enorme_no_deberia_completar_el_campo[1e13 y 1e20]` (xfail). RN-82 no menciona un tope: si Ana decide que no hace falta, se quita la prueba.
+
+### Observaciones
+- **O-39 (accesibilidad, mínima):** el diseño (§3.6) pide `ProgressRing(..., semantics_label="Buscando la cotización")`; la ruedita no lo tiene (aunque el texto "Buscando la cotización…" al lado sí está). Prueba `test_la_ruedita_tiene_etiqueta_de_accesibilidad` (xfail).
+- `pedir()` pasa `timeout` a `urlopen`, que en la práctica es por operación de socket y no total; el tope real de 10 s lo da `asyncio.wait_for` (correcto). Al vencer, el hilo del pedido sigue vivo hasta que la conexión se corte: no se ve ni se descarta, pero queda un hilo de más.
+- Con la página falsa los handlers se llaman aunque el botón esté `disabled`; por eso se verificó también que el handler de Guardar y `on_submit` no guardan buscando (el guardia `bloqueado` funciona).
+- En el resumen de un mes sin cotización y sin gastos, "Dólares a cambiar" muestra US$ 0,00 y el aviso "Cargá la cotización" está en la tarjeta de capacidad de endeudamiento (el CA dice solo que "ya no muestra Cargá la cotización"; se verificó eso en todo el resumen).
+
+### Limitaciones y pendiente de prueba manual
+- Con página falsa no se ve: el aspecto real (ruedita animada, botón gris, colores del error y del origen en tema claro y oscuro, el texto del origen bajando de línea), que `TextField.read_only` en Flet 1.0.3 realmente impida escribir, que `on_change` no se dispare al asignar `value` desde el código (la prueba asume que no; si Flet lo disparara, el origen se borraría solo y se vería en la ventana real), el foco real (`control.focus()` después de `update()`), el desplazamiento horizontal real de la barra de 7 pestañas a 1.100 px, `RadioGroup` dentro de la pestaña, y el comportamiento si el usuario mueve el foco a otro lado durante la espera.
+- No se probó la fuente real (DolarApi) a propósito: la forma real de la respuesta (nombres de campos, `fechaActualizacion` con `Z`) hay que confirmarla a mano una vez, con internet.
+- Los tiempos de 3 s, 10 s y 12 s se escalaron (0,3 / 0,2 / 0,6 s); la lógica es la misma, pero no se esperaron los segundos reales.
+- Ruff no se puede correr en este equipo (WinError 4551): hay líneas largas en las pruebas nuevas.
+
+**Correcciones después de la ronda 39 (agente principal):**
+- **BUG-39a corregido:** `_fecha_argentina` atrapa también `OverflowError` (incluido `astimezone`).
+- **BUG-39b corregido:** `json.loads` atrapa también `RecursionError`.
+- **BUG-39c corregido:** `validar_respuesta` rechaza centavos mayores a `MONTO_MAXIMO_CENT` con el mensaje de siempre (es el tope general de RN-05; RN-82 no cambia).
+- **O-39 corregida:** la ruedita tiene `semantics_label="Buscando la cotización"`.
+- Se sacó la marca xfail de las 5 pruebas (ahora pasan como normales) y se agregó `test_borde_exacto_del_tope_de_la_cotizacion` (el tope exacto se acepta; un centavo más se rechaza).
+- Suite completa con `pytest --cov=app`: 3.250 pasan, 1 omitida (archivo real de Excel), 0 fallan, 0 xfail. `cotizacion_online.py` 100 %.

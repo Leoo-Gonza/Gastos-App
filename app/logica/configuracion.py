@@ -1,7 +1,7 @@
 """Preferencias guardadas en la tabla configuracion (clave → valor de texto).
 
-Por ahora: la meta de ahorro mensual en USD (RF-36). Es una sola para todos
-los meses.
+La meta de ahorro mensual en USD (RF-36, una sola para todos los meses), el
+tema (Apariencia) y el dólar para la cotización automática (RN-79).
 """
 
 import sqlite3
@@ -61,4 +61,31 @@ def guardar_tema(con: sqlite3.Connection, tema: str) -> None:
         con.execute(
             "INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?)",
             (_TEMA, tema),
+        )
+
+
+# Dólar para la cotización automática (v2, RN-79): qué busca el botón "Buscar
+# dólar ..." del diálogo de la cotización. Se guarda un valor propio de la app,
+# no el nombre que usa DolarApi (§5.11).
+DOLARES = ("blue", "mep", "oficial", "cripto")
+_DOLAR = "dolar_cotizacion"
+
+
+def obtener_dolar(con: sqlite3.Connection) -> str:
+    """El dólar elegido; "blue" si nunca se eligió o lo guardado no es válido."""
+    fila = con.execute(
+        "SELECT valor FROM configuracion WHERE clave = ?", (_DOLAR,)
+    ).fetchone()
+    return fila["valor"] if fila and fila["valor"] in DOLARES else "blue"
+
+
+def guardar_dolar(con: sqlite3.Connection, dolar: str) -> None:
+    if dolar not in DOLARES:
+        raise ErrorDeValidacion(
+            "El dólar tiene que ser blue, MEP, oficial o cripto.", "dolar"
+        )
+    with con:
+        con.execute(
+            "INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?)",
+            (_DOLAR, dolar),
         )

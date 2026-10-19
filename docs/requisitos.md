@@ -5,7 +5,8 @@
 > dólares (y sus preguntas abiertas), de la entrevista sobre importar la planilla de Excel
 > (2026-10-13, primera funcionalidad de la v2, y sus preguntas abiertas), de las decisiones
 > del usuario sobre el diseño de la importación (2026-10-13, `docs/diseno.md` §7,
-> observaciones 21 a 32) y de la planilla de referencia
+> observaciones 21 a 32), de la entrevista sobre la cotización automática (2026-10-18,
+> segunda y última funcionalidad de la v2) y de la planilla de referencia
 > (`docs/referencia/Referencia planilla.png`).
 > Define QUÉ hace la app, no CÓMO se programa.
 
@@ -40,11 +41,17 @@ Objetivos de la v1:
 4. Repartir gastos compartidos y saber cuánto le debe cada persona.
 5. Ver la capacidad de endeudamiento, una previsión de los próximos 12 meses y tres gráficos.
 
-Objetivos de la v2 (en curso):
+Objetivos de la v2 (en curso; son las dos únicas funcionalidades de la v2):
 
 6. Importar una planilla de Excel para arrancar sin cargar todo a mano (Módulo K). Más
    adelante la usarán familiares, cada uno con su propio Excel de formato distinto: la
    importación no depende del formato de la planilla del usuario.
+7. Buscar en internet la cotización del dólar del mes con un botón, en vez de copiarla a
+   mano (Módulo L). El usuario cobra en USD y los vende para pagar en pesos, así que se usa
+   siempre el **precio de compra**. Por defecto es el dólar blue; cada usuario (por ejemplo,
+   cada familiar) puede elegir en Ajustes el dólar que usa: blue, MEP, oficial o cripto. La
+   búsqueda solo completa el campo: el usuario ve el valor y decide si lo guarda. La app no
+   envía ningún dato del usuario.
 
 ---
 
@@ -54,11 +61,11 @@ Objetivos de la v2 (en curso):
 |---|---|
 | **Mes** | Período identificado por año y mes (ej. 2026-10). Cada mes guarda sus propios gastos, cotización, sueldo, ingresos extra y cambios. |
 | **Mes seleccionado** | El mes que el usuario está mirando o editando. Puede ser cualquier mes existente. |
-| **Mes actual** | El mes del **calendario del sistema** (hoy 2026-10). No depende del mes seleccionado. Lo usan los planes de cuotas (RN-30, RN-31) y la previsión (RN-41). |
+| **Mes actual** | El mes del **calendario del sistema** (hoy 2026-10). No depende del mes seleccionado. Lo usan los planes de cuotas (RN-30, RN-31), la previsión (RN-41) y el botón de búsqueda de la cotización (RN-80). |
 | **Último mes** | El mes más reciente que existe en la app. |
 | **Sueldo** | Ingreso principal en USD del mes (hoy 1.200 USD). |
 | **Ingreso extra** | Ingreso adicional del mes, en ARS o en USD. |
-| **Cotización** | Cantidad de ARS que se obtienen por 1 USD. La carga el usuario a mano. Ej.: 1.600. |
+| **Cotización** | Cantidad de ARS que se obtienen por 1 USD. La carga el usuario a mano o, en el mes actual y los futuros, la puede buscar en internet con un botón (Módulo L). Ej.: 1.600. |
 | **Cotización del mes** | La cotización cargada en el mes; se usa para pesos a cubrir, USD a cambiar y ahorro. |
 | **Cambio realizado** | Operación ya hecha: "cambié X USD a una cotización Y y recibí Z ARS". |
 | **Gasto** | Salida de dinero que se paga en ARS dentro de un mes. Tipo: fijo mensual, en cuotas o pago único. Su monto puede estar expresado en ARS o en USD (RF-43). |
@@ -96,14 +103,18 @@ Objetivos de la v2 (en curso):
 | **Bloque** | Grupo de filas de la lista de revisión que cuelgan del mismo título de bloque. Tiene acciones para cambiar todas sus filas juntas (RN-78). |
 | **Tipo de fila** | Qué se hace con una fila detectada: gasto fijo mensual, gasto pago único, cuota, me deben, sueldo (USD) o ignorar. |
 | **Mes destino** | Mes en el que se cargan los datos importados (RN-73). |
+| **Dólar para la cotización** | Qué dólar busca la app en internet: blue (por defecto), MEP, oficial o cripto. Se elige en Ajustes (RF-59, RN-79). |
+| **Precio de compra** | Lo que le pagan al usuario por cada USD cuando los vende. Es el único precio que usa la búsqueda de la cotización (no el de venta). |
+| **DolarApi** | Servicio de internet (`dolarapi.com`) del que la app obtiene la cotización (RN-81). |
+| **Origen de la cotización** | Texto que se ve debajo del campo de cotización después de buscarla: dólar, fecha y hora que informa la fuente (ej. "Dólar blue compra, 18/10/2026 14:05 (DolarApi)", RN-85). No se guarda. |
 
 ---
 
 ## 3. Requisitos funcionales
 
 Numeración: RF-xx. Los criterios de aceptación de cada RF están en la sección 7 con el
-número CA-xx.y, donde xx es el número del RF. Los módulos A a J son la v1; el módulo K es
-la v2.
+número CA-xx.y, donde xx es el número del RF. Los módulos A a J son la v1; los módulos K y L
+son la v2.
 
 ### Módulo A – Meses e historial
 
@@ -173,9 +184,14 @@ la v2.
 
 - **RF-23** Ver y editar el sueldo en USD del mes seleccionado. Se permite 0, con aviso (RN-05).
 - **RF-24** ABM de ingresos extra del mes: descripción, moneda (ARS o USD) y monto.
-- **RF-25** Ver y editar la cotización del mes seleccionado en cualquier momento. Al cambiarla
-  se recalculan de inmediato todos los valores que dependen de ella (RN-19). El monto en ARS
-  de los gastos en dólares **no** cambia (RN-55).
+- **RF-25** Ver y editar la cotización del mes seleccionado en cualquier momento, en el
+  diálogo de editar la cotización del mes (el que se abre con `Ctrl+K` o con el lápiz). Al
+  cambiarla se recalculan de inmediato todos los valores que dependen de ella (RN-19). El
+  monto en ARS de los gastos en dólares **no** cambia (RN-55). Si el mes seleccionado es el
+  mes actual o uno futuro, el diálogo tiene además el botón para buscar la cotización en
+  internet (RF-60), que solo completa el campo: se guarda con Guardar, como siempre (RN-84).
+  En los meses pasados el diálogo no tiene ese botón y la cotización se edita solo a mano
+  (RN-80).
 - **RF-26** ABM de cambios realizados del mes: fecha, USD cambiados, cotización del cambio y
   ARS recibidos. Los ARS se completan solos (USD × cotización) y se pueden corregir a mano
   (RN-13).
@@ -312,6 +328,30 @@ la v2.
 - **RF-58** Avisos sobre el archivo: archivo dañado o que no es `.xlsx`, hoja sin datos y
   fórmulas sin valor calculado (RN-60, RN-61).
 
+### Módulo L – Cotización automática (v2)
+
+- **RF-59** Dólar para la cotización. En Ajustes, el selector "Dólar para la cotización"
+  permite elegir qué dólar se busca: Blue (por defecto), MEP, Oficial o Cripto. Siempre se
+  usa el **precio de compra** (lo que le pagan al usuario cuando vende sus USD); no se elige
+  entre compra y venta. La elección queda guardada y vale para todos los meses; cambiarla no
+  modifica ninguna cotización ya guardada (RN-79).
+- **RF-60** Botón de búsqueda. En el diálogo de editar la cotización del mes (RF-25) hay un
+  botón cuyo texto depende del dólar elegido: "Buscar dólar blue", "Buscar dólar MEP",
+  "Buscar dólar oficial" o "Buscar dólar cripto" (RN-79). Aparece solo si el mes
+  seleccionado es el mes actual o uno futuro (RN-80). La app busca la cotización **solo
+  cuando el usuario toca el botón**: nunca al abrir la app, al cambiar de mes, al crear un mes
+  nuevo ni en ningún otro lugar o momento (RN-81, RN-88).
+- **RF-61** Búsqueda y resultado. Mientras busca, se ve una ruedita y el botón está
+  deshabilitado, durante 10 segundos como máximo (RN-86). Si obtiene una cotización válida
+  (RN-82), la escribe en el campo de cotización del diálogo, con sus decimales (RN-83), y
+  muestra debajo del campo el origen, por ejemplo "Dólar blue compra, 18/10/2026 14:05
+  (DolarApi)", con la fecha y hora que informa la fuente en hora de Argentina (RN-85).
+  **No guarda**: el usuario ve el valor y toca Guardar o Cancelar como siempre, sin ninguna
+  confirmación extra (RN-84).
+- **RF-62** Error. Si no se puede obtener una cotización válida (sin internet, la fuente no
+  responde en 10 segundos o responde algo inválido), el diálogo muestra "No se pudo obtener
+  la cotización. Revisá tu conexión o cargala a mano." y el campo queda como estaba (RN-87).
+
 ---
 
 ## 4. Reglas de negocio
@@ -345,6 +385,7 @@ la v2.
   ≥ 0; si es 0 se acepta y se muestra el aviso "El sueldo de este mes es 0".
 - **RN-06 – Cotización válida.** Mayor a 0. No se puede guardar 0 ni negativa. La cotización
   del mes puede quedar sin cargar (RN-18); la de un gasto en dólares es obligatoria (RN-54).
+  Vale también para la cotización obtenida de internet (RN-82, RN-83).
 - **RN-07 – Meses válidos.** Año de 4 dígitos y mes de 1 a 12. No puede haber dos meses con
   el mismo año y mes.
 
@@ -1185,6 +1226,142 @@ de los montos en USD.
     - Después de aplicar se recalculan las marcas "ya existe" y "repetida" (RN-74) y los
       avisos de posible gasto compartido (RN-72).
 
+### 4.13 Cotización automática (v2)
+
+Los textos entre comillas de esta sección son **exactos** (se verifican en las pruebas). En
+los ejemplos el dólar elegido es el blue y la fuente informa el 18/10/2026 a las 14:05 hora
+de Argentina; en la app se reemplazan por los valores reales.
+
+- **RN-79 – Dólar elegido.** Se elige en Ajustes (RF-59) entre cuatro opciones:
+
+  | Opción en Ajustes | Valor guardado (§5.11) | Casa en DolarApi | Texto del botón | Nombre en el origen (RN-85) |
+  |---|---|---|---|---|
+  | Blue (por defecto) | `blue` | `blue` | "Buscar dólar blue" | "Dólar blue compra" |
+  | MEP | `mep` | `bolsa` | "Buscar dólar MEP" | "Dólar MEP compra" |
+  | Oficial | `oficial` | `oficial` | "Buscar dólar oficial" | "Dólar oficial compra" |
+  | Cripto | `cripto` | `cripto` | "Buscar dólar cripto" | "Dólar cripto compra" |
+
+  - **Por defecto Blue:** si no hay nada guardado (por ejemplo, una base de antes de esta
+    funcionalidad) o lo guardado no es uno de los cuatro valores, se usa Blue sin avisar, y
+    Ajustes muestra Blue elegido.
+  - **Siempre precio de compra.** No hay opción para elegir venta ni promedio.
+  - La elección queda guardada en la base: se mantiene al cerrar y abrir la app y vale para
+    todos los meses. Cada base (cada familiar con su app) tiene la suya.
+  - Cambiar el dólar **no** cambia ninguna cotización guardada ni hace ningún pedido a
+    internet: solo cambia qué se busca la próxima vez y el texto del botón.
+- **RN-80 – Meses con botón.** Con `M` = mes seleccionado y `A` = mes actual (calendario del
+  sistema), el botón de búsqueda aparece en el diálogo de la cotización solo si `M ≥ A`
+  (comparando año y mes). Ej.: con mes actual 2026-10, aparece en 2026-10 y 2026-11; no
+  aparece en 2026-09.
+  - **Motivo:** la fuente da solo la cotización de hoy, no la de un día pasado. En un mes
+    pasado, completar con la de hoy sería poner un valor que no corresponde a ese mes; ahí la
+    cotización se edita a mano como siempre (RF-25). En los meses pasados el botón no se
+    muestra (ni siquiera deshabilitado).
+  - En un mes **futuro** se completa la cotización de hoy (no hay cotización futura); el
+    usuario ve el valor y decide si lo guarda (RN-84).
+  - Se decide al abrir el diálogo, con el reloj del sistema, igual que el mes actual en el
+    resto de la app.
+  - **Mes actual todavía no creado:** el diálogo de la cotización solo existe para meses que
+    existen, así que no hay dónde buscar; el caso no aplica. El mes se crea como siempre (con
+    la cotización sugerida del último mes, RN-09) y después se puede buscar en su diálogo.
+- **RN-81 – Pedido a la fuente y privacidad.**
+  - La fuente es **DolarApi**. Cada búsqueda hace **un solo pedido de lectura** (GET) a
+    `https://dolarapi.com/v1/dolares/{casa}`, con la casa del dólar elegido (RN-79). Ej.:
+    blue → `https://dolarapi.com/v1/dolares/blue`; MEP → `https://dolarapi.com/v1/dolares/bolsa`.
+  - El pedido no lleva parámetros ni contenido: la app **no envía ningún dato del usuario**
+    (ni montos, ni nombres, ni meses, ni nada de la base). Como en cualquier conexión a
+    internet, el servidor de DolarApi ve la dirección de internet (IP) de la computadora; la
+    app no agrega nada más.
+  - Solo se hace cuando el usuario toca el botón (RN-88). La respuesta se usa solo para
+    completar el campo y el origen; no se guarda (§5.14).
+- **RN-82 – Respuesta válida.** Una respuesta es válida si cumple todo esto:
+  - llega completa dentro de los 10 segundos (RN-86) y con estado HTTP 200 (correcto);
+  - su contenido es un objeto JSON;
+  - tiene el campo `"compra"` con un **número** (no un texto, aunque parezca un número; no
+    `true`/`false`; no `null`) **mayor a 0**, y que pasado a centavos (RN-83) da al menos 1
+    centavo (RN-06);
+  - tiene el campo `"fechaActualizacion"` con una fecha y hora ISO 8601 **con huso horario**
+    (ej. `"2026-10-18T17:05:00.000Z"`).
+  Los demás campos (`"venta"`, `"casa"`, `"nombre"`, etc.) no se usan: si faltan o son raros,
+  no importa. Cualquier otra cosa es un error (RN-87).
+- **RN-83 – Valor de la cotización.**
+  - El precio de compra se pasa a centavos de ARS por USD (RN-02): `1630.5` → `163050`;
+    `1630` → `163000`.
+  - En el campo se escribe con el mismo formato que una cotización cargada (RN-04): con sus
+    decimales si los tiene ("1.630,50") y sin decimales si es entera ("1.630").
+  - Si tiene más de 2 decimales, se redondea al centavo más cercano, mitad hacia arriba
+    (RN-03): `1630.555` → "1.630,56"; `1630.554` → "1.630,55". Si el redondeo da 0 (ej.
+    `0.004`), es un error (RN-82).
+  - Al guardar se aplican las mismas validaciones que a una cotización escrita a mano
+    (RN-06) y se recalcula todo (RN-19). No se suman impuestos ni recargos (RN-58).
+- **RN-84 – Completa, no guarda.**
+  - Una búsqueda válida **reemplaza** el contenido del campo, sea cual sea: vacío (mes sin
+    cotización), la cotización actual del mes o lo que el usuario hubiera escrito.
+  - No se guarda nada hasta que el usuario toca **Guardar**, que funciona igual que siempre
+    (RF-25). Con **Cancelar**, `Esc` o cerrando el diálogo, la cotización del mes queda como
+    estaba antes de abrirlo. No hay confirmación extra: el usuario ve el valor antes de
+    guardarlo, así que nunca se pisa una cotización sin verla.
+  - Mientras el diálogo está abierto, el resumen y todos los cálculos siguen con la
+    cotización guardada (la búsqueda no cambia nada fuera del diálogo).
+  - Se puede buscar varias veces en el mismo diálogo; cada búsqueda válida reemplaza el campo
+    y el origen.
+- **RN-85 – Origen visible.**
+  - Después de una búsqueda válida, debajo del campo se ve: "Dólar blue compra, 18/10/2026
+    14:05 (DolarApi)", con el nombre del dólar elegido (RN-79).
+  - La fecha y hora son las que informa la fuente en `"fechaActualizacion"` (no las de la
+    computadora), pasadas a **hora de Argentina** (UTC−3; Argentina no usa horario de verano),
+    con el formato `DD/MM/AAAA HH:MM` (24 horas, con ceros a la izquierda). Los segundos se
+    descartan, no se redondean. Ej.:
+    - `"2026-10-18T17:05:00.000Z"` (hora UTC) → "18/10/2026 14:05";
+    - `"2026-10-18T14:05:00-03:00"` → "18/10/2026 14:05";
+    - `"2026-10-18T02:30:00Z"` → "17/10/2026 23:30" (cambia el día);
+    - `"2026-10-18T17:05:59Z"` → "18/10/2026 14:05".
+  - La fecha puede ser de un día anterior (por ejemplo, un fin de semana o feriado la fuente
+    informa la última actualización). Se muestra tal cual, sin aviso.
+  - **Si el usuario cambia el campo a mano** después de la búsqueda (cualquier cambio en el
+    texto), el origen **desaparece**, aunque después vuelva a escribir el mismo valor: así
+    nunca se le atribuye a DolarApi un valor que no es el suyo. Una nueva búsqueda válida lo
+    vuelve a mostrar.
+  - El origen **no se guarda**: al volver a abrir el diálogo (después de Guardar o Cancelar)
+    no aparece, aunque la cotización guardada sea la que vino de DolarApi (§5.14).
+- **RN-86 – Mientras busca.**
+  - Desde que el usuario toca el botón hasta que termina la búsqueda: se ve una ruedita y el
+    botón está deshabilitado (con el mismo texto).
+  - **Un solo pedido a la vez:** mientras el botón está deshabilitado, los toques no hacen
+    nada. Dos clics seguidos hacen un solo pedido.
+  - **Tiempo máximo: 10 segundos** desde que se toca el botón hasta tener la respuesta
+    completa. Si a los 10 segundos no llegó, es un error (RN-87).
+  - Al terminar (bien o con error) la ruedita desaparece y el botón se vuelve a habilitar
+    (sirve para reintentar).
+  - El campo de cotización **no se puede editar** y **Guardar está deshabilitado** mientras
+    busca (decisión del usuario, 2026-10-18): así no se guarda el valor anterior creyendo que
+    se guarda el nuevo. `Enter` en el campo tampoco guarda. Cancelar y `Esc` siguen
+    disponibles. Al terminar (bien o con error), Guardar se vuelve a habilitar.
+  - **Respuesta que llega tarde o sin diálogo.** Si el diálogo se cierra mientras busca (con
+    Cancelar, `Esc` o cerrando la app), la búsqueda queda sin efecto: lo que llegue
+    después (una respuesta válida o un error) se **descarta**: no escribe en ningún campo, no
+    muestra ningún mensaje y no guarda nada. Lo mismo pasa con una respuesta que llega después
+    de los 10 segundos. Al volver a abrir el diálogo, empieza sin búsqueda en curso.
+- **RN-87 – Error al buscar.**
+  - Es error cualquiera de estos casos: sin conexión a internet o la computadora no llega al
+    servidor; la respuesta no llega completa en 10 segundos; estado HTTP distinto de 200 (ej.
+    404 o 500); contenido que no es JSON o no es un objeto; `"compra"` que falta, es `null`,
+    texto, `true`/`false`, 0, negativa o redondea a 0 centavos; `"fechaActualizacion"` que
+    falta, no es una fecha y hora válida o no tiene huso horario.
+  - En todos los casos el diálogo muestra el mismo mensaje: "No se pudo obtener la
+    cotización. Revisá tu conexión o cargala a mano." No se muestran detalles técnicos.
+  - El campo **queda como estaba** antes de tocar el botón. Si tenía el valor de una búsqueda
+    anterior (sin editar), conserva también su origen. No se guarda nada y nada cambia en el
+    mes.
+  - El mensaje desaparece al volver a buscar o al cambiar el campo a mano.
+- **RN-88 – Solo con el botón y solo en el diálogo de la cotización del mes.**
+  - La app nunca busca la cotización por su cuenta: ni al abrir la app, ni al cambiar de mes,
+    ni al abrir el diálogo, ni al crear un mes nuevo, ni al cambiar el dólar en Ajustes.
+  - El botón **no** está en: la cotización de los gastos en dólares (se sugiere la del mes,
+    RN-54), los cambios realizados (el usuario pone la cotización que le dieron, RF-26), el
+    formulario de primer uso (RF-04), el diálogo "Mes nuevo" (RF-03; sigue sugiriendo la
+    cotización del último mes, RN-09, sin cambios) ni la importación (RN-77).
+
 ---
 
 ## 5. Modelo de datos propuesto (SQLite)
@@ -1201,7 +1378,8 @@ Convenciones:
 - Claves foráneas activadas (`PRAGMA foreign_keys = ON`).
 - El mes actual no se guarda: se toma del reloj del sistema cada vez que se necesita.
 - Versión de la estructura: `PRAGMA user_version` (0 = sin gastos en dólares; 1 = con gastos
-  en dólares) (RN-59).
+  en dólares) (RN-59). Ni la importación (§5.13) ni la cotización automática (§5.14) la
+  cambian.
 
 ### 5.1 `meses`
 | Campo | Tipo | Notas |
@@ -1210,7 +1388,7 @@ Convenciones:
 | anio | INTEGER NOT NULL | 4 dígitos |
 | mes | INTEGER NOT NULL | CHECK 1..12 |
 | sueldo_usd_cent | INTEGER NOT NULL | CHECK ≥ 0. Por mes, para que el historial no cambie si sube el sueldo. |
-| cotizacion_cent | INTEGER NULL | CHECK > 0. NULL = no cargada (RN-18). |
+| cotizacion_cent | INTEGER NULL | CHECK > 0. NULL = no cargada (RN-18). Una cotización buscada en internet y guardada se guarda acá igual que una escrita a mano (§5.14). |
 | | | UNIQUE(anio, mes) (RN-07) |
 
 ### 5.2 `categorias`, `medios_pago`, `personas`
@@ -1361,7 +1539,24 @@ Sin `mes_id`: la lista es acumulada por persona (RN-35).
 | Campo | Tipo | Notas |
 |---|---|---|
 | clave | TEXT PK | |
-| valor | TEXT NOT NULL | Uso inicial: `meta_ahorro_usd_cent` (meta única, RF-36). Sin fila = sin meta. |
+| valor | TEXT NOT NULL | Ver las claves abajo. |
+
+Claves:
+
+| Clave | Valor | Sin fila |
+|---|---|---|
+| `meta_ahorro_usd_cent` | Meta única de ahorro en centavos de USD (RF-36). | Sin meta. |
+| `dolar_cotizacion` | Dólar elegido para la búsqueda de la cotización (RF-59, RN-79): `blue`, `mep`, `oficial` o `cripto`. | Blue. Un valor distinto de esos cuatro también se toma como Blue. |
+
+Decisiones sobre `dolar_cotizacion`:
+
+- Va en `configuracion` porque es un ajuste único de la app (como la meta), no un dato de
+  cada mes. Así no hace falta ninguna tabla ni columna nueva ni migración: una base que no
+  tiene la fila funciona igual (Blue).
+- Se guarda un valor **propio de la app** (`mep`) y no el nombre de la casa en DolarApi
+  (`bolsa`). La correspondencia está en RN-79. Así, si un día la fuente cambia sus nombres o
+  se cambia de fuente, lo guardado en la base sigue valiendo.
+- No se guarda "compra" o "venta": siempre es compra (RN-79).
 
 ### 5.12 Valores que se calculan y NO se guardan
 Mes actual, total de gastos, pagado, pendiente, pesos a cubrir, USD a cambiar, pesos
@@ -1387,6 +1582,28 @@ La importación (Módulo K) **no agrega tablas ni columnas** y no cambia la vers
   a los cargados a mano. Como no hay "deshacer la importación" (RN-76, §8), no hace falta esa
   marca.
 
+### 5.14 Cotización automática: sin cambios en la estructura
+La cotización automática (Módulo L) **no agrega tablas ni columnas** y no cambia la versión
+de la base (sigue en 1, RN-59; no hace falta migración ni respaldo):
+
+- Lo único que se guarda es el dólar elegido, como una fila de `configuracion`
+  (`dolar_cotizacion`, §5.11). La fila puede no existir: entonces se usa Blue.
+- Si el usuario guarda la cotización buscada, va a `meses.cotizacion_cent` como cualquier
+  otra (en centavos, RN-83). No queda marcada como "buscada en internet": una vez guardada
+  es igual a una escrita a mano.
+- La respuesta de DolarApi, su fecha y el texto del origen (RN-85) existen solo en memoria
+  mientras el diálogo está abierto. No se guardan porque ningún requisito pide verlos
+  después, y guardarlos exigiría una columna nueva y una migración.
+- Decisiones técnicas del programador, registradas acá para que las pruebas las tengan en
+  cuenta: el pedido se hace con la librería estándar de Python (`urllib`), **sin
+  dependencias nuevas**; la lógica de pedir, validar y armar los textos va en `app/logica/`
+  sin importar nada de la interfaz, y la función que hace el pedido HTTP se puede reemplazar
+  en las pruebas, que **nunca se conectan a internet**.
+- Nota para el programador: la hora de Argentina (RN-85) se puede calcular como un desfase
+  fijo de UTC−3 (Argentina no usa horario de verano). Usar la base de husos horarios de
+  Python (`zoneinfo` con "America/Argentina/Buenos_Aires") en Windows suele necesitar el
+  paquete `tzdata`, que sería una dependencia nueva.
+
 ---
 
 ## 6. Correspondencia con la planilla
@@ -1404,6 +1621,7 @@ La importación (Módulo K) **no agrega tablas ni columnas** y no cambia la vers
 | "Deudas sofia", "Marsu" | Lista "me deben" por persona (RF-33) |
 | Columna "Objetivo" (134.000, 31.000) | Descartada: no tiene equivalente en la app |
 | La hoja entera (y la de cualquier familiar, con otro formato) | Importación con revisión (Módulo K, RF-49 a RF-58). Los totales y valores calculados se proponen como "ignorar" (RN-66); los bloques de personas, como "me deben" (RN-65), con aviso si la línea parece la parte de un gasto compartido (RN-72). |
+| Cotización 1.600 | Cotización del mes (RF-25): a mano o, en el mes actual y los futuros, buscada en internet con un botón (Módulo L, RF-59 a RF-62). |
 
 ---
 
@@ -1547,6 +1765,9 @@ Base: gastos del mes 1.434.617.
   "Cargá la cotización" (no un error ni 0).
 - **CA-25.4** Cotización del mes 1.432,50: el resumen y el diálogo de edición la muestran como
   "$ 1.432,50" (no "$ 1.433"); cotización 1.600 se muestra "$ 1.600" (sin ",00").
+- **CA-25.5** El diálogo de editar la cotización de 2026-10 (mes actual) tiene el botón
+  "Buscar dólar blue"; con 2026-09 seleccionado, el diálogo no lo tiene y la cotización se
+  edita a mano como siempre (detalle en CA-60.1).
 - **CA-26.1** Cambio de 500 USD a 1.500: el campo ARS se completa con 750.000.
 - **CA-26.2** Corregir esos ARS a 745.000 y guardar: el cambio muestra 745.000.
 - **CA-26.3** Cambio con USD, cotización o ARS ≤ 0: se rechaza.
@@ -2128,23 +2349,139 @@ Lista principal esperada con esta base (la usan varios CA):
 - **CA-58.4** El mismo contenido guardado con Excel o LibreOffice (archivo de prueba en
   `tests/`): "Luz" viene con monto 300 y sin aviso.
 
+### Módulo L – Cotización automática (v2)
+Base: mes actual 2026-10 y la fecha y hora de la computadora fijadas en las pruebas
+(2026-10-18 20:00). Existen 2026-09 (cotización 1.600), 2026-10 (sueldo 1.200, cotización
+1.600, gastos 1.434.617 como en la base del módulo E) y 2026-11 (sin cotización). En
+`configuracion` no hay fila `dolar_cotizacion`.
+
+Las pruebas **nunca se conectan a internet**: reemplazan la función que hace el pedido por una
+falsa que devuelve la respuesta indicada en cada CA (o tarda, o falla) y anota los pedidos
+que recibe. Respuesta base (válida):
+`{"compra": 1630.5, "venta": 1660, "fechaActualizacion": "2026-10-18T17:05:00.000Z"}`.
+
+- **CA-59.1** Sin la fila `dolar_cotizacion`, Ajustes muestra "Dólar para la cotización" con
+  Blue elegido y las opciones Blue, MEP, Oficial y Cripto; no hay ninguna opción de compra o
+  venta. El diálogo de la cotización de 2026-10 tiene el botón "Buscar dólar blue" y, al
+  tocarlo, el pedido va a `https://dolarapi.com/v1/dolares/blue`.
+- **CA-59.2** Elegir MEP en Ajustes: el botón dice "Buscar dólar MEP", el pedido va a
+  `https://dolarapi.com/v1/dolares/bolsa` y el origen dice "Dólar MEP compra, 18/10/2026
+  14:05 (DolarApi)". Con Oficial: "Buscar dólar oficial", pedido a
+  `https://dolarapi.com/v1/dolares/oficial`, origen "Dólar oficial compra, …". Con Cripto:
+  "Buscar dólar cripto", pedido a `https://dolarapi.com/v1/dolares/cripto`, origen "Dólar
+  cripto compra, …". En la base queda `dolar_cotizacion` = `mep` (o `oficial`, `cripto`).
+- **CA-59.3** Con MEP elegido, cerrar y volver a abrir la app: Ajustes sigue en MEP y el botón
+  dice "Buscar dólar MEP". Con `dolar_cotizacion` = `xyz` en la base: Ajustes muestra Blue y
+  el botón dice "Buscar dólar blue".
+- **CA-59.4** Cambiar el dólar en Ajustes de Blue a MEP no cambia ninguna cotización (2026-09
+  y 2026-10 siguen en 1.600 y 2026-11 sin cotización) y la función falsa no recibe ningún
+  pedido.
+- **CA-59.5** Con la respuesta base, el campo se completa con la compra ("1.630,50"), no con
+  la venta (1.660).
+- **CA-60.1** Meses con botón (RN-80): el diálogo de 2026-10 (mes actual) y el de 2026-11
+  (futuro) tienen el botón; el de 2026-09 (pasado) no lo tiene, ni siquiera deshabilitado.
+  En 2026-09 se puede cambiar la cotización a mano a 1.650 y guardarla como siempre.
+- **CA-60.2** Con el mes actual fijado en 2026-11 (como si hubiera pasado el mes), el diálogo
+  de 2026-10 ya no tiene el botón y el de 2026-11 sí.
+- **CA-60.3** Nunca busca sola (RN-88): abrir la app, cambiar de mes, abrir y cerrar el
+  diálogo de la cotización sin tocar el botón, cambiar el dólar en Ajustes y crear el mes
+  2026-12: la función falsa no recibe ningún pedido. El diálogo "Mes nuevo" sugiere la
+  cotización de 2026-11 como siempre (RN-09) y no tiene botón de búsqueda; tampoco lo tienen
+  el formulario de primer uso (base vacía), el campo de cotización de un gasto en dólares
+  (RF-44) ni el de un cambio realizado (RF-26).
+- **CA-61.1** Mes con cotización: en 2026-10 (1.600), tocar "Buscar dólar blue" con la
+  respuesta base. El campo pasa a "1.630,50" y debajo se ve "Dólar blue compra, 18/10/2026
+  14:05 (DolarApi)". Mientras el diálogo sigue abierto, el resumen sigue mostrando $ 1.600 y
+  en la base la cotización sigue en `160000`. Al tocar Guardar: se guarda `163050`, el
+  resumen muestra "$ 1.630,50", USD a cambiar 879,86 y ahorro 320,14.
+- **CA-61.2** Cancelar después de buscar: en el caso de CA-61.1, tocar Cancelar en lugar de
+  Guardar. La cotización de 2026-10 sigue en 1.600 (`160000`), USD a cambiar 896,64 y ahorro
+  303,36. Al volver a abrir el diálogo, el campo dice "1.600" y no se ve el origen. Con `Esc`
+  pasa lo mismo.
+- **CA-61.3** Mes sin cotización: en 2026-11 el campo está vacío; tocar "Buscar dólar blue"
+  lo completa con "1.630,50" y muestra el origen. Al guardar, 2026-11 queda con `163050` y el
+  resumen de 2026-11 ya no muestra "Cargá la cotización". Si en cambio se toca Cancelar,
+  2026-11 sigue sin cotización.
+- **CA-61.4** Cotización entera: con `"compra": 1630`, el campo dice "1.630" (sin ",00");
+  al guardar queda `163000` y el resumen muestra "$ 1.630".
+- **CA-61.5** Editar a mano después de buscar: en el caso de CA-61.1, cambiar el campo a
+  "1.640": el origen desaparece. Volver a escribir "1.630,50" no lo hace volver. Guardar
+  guarda `163050` (lo que dice el campo). Tocar de nuevo el botón vuelve a completar el campo
+  y a mostrar el origen.
+- **CA-61.6** Hora de Argentina (RN-85): con `"fechaActualizacion"` igual a
+  `"2026-10-18T02:30:00Z"`, el origen dice "Dólar blue compra, 17/10/2026 23:30 (DolarApi)";
+  con `"2026-10-18T14:05:00-03:00"`, "… 18/10/2026 14:05 …"; con `"2026-10-18T17:05:59Z"`,
+  "… 18/10/2026 14:05 …". En los tres casos se muestra la hora de la fuente aunque la
+  computadora diga 20:00.
+- **CA-61.7** Mientras busca: con la función falsa tardando 3 segundos en responder, durante
+  esa espera se ve la ruedita, el botón y Guardar están deshabilitados, el campo no se puede
+  editar y `Enter` en el campo no guarda; Cancelar sigue disponible. Dos clics seguidos en el
+  botón generan **un solo** pedido. Al llegar la respuesta, la ruedita desaparece y el botón y
+  Guardar se vuelven a habilitar.
+- **CA-61.8** Cerrar el diálogo mientras busca: con la función falsa tardando 3 segundos,
+  tocar Cancelar al segundo. Cuando llega la respuesta, no cambia nada: 2026-10 sigue en
+  1.600, no aparece ningún mensaje y, al volver a abrir el diálogo, el campo dice "1.600", sin
+  origen ni ruedita. Lo mismo si en vez de Cancelar se aprieta `Esc`.
+- **CA-61.9** Más de 2 decimales: con `"compra": 1630.555`, el campo dice "1.630,56" y al
+  guardar queda `163056`; con `"compra": 1630.554`, "1.630,55".
+- **CA-62.1** Sin conexión: con la función falsa simulando que no hay internet, el diálogo
+  muestra "No se pudo obtener la cotización. Revisá tu conexión o cargala a mano.", el campo
+  sigue en "1.600", no se ve origen y el botón vuelve a estar habilitado. Al tocar Guardar,
+  la cotización sigue en `160000` y el resumen no cambia.
+- **CA-62.2** La fuente no responde a tiempo: con la función falsa sin responder, a los 10
+  segundos se ve el mismo mensaje de error y el campo sigue en "1.600". Si la respuesta base
+  llega a los 12 segundos, se descarta: el campo sigue en "1.600" y no aparece el origen.
+- **CA-62.3** Respuestas inválidas: cada una de estas respuestas muestra el mensaje de error
+  y deja el campo en "1.600": `"compra": 0`; `"compra": -5`; sin el campo `"compra"`;
+  `"compra": null`; `"compra": "abc"`; `"compra": "1630.5"` (texto); `"compra": true`;
+  `"compra": 0.004` (redondea a 0 centavos); contenido `<html>Error</html>` (no es JSON);
+  contenido `[]` (no es un objeto); estado HTTP 500; estado HTTP 404. En ningún caso se
+  guarda nada.
+- **CA-62.4** Fecha de la fuente no válida: sin `"fechaActualizacion"`, con
+  `"fechaActualizacion": "ayer"` o con `"2026-10-18T14:05:00"` (sin huso horario): se muestra
+  el mensaje de error y el campo sigue en "1.600".
+- **CA-62.5** Campos que no se usan: una respuesta con `"compra": 1630.5` y una
+  `"fechaActualizacion"` válida pero sin `"venta"` (o con `"venta": "abc"`) es válida y
+  completa el campo con "1.630,50".
+- **CA-62.6** Error después de un acierto: en 2026-10, una primera búsqueda con la respuesta
+  base deja "1.630,50" con su origen; una segunda búsqueda sin conexión muestra el mensaje de
+  error y el campo sigue en "1.630,50" con el mismo origen. Al cambiar el campo a mano,
+  desaparecen el mensaje y el origen.
+- **CA-62.7** Privacidad (RN-81): en el caso de CA-61.1 la función falsa recibió exactamente
+  un pedido, de lectura (GET), a `https://dolarapi.com/v1/dolares/blue`, sin parámetros y sin
+  contenido. Con otros gastos, sueldo y personas cargados en la base, el pedido es
+  exactamente el mismo.
+
 ---
 
 ## 8. Fuera de alcance (v1 y v2)
 
-La importación de la planilla de Excel salió de esta lista: es la primera funcionalidad de la
-v2 (Módulo K, RF-49 a RF-58). Lo que sigue queda para más adelante o se decidió no hacerlo:
+La importación de la planilla de Excel y la cotización automática salieron de esta lista: son
+las dos funcionalidades de la v2 (Módulo K, RF-49 a RF-58, y Módulo L, RF-59 a RF-62). Lo que
+sigue queda para más adelante o se decidió no hacerlo:
 
-- Cotización automática desde internet.
 - Cuotas (planes de cuotas) en dólares. Los gastos fijos mensuales y de pago único en dólares
-  **sí** están en la v1 (RF-43 a RF-48).
+  **sí** están en la v1 (RF-43 a RF-48). El 2026-10-18 se decidió **no hacerlas en la v2**:
+  el caso real del usuario era una suscripción en dólares que se repite sin fecha de fin (ej.
+  Claude US$ 20 por mes), y eso ya se carga como gasto fijo mensual en USD (RN-57). Se vuelve
+  a analizar solo si aparece una compra en cuotas en dólares (por ejemplo, de un familiar).
 - Cálculo automático de impuestos o recargos sobre el dólar (dólar tarjeta, percepciones):
   el usuario carga la cotización que corresponda (RN-58).
-- Ajuste por inflación en previsiones.
+- Ajuste por inflación en previsiones. **Tampoco está en la v2** (decidido el 2026-10-14): la
+  previsión sigue sin inflación (RN-43).
 - Sueldo en pesos, para familiares que no cobran en USD (funcionalidad futura). Mientras
   tanto, la importación toma el sueldo siempre en USD (RN-70).
 - Deshacer una importación ya confirmada: **no se hace** (decisión del usuario). Los errores
   se corrigen a mano (RN-76).
+- Búsqueda automática de la cotización (al abrir la app, al crear un mes nuevo o en cualquier
+  momento sin que el usuario toque el botón) y búsqueda en otros lugares (gastos en dólares,
+  cambios realizados, primer uso, "Mes nuevo", importación): **no se hace** (decisión del
+  usuario, 2026-10-18). Solo existe el botón del diálogo de la cotización del mes (RN-88).
+- Cotización histórica (de un día o mes pasado) desde internet: la fuente da solo la de hoy.
+  En los meses pasados la cotización se carga a mano (RN-80).
+- Elegir el precio de venta (o un promedio) en la búsqueda: siempre es el de compra (RN-79).
+- Recordar de dónde salió una cotización ya guardada: el origen se ve solo en el diálogo,
+  justo después de buscar (RN-85, §5.14).
 
 ---
 
@@ -2166,6 +2503,9 @@ v2 (Módulo K, RF-49 a RF-58). Lo que sigue queda para más adelante o se decidi
 | 8c | Lista de revisión de solo lectura: bloques, filas, tipos propuestos, notas y avisos, "Filas incompletas", controles generales (mes destino y categoría por defecto), pie con conteo. Tilde, tipo, "Tildar/Destildar todas las filas" y "Cobrado" ya editables. | RF-51, RF-52, RF-54 (sin crear categorías), RF-55, RF-56. CA-51.1, CA-51.2, CA-51.6, CA-51.7, CA-52.1, CA-52.6 a CA-52.8, CA-55.1, CA-55.3, CA-56.x, CA-58.3 (en pantalla). |
 | 8d | Edición: diálogo de edición de fila, "Cambiar tipo o categoría de todas...", creación de categorías y personas nuevas, errores por fila y bloqueo de "Confirmar importación". | RF-53, RF-54. CA-53.x, CA-54.x, CA-57.5 a CA-57.8 (en pantalla). |
 | 8e | Confirmar y cancelar: resumen previo, guardado todo o nada, resultado y pantalla final (Gastos o Resumen), error al guardar, cancelar con confirmación y cierre de la ventana sin pregunta. | RF-57. CA-55.2, CA-55.4, CA-57.1 a CA-57.4, CA-57.9 a CA-57.13 (en pantalla). |
+| 9 | Cotización automática (v2), última funcionalidad de la v2. Sin cambios en la estructura de la base (§5.14) y sin dependencias nuevas. Usa el diálogo de la cotización del mes (RF-25, paso 3) y Ajustes. Se divide en dos sub-pasos que se prueban por separado: 9a es solo lógica y 9b, la interfaz (la ubicación exacta del selector, el botón, la ruedita, el origen y el mensaje de error la define `docs/diseno.md`). Las preguntas P-1 a P-4 se resolvieron el 2026-10-18 (§10). | RF-59 a RF-62; RN-79 a RN-88; CA-25.5, CA-59.1 a CA-62.7. |
+| 9a | Lógica de la cotización automática, **sin interfaz** (en `app/logica/`, probada con pytest y **sin internet**, reemplazando la función que hace el pedido): leer y guardar el dólar elegido (con Blue por defecto y valores desconocidos); qué meses tienen botón; armar la dirección del pedido; pedir con tiempo máximo de 10 segundos; validar la respuesta; pasar la compra a centavos; textos del botón, del origen (con la hora de Argentina) y del error. | RN-79 a RN-83, RN-85 (texto del origen), RN-87. CA-59.1 a CA-59.5, CA-60.1, CA-60.2, CA-61.1 (valores y textos), CA-61.4, CA-61.6, CA-61.9, CA-62.1 a CA-62.5, CA-62.7 (en la lógica). |
+| 9b | Interfaz: selector "Dólar para la cotización" en Ajustes; botón en el diálogo de la cotización del mes solo en el mes actual y los futuros; ruedita y botón deshabilitado mientras busca; completar el campo sin guardar; origen debajo del campo y ocultarlo al editar; mensaje de error; un solo pedido con dos clics; descartar la respuesta si el diálogo se cerró o pasaron los 10 segundos. | RF-59 a RF-62; RN-84, RN-86, RN-88. CA-25.5, CA-59.x, CA-60.x, CA-61.x, CA-62.x (en pantalla). |
 
 Cada paso termina cuando pasan los criterios de aceptación de sus RF.
 
@@ -2173,7 +2513,35 @@ Cada paso termina cuando pasan los criterios de aceptación de sus RF.
 
 ## 10. Preguntas abiertas
 
-Sin preguntas abiertas.
+No quedan preguntas abiertas.
+
+### Resueltas el 2026-10-18 (cotización automática)
+
+El usuario confirmó el 2026-10-18 las cuatro propuestas tal como estaban escritas. Ya están
+incorporadas, sin marca de provisional, en las reglas y los criterios de aceptación indicados.
+
+- **P-1 – Cotización con más de 2 decimales.** Si DolarApi informa una compra con más de 2
+  decimales (ej. 1630.555), ¿se redondea al centavo o se muestra el error? La app guarda y
+  acepta a mano solo 2 decimales (RN-02, RN-04). **Respuesta (2026-10-18):** redondear al
+  centavo más cercano, mitad hacia arriba, como en la importación (RN-62): 1.630,555 →
+  1.630,56. (RN-83, CA-61.9.)
+- **P-2 – Fecha de la fuente faltante o rara.** Si la respuesta trae una compra válida pero
+  no trae `"fechaActualizacion"`, la trae con un formato que no es fecha, o sin huso horario
+  (no se sabe en qué hora está), ¿se usa la compra igual (con un origen sin fecha, por
+  ejemplo "Dólar blue compra (DolarApi)") o se toma como error? **Respuesta (2026-10-18):**
+  se toma como error, para no mostrar nunca una cotización sin saber de cuándo es. (RN-82,
+  RN-87, CA-62.4.)
+- **P-3 – Escribir en el campo mientras busca.** Durante la búsqueda (hasta 10 segundos), ¿el
+  usuario puede escribir en el campo de cotización? Si puede, la respuesta que llega después
+  pisaría lo que escribió. **Respuesta (2026-10-18):** el campo no se puede editar mientras
+  busca; Cancelar sigue disponible. Después el usuario decidió también que Guardar quede
+  deshabilitado mientras busca (observación 35 de `docs/diseno.md`). (RN-86, CA-61.7.)
+- **P-4 – Cotización vieja.** Un fin de semana o feriado, DolarApi informa la cotización del
+  último día hábil (ej. viernes). ¿Hace falta un aviso si la fecha de la fuente no es de hoy
+  (por ejemplo, "Esta cotización es del 16/10/2026")? **Respuesta (2026-10-18):** sin aviso;
+  la fecha ya se ve en el origen. (RN-85.)
+
+### Resueltas anteriormente
 
 - Las cinco preguntas sobre la importación de Excel se respondieron el 2026-10-13 y están
   incorporadas en RN-64, RN-70, RN-72, RN-76, RN-77 y §8.

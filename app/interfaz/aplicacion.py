@@ -409,6 +409,10 @@ class Aplicacion:
     def hay_dialogo_abierto(self) -> bool:
         return bool(self._dialogos)
 
+    def esta_abierto(self, dialogo: ft.AlertDialog) -> bool:
+        """True si ese diálogo sigue abierto (no se cerró con Cancelar, Esc, etc.)."""
+        return dialogo in self._dialogos
+
     def atajo(self, tecla: str, shift: bool = False) -> str:
         """Texto de un atajo para mostrar, con la convención de cada sistema.
 

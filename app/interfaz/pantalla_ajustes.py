@@ -1,5 +1,5 @@
-"""Ajustes: categorías, medios de pago, personas, meta de ahorro, apariencia e
-importar Excel (RF-10, RF-11, RF-28, RF-36, RF-49, docs/diseno.md §3.10)."""
+"""Ajustes: categorías, medios de pago, personas, meta de ahorro, cotización,
+apariencia e importar Excel (RF-10, RF-11, RF-28, RF-36, RF-49, RF-59, §3.10)."""
 
 import flet as ft
 
@@ -314,6 +314,63 @@ class PestanaMeta:
         self.app.avisar("Meta de ahorro quitada")
 
 
+class PestanaCotizacion:
+    """Pestaña "Cotización" (v2, RF-59, §3.10): qué dólar busca el botón del diálogo."""
+
+    # Valor guardado -> etiqueta (RN-79), en el orden en que se muestran.
+    OPCIONES = {"blue": "Blue", "mep": "MEP", "oficial": "Oficial", "cripto": "Cripto"}
+
+    def __init__(self, app) -> None:
+        self.app = app
+        self.opciones = ft.RadioGroup(
+            content=ft.Column(
+                [ft.Radio(value=v, label=t) for v, t in self.OPCIONES.items()]
+            ),
+            on_change=lambda e: self.elegir(e.control.value),
+        )
+        ayudas = [
+            "Siempre se usa el precio de compra: lo que te pagan cuando vendés tus dólares.",
+            "Si no elegís otro, se usa Blue.",
+            "Cambiarlo no modifica ninguna cotización ya guardada ni busca nada: solo "
+            "cambia lo que se busca la próxima vez.",
+            "La búsqueda consulta DolarApi (dolarapi.com) solo cuando tocás el botón y "
+            "no envía ningún dato tuyo.",
+        ]
+        self.control = ft.Column(
+            [
+                ft.Text(
+                    "Dólar para la cotización",
+                    size=estilos.TAM_SECCION,
+                    weight=ft.FontWeight.W_600,
+                ),
+                texto_ayuda(
+                    'Es el dólar que busca el botón "Buscar dólar…" del diálogo de la '
+                    "cotización del mes."
+                ),
+                self.opciones,
+                ft.Column([texto_ayuda(a) for a in ayudas], spacing=4),
+            ],
+            spacing=16,
+        )
+
+    def refrescar(self) -> None:
+        self.opciones.value = configuracion.obtener_dolar(self.app.con)
+        self.app.page.update()
+
+    def nuevo(self) -> None:
+        """Ctrl+N no tiene acción en esta pestaña."""
+
+    def elegir(self, dolar: str) -> None:
+        # Guarda al instante, sin botón, como Apariencia. No busca nada (RN-79).
+        try:
+            configuracion.guardar_dolar(self.app.con, dolar)
+        except Exception as error:  # noqa: BLE001 (a propósito: ver error_inesperado)
+            self.refrescar()  # El radio vuelve a la opción guardada.
+            self.app.error_inesperado(error)
+            return
+        self.app.avisar(f"Dólar para la cotización: {self.OPCIONES[dolar]}")
+
+
 class PestanaApariencia:
     """Pestaña "Apariencia" (§3.10): tema claro, oscuro o como el sistema."""
 
@@ -417,10 +474,17 @@ class PantallaAjustes:
             ListaCatalogo(app, catalogos.PERSONAS),
         ]
         self.meta = PestanaMeta(app)
+        self.cotizacion = PestanaCotizacion(app)
         self.apariencia = PestanaApariencia(app)
         self.importar = PestanaImportar(app)
         # Todas las pestañas, en el orden en que se ven.
-        self._pestanas = [*self.listas, self.meta, self.apariencia, self.importar]
+        self._pestanas = [
+            *self.listas,
+            self.meta,
+            self.cotizacion,
+            self.apariencia,
+            self.importar,
+        ]
         # En Flet 1.0 las pestañas son tres piezas: Tabs (el conjunto),
         # TabBar (los títulos) y TabBarView (el contenido de cada una).
         self.pestanas = ft.Tabs(
@@ -431,11 +495,15 @@ class PantallaAjustes:
             content=ft.Column(
                 [
                     ft.TabBar(
+                        # Con 7 pestañas, a 1100 px no entran todas: la barra se
+                        # desliza de costado (observación 33).
+                        scrollable=True,
                         tabs=[
                             ft.Tab(label="Categorías"),
                             ft.Tab(label="Medios de pago"),
                             ft.Tab(label="Personas"),
                             ft.Tab(label="Meta de ahorro"),
+                            ft.Tab(label="Cotización"),
                             ft.Tab(label="Apariencia"),
                             ft.Tab(label="Importar Excel"),
                         ]

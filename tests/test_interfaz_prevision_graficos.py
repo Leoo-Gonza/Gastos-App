@@ -939,7 +939,7 @@ def test_elegir_tema_mantiene_la_pestana_apariencia(con, mes_id):
     app = _app(con, "Gastos")
     _apariencia(app).elegir("oscuro")
     ajustes = app.pantalla("Ajustes")
-    assert ajustes.pestanas.selected_index == 4
+    assert ajustes.pestanas.selected_index == 5
     assert ajustes.apariencia.opciones.value == "oscuro"
 
 
@@ -1035,7 +1035,7 @@ def test_bug23_la_opcion_elegida_queda_marcada_en_apariencia(con, tema):
     ajustes = app.pantalla("Ajustes")
     assert nombre_visible(app) == "Ajustes"
     assert ajustes.pestanas.selected_index == ajustes.indice_de(ajustes.apariencia)
-    assert ajustes.pestanas.selected_index == 4
+    assert ajustes.pestanas.selected_index == 5
     assert ajustes.apariencia.opciones.value == tema
     assert mes_seleccionado(app) == "Septiembre 2026"
     assert app.page.avisos()[-1] == "Tema actualizado"
@@ -1047,7 +1047,7 @@ def test_bug23_elegir_dos_veces_seguidas(con, mes_id):
     _apariencia(app).elegir("oscuro")
     app.pantalla("Ajustes").apariencia.elegir("claro")
     ajustes = app.pantalla("Ajustes")
-    assert ajustes.pestanas.selected_index == 4
+    assert ajustes.pestanas.selected_index == 5
     assert ajustes.apariencia.opciones.value == "claro"
     assert app.page.theme_mode == ft.ThemeMode.LIGHT
     assert app.page.avisos()[-2:] == ["Tema actualizado", "Tema actualizado"]
@@ -1056,8 +1056,14 @@ def test_bug23_elegir_dos_veces_seguidas(con, mes_id):
 def test_indice_de_cada_pestana(con, mes_id):
     # indice_de devuelve la posición de cada pestaña en el orden en que se ven.
     ajustes = _app(con, "Ajustes").pantalla("Ajustes")
-    pestanas = [*ajustes.listas, ajustes.meta, ajustes.apariencia]
-    assert [ajustes.indice_de(p) for p in pestanas] == [0, 1, 2, 3, 4]
+    pestanas = [
+        *ajustes.listas,
+        ajustes.meta,
+        ajustes.cotizacion,
+        ajustes.apariencia,
+        ajustes.importar,
+    ]
+    assert [ajustes.indice_de(p) for p in pestanas] == [0, 1, 2, 3, 4, 5, 6]
 
 
 def test_bug23_con_el_mes_borrado_por_detras_queda_otro_mes(con):

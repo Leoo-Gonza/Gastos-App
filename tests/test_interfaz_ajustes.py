@@ -66,8 +66,9 @@ def test_pestanas_y_titulo(ajustes):
         "Medios de pago",
         "Personas",
         "Meta de ahorro",
+        "Cotización",  # v2 (paso 9b, diseno.md §3.10): entre Meta de ahorro y Apariencia
         "Apariencia",
-        "Importar Excel",  # v2 (paso 8b, diseno.md §3.10): sexta pestaña, la última
+        "Importar Excel",  # v2 (paso 8b, diseno.md §3.10): la última
     ]
 
 

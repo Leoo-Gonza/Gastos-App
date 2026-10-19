@@ -9,6 +9,9 @@
 > requisitos no tengan número en `requisitos.md`, se los cita por su descripción.
 > **Importar Excel** (v2) es el Módulo K de `requisitos.md` (RF-49 a RF-58): pantallas
 > §3.11 a §3.14, diálogos §4.9 a §4.11 y Paso 8.
+> **Cotización automática** (v2) es el Módulo L de `requisitos.md` (RF-59 a RF-62, RN-79 a
+> RN-88, ampliación de RF-25): botón en el diálogo de la cotización (§3.6, subsección "Buscar
+> la cotización en internet"), pestaña "Cotización" de Ajustes (§3.10) y Paso 9.
 
 ---
 
@@ -89,7 +92,7 @@ Destinos del `NavigationRail` (el número es también el atajo `Ctrl/Cmd + núme
 | 4 | Me deben | `PEOPLE_OUTLINE` | Me deben | No (acumulado) |
 | 5 | Previsión | `TRENDING_UP` | Previsión 12 meses | No (usa el mes actual) |
 | 6 | Gráficos | `BAR_CHART` | Gráficos | En parte |
-| 7 | Ajustes | `SETTINGS_OUTLINED` | Categorías, medios, personas, meta, apariencia | No |
+| 7 | Ajustes | `SETTINGS_OUTLINED` | Categorías, medios, personas, meta, cotización, apariencia | No |
 
 La pantalla de inicio al abrir la app es **Resumen** (desde el paso 3; antes, Gastos).
 
@@ -872,6 +875,197 @@ cotización del mes **no** los recalcula; por eso el texto de ayuda lo dice. Si 
 gastos en dólares, debajo se agrega: "Este mes tiene 2 gastos en dólares. Si querés
 actualizarlos, editalos uno por uno."
 
+#### Buscar la cotización en internet (v2: RF-25, RF-60, RF-61, RF-62, RN-80 a RN-88)
+
+**Objetivo del usuario:** completar la cotización del mes con el dólar de hoy sin tener que
+mirarla en otro lado ni tipearla. Sigue teniendo el control: el botón solo **completa el
+campo**; lo que se guarda lo decide él con "Guardar", como siempre (RN-84).
+
+**Dónde está.** Solo en este diálogo (el de la cotización **del mes**), sea cual sea la
+forma de abrirlo: `Ctrl/Cmd+K`, el lápiz de la barra, "Cargar cotización" del Resumen o de la
+Previsión. **No está** en el formulario de primer uso (§3.1), en "Mes nuevo" (§3.9), en la
+cotización del día de un gasto en dólares (§4.1), en el cambio de USD (§4.6) ni en la
+importación (RN-88). Esos campos se ven exactamente como antes.
+
+**Cuándo está (RN-80).** Solo si el mes seleccionado es el mes actual o uno futuro. En un
+**mes pasado no hay botón, ni deshabilitado, ni su ayuda**: el diálogo se ve como el boceto de
+arriba, sin ningún cambio. Se decide al abrir el diálogo.
+
+**Distribución – mes actual o futuro, antes de buscar**
+
+```
++------------------------------------------------+
+| Cotización de Octubre 2026                     |
+|                                                |
+| [ $              1.600   ARS ] por US$         |
+|                                                |
+| [nube] Buscar dólar blue                       |
+| Trae el precio de compra de hoy desde          |
+| internet (DolarApi) y completa el campo.       |
+| No se guarda hasta que toques Guardar.         |
+| El dólar se elige en Ajustes.                  |
+|                                                |
+| Se usa para calcular los dólares a cambiar.    |
+| No modifica los cambios ya registrados ni      |
+| los gastos en dólares ya cargados.             |
+|                                                |
+|                      [Cancelar] [Guardar]      |
++------------------------------------------------+
+```
+
+**Orden vertical de los elementos** (de arriba abajo; cada uno se oculta con `visible`, no
+se reconstruye el diálogo):
+
+| # | Elemento | Siempre / condicional |
+|---|---|---|
+| 1 | Campo de cotización (como hoy, `campo_monto("ARS")`, `autofocus=True`) | Siempre |
+| 2 | **Origen** debajo del campo | Solo tras una búsqueda válida y sin editar el campo |
+| 3 | **Fila de búsqueda**: botón + ruedita + estado | Solo mes actual o futuro |
+| 4 | **Mensaje de error** | Solo tras una búsqueda fallida |
+| 5 | Ayuda del botón | Solo mes actual o futuro |
+| 6 | Texto actual de ayuda de §3.6 (y la línea de gastos en dólares si corresponde) | Siempre |
+
+El origen va **pegado al campo** porque habla del valor del campo; el error va **pegado al
+botón** porque es el resultado de tocarlo. Los dos pueden verse a la vez (ver "Error después
+de un acierto").
+
+**Componentes de Flet**
+
+| Parte | Componente | Detalle |
+|---|---|---|
+| Botón | `ft.OutlinedButton("Buscar dólar blue", icon=ft.Icons.CLOUD_DOWNLOAD_OUTLINED)` | Es secundario a propósito: "Guardar" sigue siendo la única acción principal (`FilledButton`). El texto cambia con el dólar elegido en Ajustes: "Buscar dólar blue" / "Buscar dólar MEP" / "Buscar dólar oficial" / "Buscar dólar cripto" (RN-79). Tooltip: "Busca el precio de compra de hoy en internet. No guarda nada." |
+| Ruedita | `ft.ProgressRing(width=18, height=18, stroke_width=2, visible=False, semantics_label="Buscando la cotización")` | A la derecha del botón, en la misma fila (`ft.Row(spacing=12)`), para que el botón no se mueva al aparecer. |
+| Texto de estado | `ft.Text` 13, texto secundario, `visible=False`, junto a la ruedita | "Buscando la cotización…". |
+| Origen | `ft.Row([ft.Icon(ft.Icons.INFO_OUTLINE, size=16, color=info), ft.Text(origen, size=13, color=texto_secundario)])`, `visible=False` | Texto exacto: "Dólar blue compra, 18/10/2026 14:05 (DolarApi)". Lo arma la lógica (9a); la interfaz solo lo muestra. Si no entra en una línea, baja a otra (`expand=True` en el texto). |
+| Error | `ft.Container` con fondo *negativo* suave, `border_radius=8`, ícono `ERROR_OUTLINE` + texto 13 en *negativo* (patrón "Aviso en pantalla" de §2.5) | Texto exacto: "No se pudo obtener la cotización. Revisá tu conexión o cargala a mano." Sin detalles técnicos. |
+| Ayuda del botón | `texto_ayuda` (13, texto secundario) | Ver el boceto. En un mes **futuro** se agrega una frase: "Es la cotización de hoy, no la de Noviembre 2026." (observación 37). |
+
+**Los cuatro estados de la fila de búsqueda**
+
+```
+(1) Reposo                       (2) Buscando (hasta 10 s)
+[nube] Buscar dólar blue         [nube] Buscar dólar blue  (o) Buscando la cotización…
+                                 (botón gris, no se puede tocar; "Guardar" también gris)
+
+(3) Resultado válido             (4) Error
+[ $          1.630,50  ARS ]     [ $              1.600   ARS ] por US$
+(i) Dólar blue compra,           [nube] Buscar dólar blue
+    18/10/2026 14:05 (DolarApi)  +--------------------------------------------------+
+[nube] Buscar dólar blue         | (!) No se pudo obtener la cotización. Revisá tu  |
+                                 |     conexión o cargala a mano.                   |
+                                 +--------------------------------------------------+
+```
+
+**Estado buscando (RN-86)**
+
+- Al tocar el botón, **en el mismo instante** (antes de lanzar el pedido): el botón se
+  deshabilita con el mismo texto, aparece la ruedita con su texto de estado, el error anterior
+  se oculta y el campo pasa a **solo lectura**. Deshabilitar primero es lo que garantiza que
+  dos clics seguidos hagan un solo pedido.
+- El campo queda **bloqueado** con `read_only=True` y no con `disabled=True` (decisión de la
+  pregunta P-3; el porqué está en la observación 34): el valor se sigue leyendo con el
+  contraste normal: es el valor que queda si la búsqueda falla o se cancela.
+- El origen que hubiera de una búsqueda anterior **se queda** (el campo no cambió).
+- "Guardar" se **deshabilita** (decisión del usuario, observación 35) y `Enter` en el campo
+  no guarda. "Cancelar" sigue activo, normal, sin ruedita ni atenuado. Al terminar la
+  búsqueda (bien o con error), "Guardar" se vuelve a habilitar.
+- Máximo 10 segundos. Si se cumplen sin respuesta completa, es un error (estado 4). Ese
+  tiempo lo controla la lógica (9a), no la interfaz.
+
+**Al terminar la búsqueda**
+
+| Resultado | Qué pasa en el diálogo | Foco |
+|---|---|---|
+| Válido | El campo pasa a la cotización con sus decimales (`1.630,50`; `1.630` si es entera), vuelve a ser editable; se muestra el origen; se oculta el error; el botón se rehabilita. **No se guarda nada**: el Resumen de atrás sigue con la cotización guardada. | Al campo, con el cursor al final y sin seleccionar (así `Enter` guarda y escribir corrige). |
+| Error | El campo queda **como estaba**; el origen anterior (si el campo no se editó) se conserva; aparece el mensaje de error; el botón se rehabilita (sirve para reintentar). | Al botón de buscar, para reintentar con `Enter`/Espacio sin que un `Enter` guarde por accidente. |
+
+En los dos casos, el foco solo se mueve si el usuario no lo llevó a otro lado mientras
+esperaba (por ejemplo, a "Cancelar"); si Flet no permite saberlo, se deja donde estaba.
+
+**Cuándo desaparece el origen (RN-85)**
+
+| Hecho | Origen |
+|---|---|
+| El usuario cambia el texto del campo (escribir, borrar, pegar), aunque después vuelva a dejar el mismo valor | **Desaparece** y no vuelve solo. |
+| Nueva búsqueda válida | Se reemplaza por el nuevo. |
+| Búsqueda con error | Se conserva (el campo no cambió). |
+| Salir del campo (`on_blur`) y que la app reescriba el formato ("1.630,5" → "1.630,50") | No cambia: solo desaparece con un cambio hecho por el usuario. |
+| Cerrar el diálogo con Guardar o Cancelar (Guardar, solo cuando no busca) | Desaparece. Al reabrirlo no se ve, aunque la cotización guardada sea la que vino de DolarApi (no se guarda). |
+
+Nota para quien programe: el `on_change` de un `TextField` de Flet se dispara por lo que
+escribe el usuario, no por asignar `campo.value` desde el código. Eso es lo que se necesita
+(la búsqueda escribe el valor sin ocultar el origen que acaba de mostrar); verificarlo en Flet
+1.0.3.
+
+**Cuándo desaparece el error (RN-87)**: al empezar otra búsqueda, al cambiar el campo a mano
+y al cerrar el diálogo.
+
+**Cerrar el diálogo mientras busca (RN-86)**
+
+- `Cancelar` y `Esc` funcionan igual que siempre y **cierran en el acto**, sin
+  confirmación y sin esperar. Ninguna cierra "después de que termine".
+- La respuesta que llega después (válida o error) **se descarta en silencio**: no escribe
+  nada, no muestra mensajes ni SnackBars y no guarda. Al reabrir el diálogo empieza limpio.
+- `Guardar` está deshabilitado durante la búsqueda (observación 35).
+- Para descartar bien, cada vez que se abre el diálogo se crea una "ficha" nueva; la búsqueda
+  la recuerda y, al volver, solo escribe en pantalla si el diálogo sigue abierto y la ficha es
+  la misma.
+
+**Teclado**
+
+- Orden de Tab: campo → "Buscar dólar …" → "Cancelar" → "Guardar".
+- `Enter` en el campo = Guardar (durante la búsqueda no hace nada). `Enter` o Espacio sobre el
+  botón = buscar. `Esc` = Cancelar.
+- No se agrega un atajo propio para buscar: dentro de un diálogo los atajos globales se
+  ignoran (§1.3), y con Tab alcanza (observación 38).
+- Con el botón deshabilitado, Tab lo saltea; por eso el estado se explica también con texto
+  ("Buscando la cotización…") y no solo con el botón gris.
+
+**Tema oscuro.** Los colores salen de §2.1: error `#FF8A80` sobre `#3D1F1D` (≈ 6,5:1), origen
+en `#B7BEC4` (≈ 8:1) con el ícono en `#8CCDF0`, ruedita y borde del botón en el primario
+`#8CCDF0` (≈ 9:1) sobre la superficie `#1B2024`. En el tema claro: error `#B3261E` sobre
+`#FCE8E6`, origen `#4A5056`, ícono, ruedita y borde del botón `#1F5F7A`. El botón
+deshabilitado usa el color que Flet le da; no hace falta que cumpla el contraste, y por eso
+el texto de estado a su lado lleva el significado.
+
+**Flujo paso a paso (mes actual, con DolarApi funcionando)**
+
+1. `Ctrl/Cmd+K`. El diálogo muestra el campo con "1.600" y "Buscar dólar blue".
+2. Toca el botón. Aparece "Buscando la cotización…"; el campo no se puede escribir.
+3. A los 2 segundos, el campo dice "1.630,50" y debajo "Dólar blue compra, 18/10/2026 14:05
+   (DolarApi)". La ruedita desaparece. El Resumen de atrás sigue en $ 1.600.
+4. Decide: `Enter` o "Guardar" → se cierra, SnackBar "Cotización actualizada: $ 1.630,50 por
+   US$" y el Resumen se recalcula (RN-19). O "Cancelar" / `Esc` → la cotización sigue en
+   $ 1.600.
+
+**Flujo alternativo – error y carga a mano**
+
+1. Sin internet, toca el botón. Tras la espera (de inmediato si no hay red, hasta 10
+   segundos si no responde), aparece el mensaje de error y el campo sigue en "1.600".
+2. Puede reintentar con el botón, o escribir la cotización a mano: al empezar a escribir, el
+   mensaje desaparece. "Guardar" funciona igual que siempre.
+
+**Error después de un acierto (CA-62.6).** Si ya había buscado bien (campo en "1.630,50" con
+su origen) y una segunda búsqueda falla, se ven **a la vez**: el campo "1.630,50", su origen y
+el mensaje de error debajo del botón. Es correcto: el origen sigue siendo verdad para ese
+valor.
+
+**Estados del diálogo**
+
+| Situación | Cómo se ve |
+|---|---|
+| Mes pasado | Sin botón, sin ruedita, sin ayuda del botón: igual que el boceto original de §3.6. |
+| Mes actual, reposo | Boceto de "Distribución". |
+| Mes futuro, reposo | Igual, con la frase extra en la ayuda del botón. |
+| Mes sin cotización (campo vacío) | Igual; el botón completa el campo vacío. Es el uso más común de la función. |
+| Buscando | Estado (2). |
+| Búsqueda válida | Estado (3). |
+| Búsqueda con error | Estado (4). |
+| Error de validación al guardar (campo vacío o ≤ 0) | Como siempre: `error_text` en el campo (§2.5). No interfiere con el origen, que ya no está si el campo se vació. |
+
+**Después de guardar.** No hay ninguna marca de "buscada en internet" en la barra ni en el
+Resumen: la cotización guardada es un número más (RN-85, §5.14 de requisitos).
+
 ---
 
 ### 3.7 Previsión (RF-38, RF-39)
@@ -1107,6 +1301,73 @@ de pago · Personas · Meta de ahorro · Apariencia · Importar Excel.
   de listas. `Ctrl/Cmd+N` no tiene acción en esta pestaña (igual que Apariencia).
 - Al **cancelar** se vuelve a **esta pestaña** (no a la primera). Al **terminar** la
   importación se muestra Gastos (o Resumen) del mes destino, como en §3.13.
+
+#### Pestaña "Cotización" (v2: RF-59)
+
+Con la cotización automática (Paso 9) se agrega una pestaña, **entre "Meta de ahorro" y
+"Apariencia"**. Orden final, 7 pestañas: Categorías · Medios de pago · Personas · Meta de
+ahorro · **Cotización** · Apariencia · Importar Excel ("Importar Excel" sigue siendo la
+última). Se la ubica junto a "Meta de ahorro" porque las dos son valores que alimentan el
+cálculo del ahorro; ver la observación 33 por la alternativa.
+
+**Objetivo del usuario:** elegir de qué dólar quiere traer la cotización cuando toque
+"Buscar dólar …" en el diálogo de la cotización del mes (§3.6).
+
+```
+| Ajustes                                                                                    |
+| [ ... ] [ Meta de ahorro ] [ Cotización ] [ Apariencia ] [ Importar Excel ]                |
+|--------------------------------------------------------------------------------------------|
+|  Dólar para la cotización                                                                  |
+|  Es el dólar que busca el botón "Buscar dólar…" del diálogo de la cotización del mes.      |
+|                                                                                            |
+|   (o) Blue                                                                                 |
+|   ( ) MEP                                                                                  |
+|   ( ) Oficial                                                                              |
+|   ( ) Cripto                                                                               |
+|                                                                                            |
+|   Siempre se usa el precio de compra: lo que te pagan cuando vendés tus dólares.           |
+|   Si no elegís otro, se usa Blue.                                                          |
+|   Cambiarlo no modifica ninguna cotización ya guardada ni busca nada: solo cambia lo que   |
+|   se busca la próxima vez.                                                                 |
+|   La búsqueda consulta DolarApi (dolarapi.com) solo cuando tocás el botón y no envía       |
+|   ningún dato tuyo.                                                                        |
++--------------------------------------------------------------------------------------------+
+```
+
+| Parte | Componente | Detalle |
+|---|---|---|
+| Título | `ft.Text("Dólar para la cotización")` 16 `W_600` | Es el nombre exacto del selector (RF-59). |
+| Selector | `ft.RadioGroup` con cuatro `ft.Radio`, uno debajo del otro (`ft.Column`) | Etiquetas exactas: "Blue", "MEP", "Oficial", "Cripto", en ese orden. **Son las mismas que usa Apariencia**, así el usuario ya sabe cómo se usa. Sin ninguna opción de "compra" o "venta" (CA-59.1). |
+| Ayuda | `texto_ayuda` (13, texto secundario) debajo del selector | Los cuatro párrafos del boceto. |
+
+**Cuándo se guarda: al instante, sin botón "Guardar"**, igual que Apariencia. Cada vez que
+cambia la selección (`on_change`):
+
+1. Se guarda la clave `dolar_cotizacion` en `configuracion` con `blue`, `mep`, `oficial` o
+   `cripto`.
+2. SnackBar: "Dólar para la cotización: MEP".
+3. **No se hace ningún pedido a internet** y no cambia ninguna cotización (RN-79, RN-88).
+
+La próxima vez que se abra el diálogo de la cotización, el botón ya dice "Buscar dólar MEP".
+Si había un diálogo abierto, no puede ser: los diálogos son modales y Ajustes no se toca
+mientras tanto.
+
+**Estados**
+
+| Situación | Cómo se ve |
+|---|---|
+| Sin valor guardado, o un valor que no es uno de los cuatro | "Blue" elegido, sin ningún aviso. La base no se modifica hasta que el usuario elija algo (RN-79). |
+| Falla el guardado | El radio vuelve a la opción anterior y se muestra el "Error inesperado" de §2.5. |
+
+**Teclado.** Tab entra al grupo; flechas y Espacio cambian la opción (como en Apariencia).
+`Ctrl/Cmd+N` no tiene acción en esta pestaña (igual que Apariencia). El tooltip del botón de
+búsqueda del diálogo (§3.6) y su ayuda ("El dólar se elige en Ajustes.") remiten a esta
+pestaña.
+
+**Ancho de las pestañas.** Con 7 pestañas, a la ventana mínima de 1100 px no entran todas
+las etiquetas de una vez. La barra de pestañas tiene que poder desplazarse
+(`ft.Tabs`/`TabBar` con `scrollable=True`; verificar el nombre en Flet 1.0.3) y la pestaña
+elegida tiene que quedar visible. Ver observación 33.
 
 ### 3.11 Importar Excel: elegir archivo y hoja (RF-49, RF-50, RF-58, RN-60, RN-61)
 
@@ -2079,6 +2340,28 @@ también…") y la confirmación de cancelar (§3.14).
 - **Lenguaje:** los mensajes dicen qué está mal y cómo arreglarlo, sin términos técnicos
   ("fórmulas sin valor calculado" lleva su instrucción para resolverlo).
 
+### Cotización automática (v2)
+
+- **Contraste:** error, origen, ruedita y botón usan los pares de §2.1 en ambos temas
+  (≥ 4,5:1); detalle por tema en §3.6. El campo bloqueado mientras busca es de **solo
+  lectura, no deshabilitado**, para conservar el contraste normal del valor (observación 34).
+- **No solo color ni solo ícono:** buscando = ruedita **y** el texto "Buscando la
+  cotización…"; error = ícono `ERROR_OUTLINE` **y** el mensaje; origen = ícono `INFO_OUTLINE`
+  **y** el texto con dólar, fecha y hora. El botón deshabilitado no es la única señal de que
+  hay una búsqueda en curso.
+- **Tamaños:** botón de 40 px de alto como mínimo; textos de ayuda, estado, origen y error en
+  13 (nunca menos).
+- **Teclado:** todo con teclado. Orden de Tab: campo, "Buscar dólar …", "Cancelar",
+  "Guardar". `Enter` en el campo guarda, `Esc` cancela, también durante la búsqueda. Al
+  terminar la búsqueda el foco va al campo (si salió bien) o al botón de buscar (si falló),
+  salvo que el usuario ya lo haya movido. En Ajustes, el grupo de opciones se recorre con
+  flechas y Espacio.
+- **Lectores de pantalla:** la ruedita lleva `semantics_label` ("Buscando la cotización"); el
+  mensaje de error y el origen son texto normal, y el contenedor del error se marca como
+  región "en vivo" si Flet 1.0.3 lo permite (verificarlo), para que se lea al aparecer.
+- **Lenguaje:** el error dice qué pasó y qué hacer ("Revisá tu conexión o cargala a mano"),
+  sin códigos ni términos como "HTTP" o "JSON".
+
 ---
 
 ## 6. Orden de implementación (alineado con requisitos.md §9)
@@ -2225,6 +2508,43 @@ lista esperada con sus tipos y avisos; cambiar tipos, corregir un monto, crear a
 cambiar el mes destino y ver cómo se destildan las repetidas; cancelar y verificar que no
 quedó nada; confirmar y ver el resultado y el mes.
 
+### Paso 9 – Cotización automática (v2)
+
+Última funcionalidad de la v2. Sin pantallas nuevas, sin cambios en la estructura de la base
+ni dependencias nuevas (`requisitos.md` §9, paso 9). Se divide en dos sub-pasos que se prueban
+por separado, igual que el paso 8:
+
+- **9a – Lógica (sin pantallas).** En `app/logica/`: leer y guardar el dólar elegido (Blue por
+  defecto y ante valores desconocidos); decidir si un mes tiene botón (RN-80); armar la
+  dirección del pedido; pedir con tiempo máximo de 10 segundos; validar la respuesta; pasar la
+  compra a centavos; y armar los textos del botón, del origen (con la hora de Argentina) y del
+  error. La función que hace el pedido a internet es reemplazable, así Lucía prueba todo con
+  pytest y **sin internet**. No importa nada de Flet.
+- **9b – Interfaz.** Dos partes que se pueden probar una por una:
+  1. **Ajustes → pestaña "Cotización"** (§3.10): `RadioGroup` con Blue, MEP, Oficial y
+     Cripto, texto de ayuda y guardado al instante con SnackBar.
+  2. **Diálogo de la cotización del mes** (§3.6, "Buscar la cotización en internet"): botón
+     solo en el mes actual y los futuros, ruedita y campo en solo lectura mientras busca,
+     campo completado sin guardar, origen debajo del campo (y que desaparezca al editar),
+     mensaje de error, un solo pedido aunque se toque dos veces, y descartar la respuesta si
+     el diálogo se cerró o pasaron los 10 segundos.
+- **Cómo no trabar la ventana (para quien programa):** el pedido a internet no puede correr
+  dentro del manejador del clic sin más, porque la ventana quedaría congelada hasta 10
+  segundos. Usar un manejador asincrónico o un hilo aparte y, al volver, actualizar los
+  controles y llamar a `update()`; verificar el mecanismo exacto en Flet 1.0.3.
+
+Qué puede probar el usuario al final:
+
+- En Ajustes → Cotización, ver "Blue" elegido; elegir MEP, cerrar la app, abrirla y ver que
+  sigue en MEP. Abrir el diálogo de la cotización (`Ctrl/Cmd+K`) y ver "Buscar dólar MEP".
+- En el mes actual, tocar el botón con internet: ver la ruedita, el campo completado y el
+  origen con fecha y hora. Tocar "Cancelar" y ver que la cotización no cambió; repetir y tocar
+  "Guardar" y ver el Resumen recalculado.
+- Escribir en el campo después de buscar y ver que el origen desaparece.
+- Desconectar internet, tocar el botón y ver el mensaje de error con el campo intacto.
+- Entrar a un mes pasado (selector de mes) y ver que el diálogo no tiene botón.
+- Tocar el botón y cerrar el diálogo enseguida con `Esc`: no pasa nada después.
+
 ### Sugerencia de organización de archivos de la interfaz
 
 Solo como orientación para el agente que programa:
@@ -2266,8 +2586,8 @@ Puntos de los requisitos que no se pueden diseñar del todo bien o que necesitan
    categorías iniciales (ej. Vivienda, Servicios, Transporte, Comunicaciones, Salud, Deudas,
    Otros).
 2. **Quitar la meta de ahorro.** Existe el estado "sin meta" (RN-38, RN-39), pero RF-36 solo
-   dice "editable" y meta 0 se rechaza (CA-36.2). Sin un "Quitar meta", una vez cargada no
-   se puede volver a "sin meta". Propongo el botón "Quitar meta"; falta confirmarlo.
+   dice "editable" y meta 0 se rechaza (CA-36.2). Sin un "Quitar meta", una vez cargada no se
+   puede volver a "sin meta". Propongo el botón "Quitar meta"; falta confirmarlo.
 3. **Editar y borrar ítems manuales de "me deben".** RF-32 solo habla de cargarlos. Para
    corregir errores de tipeo hace falta editarlos o borrarlos. Propongo "Editar" y "Borrar"
    en su menú; falta confirmarlo.
@@ -2395,3 +2715,53 @@ las decidió el usuario el 2026-10-13; 23 a 25, 27 y 28 son para Ana.
     orientativos para Flet 1.0.x: en particular `ft.FilePicker` (en 1.0 es un servicio y el
     selector es asincrónico), `ft.Dropdown(dense=...)`, `ft.ExpansionTile` y
     `ListView.scroll_to`. Verificarlos contra la versión instalada en `.venv`.
+
+**Cotización automática**
+
+Las preguntas P-1 a P-4 de `requisitos.md` §10 (redondeo al centavo, fecha inválida = error,
+campo bloqueado mientras busca, sin aviso por cotización de día anterior) las confirmó el
+usuario como las propuso Ana; el diseño las sigue. Las observaciones 33 a 38 son decisiones
+de diseño para que el usuario las confirme; la 36 es además para Ana.
+
+33. **Dónde va el selector del dólar – a decidir.** Lo puse en una pestaña nueva
+    "Cotización" entre "Meta de ahorro" y "Apariencia" (§3.10): se encuentra fácil, tiene
+    espacio para la ayuda y sigue el patrón de Apariencia. Costo: Ajustes pasa a **7 pestañas**
+    y a 1100 px de ancho no entran todas, así que la barra tiene que poder desplazarse.
+    Alternativa: no crear pestaña y poner el selector debajo del campo de la meta, renombrando
+    esa pestaña "Ahorro y dólar" (6 pestañas, sin desplazamiento). Recomiendo la pestaña nueva
+    por claridad; si al probar el desplazamiento molesta, se pasa a la alternativa sin tocar
+    nada más. **Decidido por el usuario (2026-10-18): pestaña nueva "Cotización".**
+34. **Campo "bloqueado" = solo lectura, no deshabilitado.** Mientras busca, el campo de la
+    cotización usa `read_only=True`. Con `disabled=True` Flet lo atenúa y el valor se lee
+    mal, y el usuario tiene que ver qué valor queda si la búsqueda falla o se cancela. Para el usuario es lo mismo (no puede escribir). Si se
+    prefiere el aspecto atenuado, es un cambio de una línea.
+35. **"Guardar" durante la búsqueda guarda el valor viejo.** Es lo que piden los requisitos
+    (RN-86: Guardar y Cancelar siguen disponibles) y puede sorprender: el usuario toca
+    "Buscar", impaciente toca "Guardar" y se guarda lo de antes, no lo que iba a traer. Lo
+    mitigué con el texto de estado ("Si guardás ahora, se guarda el valor que ves."). Si el
+    usuario prefiere evitarlo del todo, la alternativa es deshabilitar "Guardar" mientras
+    busca (máximo 10 segundos); eso exigiría cambiar RN-86 y CA-61.7/CA-61.8, así que lo dejo
+    como pregunta para el usuario y para Ana. **Decidido por el usuario (2026-10-18): Guardar
+    se deshabilita mientras busca.** RN-86, CA-61.7 y CA-61.8 ya se actualizaron y el texto
+    "Si guardás ahora, se guarda el valor que ves." se eliminó.
+36. **Textos nuevos, míos, no definidos en los requisitos** (Ana debe fijarlos si los
+    criterios de aceptación los verifican): "Buscando la cotización…", la ayuda del botón ("Trae el precio de compra de hoy desde
+    internet (DolarApi) y completa el campo. No se guarda hasta que toques Guardar. El dólar
+    se elige en Ajustes."), el tooltip del botón, los párrafos de ayuda y el título de
+    pestaña de Ajustes, el nombre de la pestaña "Cotización" y el SnackBar "Dólar para la
+    cotización: MEP". Los textos del botón, el origen y el error son los exactos de los
+    requisitos (RN-79, RN-85, RN-87).
+37. **Mes futuro: aviso de que se trae la cotización de hoy.** En un mes futuro el botón
+    completa la cotización de hoy (RN-80). Agregué en la ayuda: "Es la cotización de hoy, no
+    la de Noviembre 2026.", para que no se la tome por una cotización prevista. Si no se
+    quiere, se quita sin afectar nada más.
+38. **Foco y atajos.** Tras una búsqueda correcta el foco vuelve al campo (así `Enter` guarda);
+    tras un error va al botón (para reintentar sin guardar por accidente). No agregué un atajo
+    de teclado para "Buscar": dentro de los diálogos los atajos globales se ignoran (§1.3) y
+    con Tab alcanza. Si el usuario lo quisiera, podría ser `Ctrl/Cmd+B` solo dentro de este
+    diálogo.
+39. **Componentes de Flet a verificar (Flet 1.0.3).** Como en las observaciones 13 y 32:
+    `ft.ProgressRing` (y su `semantics_label`), `TextField.read_only`, que `on_change` no se
+    dispare al asignar `value` desde el código, `control.focus()` después de `update()`, los
+    manejadores asincrónicos o hilos para no congelar la ventana, `ft.RadioGroup` dentro de
+    una pestaña y el desplazamiento de `ft.Tabs` con 7 pestañas.
